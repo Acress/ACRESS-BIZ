@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Acress Biz — Strategic Capital Research Suite</title>
+<title>Acress Biz — Trading & Research Intelligence Suite</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -539,7 +539,7 @@
   <div class="topbar-left">
     <span class="topbar-brand">Acress Biz</span>
     <span class="topbar-sep">|</span>
-    <span>Strategic Capital Research</span>
+    <span>Trading & Research Intelligence</span>
   </div>
   <div class="topbar-right">
     <div class="live-dot"></div>
@@ -550,11 +550,12 @@
 <!-- MASTHEAD -->
 <div class="masthead">
   <div class="masthead-bg-text">ACB</div>
-  <div class="masthead-eyebrow">Investment Research Suite</div>
-  <h1>Tools for <em>Conviction</em><br>Under Pressure</h1>
+  <div class="masthead-eyebrow">Trading & Research Intelligence Suite</div>
+  <h1>Tools Built for<br><em>Precision</em> Capital</h1>
   <div class="masthead-desc">
-    A private suite of live research instruments built for long-duration capital thinking —
-    disruption analysis, thesis stress-testing, and market intelligence. Each tool runs independently. All connected here.
+    A private suite of live instruments spanning perpetual futures trading, 
+    event-driven intelligence, and long-duration investment research. 
+    Each tool runs independently. All connected here.
   </div>
   <div class="suite-progress">
     <span class="progress-label">Suite Progress</span>
@@ -568,10 +569,16 @@
 <!-- FILTERS -->
 <div class="filters-bar">
   <div class="filter-group">
-    <button class="filter-btn active" onclick="filterTools('all', this)">All Tools</button>
+    <button class="filter-btn active" onclick="filterTools('all', this)">All</button>
     <button class="filter-btn" onclick="filterTools('live', this)">Live</button>
     <button class="filter-btn" onclick="filterTools('building', this)">In Development</button>
     <button class="filter-btn" onclick="filterTools('planned', this)">Planned</button>
+  </div>
+  <div class="filter-group">
+    <button class="filter-btn" onclick="filterCategory('Event Intelligence', this)">Event Intelligence</button>
+    <button class="filter-btn" onclick="filterCategory('Perpetual Futures', this)">Perp Futures</button>
+    <button class="filter-btn" onclick="filterCategory('Market Microstructure', this)">Microstructure</button>
+    <button class="filter-btn" onclick="filterCategory('Investment Research', this)">Investment Research</button>
   </div>
   <div class="filter-count" id="filter-count"></div>
 </div>
@@ -585,18 +592,19 @@
 <div class="quote-strip">
   <div class="quote-mark">"</div>
   <div class="quote-text">
-    You are not hunting the next big thing. You are hunting long-duration compounding systems
-    that are robust to paradigm shifts — including ones we cannot yet name.
+    Every public narrative is designed to engineer a specific retail behavior. 
+    Market makers, coin owners, and exchanges trade against behaviors — not price. 
+    The edge is knowing the difference.
   </div>
 </div>
 
 <!-- FOOTER -->
 <div class="footer">
   <div class="footer-brand">Acress Biz</div>
-  <div class="footer-note">
-    Not financial advice &nbsp;·&nbsp; Private research instruments<br>
-    Updated <span id="footer-date"></span>
-  </div>
+    <div class="footer-note">
+      Not financial advice &nbsp;·&nbsp; Private trading & research instruments<br>
+      Updated <span id="footer-date"></span>
+    </div>
 </div>
 
 <script>
@@ -608,73 +616,140 @@
 // ═══════════════════════════════════════════════════════════
 
 const TOOLS = [
+
+  // ── TRADING: EVENT INTELLIGENCE ──
   {
     roman:    'I',
-    title:    'Conviction Framework',
-    category: 'Research',
-    desc:     'The master reference. Four active theses, five survival questions, and the four-tier portfolio architecture — all in one instrument.',
-    tags:     ['Thesis', 'Framework', 'Scoring'],
-    status:   'planned',   // change to 'building' or 'live'
-    url:      null,        // add path when live: 'tools/conviction-framework.html'
+    title:    'Upbit Listing Scanner',
+    category: 'Event Intelligence',
+    desc:     'Polls Upbit\'s notice board every 10–15 seconds. Detects new listing announcements the moment they are published and fires a Telegram alert with inline action buttons for immediate Bybit and Binance perp entries.',
+    tags:     ['Upbit', 'Telegram', 'Alerts', 'Live Polling'],
+    status:   'planned',
+    url:      null,
   },
   {
     roman:    'II',
-    title:    'Asset Researcher',
-    category: 'Intelligence',
-    desc:     'Enter any ticker or coin name. Live web research, price data, and a full conviction brief are generated automatically — no manual input required.',
-    tags:     ['Live Data', 'AI Research', 'Stocks', 'Crypto'],
+    title:    'Catalyst News Tracker',
+    category: 'Event Intelligence',
+    desc:     'Post any ticker and a one-week forward window opens. Tracks earnings, governance votes, token unlocks, regulatory decisions, and narrative catalysts — surfaced automatically as they break.',
+    tags:     ['News', 'Catalysts', 'Watchlist', 'Web Search'],
     status:   'planned',
     url:      null,
   },
   {
     roman:    'III',
-    title:    'Thesis Stress-Tester',
-    category: 'Analysis',
-    desc:     'State a thesis in plain language. The tool automatically searches for evidence that supports it and evidence that breaks it — then delivers a balanced verdict.',
-    tags:     ['Thesis', 'Web Search', 'Devil\'s Advocate'],
+    title:    'TGE & Token Unlock Calendar',
+    category: 'Event Intelligence',
+    desc:     'One-week and one-month forward view of upcoming token generation events and major unlock dates. Unlocks are among the most reliable short catalysts — this ensures you are never caught without notice.',
+    tags:     ['TGE', 'Unlocks', 'Calendar', 'CoinGecko'],
     status:   'planned',
     url:      null,
   },
   {
     roman:    'IV',
-    title:    'Disruption Radar',
-    category: 'Intelligence',
-    desc:     'Live scanner for the variables that matter most — quantum computing breakthroughs, post-quantum regulatory updates, biotech approvals, and macro regime shifts.',
-    tags:     ['Quantum', 'Biotech', 'Macro', 'Alerts'],
+    title:    'Exchange Listing Intelligence',
+    category: 'Event Intelligence',
+    desc:     'Monitors Binance, Bybit, OKX, and Coinbase listing announcements simultaneously. Maps each exchange\'s historical price impact profile and suggests the appropriate entry direction and vehicle.',
+    tags:     ['Multi-Exchange', 'Listings', 'Impact Analysis'],
     status:   'planned',
     url:      null,
   },
+
+  // ── TRADING: PERPETUAL FUTURES ──
   {
     roman:    'V',
-    title:    'Market Radar',
-    category: 'Dashboard',
-    desc:     'A live watchlist dashboard tracking stocks and crypto across the four theses. Prices, momentum, and framework alignment — updated in real time.',
-    tags:     ['Live Prices', 'Watchlist', 'Dashboard'],
+    title:    'Perp Intelligence Dashboard',
+    category: 'Perpetual Futures',
+    desc:     'For any coin: live perp vs spot price premium or discount, funding rate, open interest trend, volume delta, and long/short ratio — all in one view. Tells you instantly whether a market is over-leveraged.',
+    tags:     ['Perp', 'Funding Rate', 'OI', 'Volume', 'Binance'],
     status:   'planned',
     url:      null,
   },
   {
     roman:    'VI',
-    title:    'Conviction Scorer',
-    category: 'Scoring',
-    desc:     'Combines live research with the five survival questions to produce a single conviction score for any asset. Includes quantum vulnerability rating and tier recommendation.',
-    tags:     ['Scoring', 'AI', 'Quantum Test'],
+    title:    'Post-Pump Short Signal Detector',
+    category: 'Perpetual Futures',
+    desc:     'Monitors a defined watchlist for low-to-mid cap coins that have pumped 30%+ on narrative or coordination. Scores each for short conviction using pump magnitude, volume signature, and funding rate spike.',
+    tags:     ['Short', 'Signal', 'Mean Reversion', 'CoinGecko'],
     status:   'planned',
     url:      null,
   },
+  {
+    roman:    'VII',
+    title:    'Funding Rate Arbitrage Scanner',
+    category: 'Perpetual Futures',
+    desc:     'Scans perpetual markets for extreme funding rates in both directions. Positive extremes flag overleveraged longs ripe for shorts. Negative extremes signal capitulation and potential reversal entries.',
+    tags:     ['Funding Rate', 'Arbitrage', 'Scanner', 'Binance'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'VIII',
+    title:    'Leverage Ladder Calculator',
+    category: 'Perpetual Futures',
+    desc:     'The staggered leverage ladder rebuilt with live Binance mark price integration. Liquidation calculations are always current. Supports descending leverage across up to six tranches with capital auto-distribution.',
+    tags:     ['Ladder', 'Leverage', 'Liquidation', 'Binance'],
+    status:   'planned',
+    url:      null,
+  },
+
+  // ── TRADING: MARKET MICROSTRUCTURE ──
+  {
+    roman:    'IX',
+    title:    'Pre-Market Depth Analyser',
+    category: 'Market Microstructure',
+    desc:     'Live Binance order book analysis. Capital required to move price to key levels, bid-ask imbalance, wall detection, and a manipulability score — everything needed to assess whether a move is engineered.',
+    tags:     ['Order Book', 'Depth', 'Manipulability', 'Binance'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'X',
+    title:    'Coin Manipulability Assessor',
+    category: 'Market Microstructure',
+    desc:     'Scores any coin on float concentration, team wallet behavior, exchange distribution, narrative freshness, and market maker fingerprints. Determines whether the setup is engineered or organic before any position is opened.',
+    tags:     ['Manipulation', 'On-Chain', 'Scoring', 'CoinGecko'],
+    status:   'planned',
+    url:      null,
+  },
+
+  // ── INVESTMENT RESEARCH ──
+  {
+    roman:    'XI',
+    title:    'Conviction Researcher',
+    category: 'Investment Research',
+    desc:     'Type any stock or crypto name. Live web research, price data, and a full conviction brief are generated automatically — scored against five survival questions with quantum vulnerability rating and tier recommendation.',
+    tags:     ['Stocks', 'Crypto', 'AI Research', 'Thesis'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'XII',
+    title:    'Disruption Radar',
+    category: 'Investment Research',
+    desc:     'Live scanner for the variables that threaten or create long-duration positions — quantum computing breakthroughs, post-quantum regulatory mandates, biotech approvals, and macro regime shifts.',
+    tags:     ['Quantum', 'Biotech', 'Macro', 'Web Search'],
+    status:   'planned',
+    url:      null,
+  },
+
 ];
 
 // ═══════════════════════════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════════════════════════
 
-function renderTools(filter = 'all') {
+let activeStatus = 'all';
+let activeCategory = null;
+
+function renderTools() {
   const grid = document.getElementById('tools-grid');
-  const visible = TOOLS.filter(t => filter === 'all' || t.status === filter);
 
   grid.innerHTML = TOOLS.map((t, i) => {
-    const hidden = (filter !== 'all' && t.status !== filter) ? 'card-hidden' : '';
-    const delay  = (i * 0.07).toFixed(2);
+    const statusMatch   = activeStatus === 'all' || t.status === activeStatus;
+    const categoryMatch = !activeCategory || t.category === activeCategory;
+    const hidden = (!statusMatch || !categoryMatch) ? 'card-hidden' : '';
+    const delay  = (i * 0.06).toFixed(2);
     const statusLabel = { live: 'Live', building: 'In Development', planned: 'Planned' }[t.status];
     const tagsHtml = t.tags.map(tag => `<span class="card-tag">${tag}</span>`).join('');
     const footerHtml = t.status === 'live' && t.url
@@ -695,17 +770,33 @@ function renderTools(filter = 'all') {
     </div>`;
   }).join('');
 
-  const visCount = visible.length;
-  document.getElementById('filter-count').textContent =
-    filter === 'all'
-      ? `${TOOLS.length} tools total`
-      : `${visCount} ${filter === 'live' ? 'live' : filter === 'building' ? 'in development' : 'planned'} tool${visCount !== 1 ? 's' : ''}`;
+  const visible = TOOLS.filter(t => {
+    const s = activeStatus === 'all' || t.status === activeStatus;
+    const c = !activeCategory || t.category === activeCategory;
+    return s && c;
+  }).length;
+
+  document.getElementById('filter-count').textContent = `${visible} of ${TOOLS.length} tools`;
 }
 
 function filterTools(status, btn) {
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.filter-group:first-child .filter-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  renderTools(status);
+  activeStatus = status;
+  renderTools();
+}
+
+function filterCategory(category, btn) {
+  const catBtns = document.querySelectorAll('.filter-group:last-child .filter-btn');
+  if (activeCategory === category) {
+    catBtns.forEach(b => b.classList.remove('active'));
+    activeCategory = null;
+  } else {
+    catBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeCategory = category;
+  }
+  renderTools();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -742,7 +833,7 @@ setInterval(updateClock, 1000);
 //  INIT
 // ═══════════════════════════════════════════════════════════
 
-renderTools('all');
+renderTools();
 updateProgress();
 </script>
 </body>
