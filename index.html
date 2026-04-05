@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acress Biz — Strategic Capital Research Suite</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page:     #0d0f14;
+    --surface:  #13161d;
+    --surface2: #181c24;
+    --border:   #232731;
+    --border2:  #2e333f;
+    --text:     #d4d7e2;
+    --text-dim: #9096aa;
+    --text-bright: #f0f2f8;
+    --gold:     #c8a44a;
+    --gold-dim: #7a6228;
+    --gold-glow: rgba(200,164,74,0.07);
+    --green:    #2ecc71;
+    --green-dim: rgba(46,204,113,0.12);
+    --amber:    #e67e22;
+    --amber-dim: rgba(230,126,34,0.12);
+    --red:      #c0392b;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--page);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 17px;
+    line-height: 1.65;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRAIN ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── VERTICAL RULE ── */
+  .v-rule {
+    position: fixed;
+    left: 52px;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: var(--border);
+    display: none;
+  }
+
+  @media(min-width: 1100px) { .v-rule { display: block; } }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    position: sticky;
+    top: 0;
+    background: var(--page);
+    z-index: 100;
+    opacity: 0;
+    animation: fadeUp 0.5s ease 0.1s forwards;
+  }
+
+  .topbar-left {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .topbar-brand {
+    color: var(--gold);
+    letter-spacing: 3px;
+  }
+
+  .topbar-sep { color: var(--border2); }
+
+  .topbar-right {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
+
+  /* ── MASTHEAD ── */
+  .masthead {
+    padding: 80px 40px 64px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+    animation: fadeUp 0.7s ease 0.2s forwards;
+  }
+
+  .masthead-bg-text {
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Playfair Display', serif;
+    font-size: 200px;
+    font-weight: 700;
+    color: var(--border);
+    line-height: 1;
+    user-select: none;
+    pointer-events: none;
+    letter-spacing: -8px;
+    opacity: 0.5;
+  }
+
+  .masthead-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .masthead-eyebrow::before {
+    content: '';
+    display: block;
+    width: 32px;
+    height: 1px;
+    background: var(--gold-dim);
+  }
+
+  .masthead h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(42px, 6vw, 72px);
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.05;
+    letter-spacing: -1.5px;
+    margin-bottom: 24px;
+    max-width: 780px;
+  }
+
+  .masthead h1 em {
+    font-style: italic;
+    color: var(--gold);
+  }
+
+  .masthead-desc {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 19px;
+    font-weight: 300;
+    color: var(--text);
+    max-width: 560px;
+    line-height: 1.7;
+    margin-bottom: 40px;
+  }
+
+  .suite-progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+  }
+
+  .progress-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .progress-track {
+    width: 120px;
+    height: 3px;
+    background: var(--border2);
+    position: relative;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--gold);
+    transition: width 1s ease;
+  }
+
+  .progress-count {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    color: var(--gold);
+  }
+
+  /* ── FILTERS ── */
+  .filters-bar {
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    opacity: 0;
+    animation: fadeUp 0.6s ease 0.35s forwards;
+  }
+
+  .filter-group {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .filter-btn:hover { border-color: var(--border2); color: var(--text); }
+
+  .filter-btn.active {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--page);
+  }
+
+  .filter-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text);
+  }
+
+  /* ── GRID ── */
+  .tools-section {
+    padding: 48px 40px 80px;
+  }
+
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  /* ── TOOL CARD ── */
+  .tool-card {
+    background: var(--page);
+    padding: 32px 28px 28px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.25s;
+    opacity: 0;
+    animation: fadeUp 0.5s ease forwards;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    min-height: 260px;
+  }
+
+  .tool-card:hover { background: var(--surface); }
+
+  .tool-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--gold);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+
+  .tool-card:hover::before { transform: scaleX(1); }
+
+  .tool-card.status-planned { opacity: 0; animation: fadeUp 0.5s ease forwards; }
+  .tool-card.status-planned:hover { background: var(--surface); }
+
+  .card-roman {
+    position: absolute;
+    bottom: -10px;
+    right: 16px;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 96px;
+    font-weight: 700;
+    color: var(--border);
+    line-height: 1;
+    user-select: none;
+    pointer-events: none;
+    transition: color 0.25s;
+  }
+
+  .tool-card:hover .card-roman { color: var(--border2); }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .card-category {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text);
+    border: 1px solid var(--border2);
+    padding: 3px 10px;
+  }
+
+  .status-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+  }
+
+  .status-badge.live {
+    color: var(--green);
+    border-color: rgba(46,204,113,0.3);
+    background: var(--green-dim);
+  }
+
+  .status-badge.building {
+    color: var(--amber);
+    border-color: rgba(230,126,34,0.3);
+    background: var(--amber-dim);
+    animation: badgePulse 2s ease-in-out infinite;
+  }
+
+  .status-badge.planned {
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  @keyframes badgePulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+  }
+
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-bright);
+    line-height: 1.2;
+    margin-bottom: 12px;
+    padding-right: 60px;
+  }
+
+  .card-desc {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.65;
+    flex: 1;
+    margin-bottom: 20px;
+    padding-right: 50px;
+  }
+
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 20px;
+  }
+
+  .card-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text);
+    padding: 2px 8px;
+    background: var(--surface2);
+  }
+
+  .card-footer {
+    margin-top: auto;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  .card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-decoration: none;
+    transition: gap 0.2s;
+  }
+
+  .card-link:hover { gap: 16px; }
+
+  .card-link .arrow { font-size: 14px; }
+
+  .card-link-disabled {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .card-hidden { display: none; }
+
+  /* ── QUOTE STRIP ── */
+  .quote-strip {
+    padding: 48px 40px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    opacity: 0;
+    animation: fadeUp 0.7s ease 0.6s forwards;
+  }
+
+  .quote-mark {
+    font-family: 'Playfair Display', serif;
+    font-size: 72px;
+    color: var(--gold-dim);
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: -20px;
+  }
+
+  .quote-text {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: clamp(18px, 2.5vw, 24px);
+    color: var(--text-bright);
+    line-height: 1.5;
+    max-width: 700px;
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 28px 40px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .footer-brand {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+
+  .footer-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text);
+    text-align: right;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── RESPONSIVE ── */
+  @media(max-width: 600px) {
+    .masthead, .filters-bar, .tools-section, .quote-strip, .footer {
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+    .topbar { padding: 0 20px; }
+    .topbar-left .topbar-sep,
+    .topbar-left span:last-child { display: none; }
+    .masthead-bg-text { display: none; }
+    .tools-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="v-rule"></div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-brand">Acress Biz</span>
+    <span class="topbar-sep">|</span>
+    <span>Strategic Capital Research</span>
+  </div>
+  <div class="topbar-right">
+    <div class="live-dot"></div>
+    <span id="live-time"></span>
+  </div>
+</div>
+
+<!-- MASTHEAD -->
+<div class="masthead">
+  <div class="masthead-bg-text">ACB</div>
+  <div class="masthead-eyebrow">Investment Research Suite</div>
+  <h1>Tools for <em>Conviction</em><br>Under Pressure</h1>
+  <div class="masthead-desc">
+    A private suite of live research instruments built for long-duration capital thinking —
+    disruption analysis, thesis stress-testing, and market intelligence. Each tool runs independently. All connected here.
+  </div>
+  <div class="suite-progress">
+    <span class="progress-label">Suite Progress</span>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <span class="progress-count" id="progress-count">—</span>
+  </div>
+</div>
+
+<!-- FILTERS -->
+<div class="filters-bar">
+  <div class="filter-group">
+    <button class="filter-btn active" onclick="filterTools('all', this)">All Tools</button>
+    <button class="filter-btn" onclick="filterTools('live', this)">Live</button>
+    <button class="filter-btn" onclick="filterTools('building', this)">In Development</button>
+    <button class="filter-btn" onclick="filterTools('planned', this)">Planned</button>
+  </div>
+  <div class="filter-count" id="filter-count"></div>
+</div>
+
+<!-- TOOLS GRID -->
+<div class="tools-section">
+  <div class="tools-grid" id="tools-grid"></div>
+</div>
+
+<!-- QUOTE STRIP -->
+<div class="quote-strip">
+  <div class="quote-mark">"</div>
+  <div class="quote-text">
+    You are not hunting the next big thing. You are hunting long-duration compounding systems
+    that are robust to paradigm shifts — including ones we cannot yet name.
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-brand">Acress Biz</div>
+  <div class="footer-note">
+    Not financial advice &nbsp;·&nbsp; Private research instruments<br>
+    Updated <span id="footer-date"></span>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  MANIFEST — When a new tool is deployed:
+//  1. Change its status from 'planned' → 'building' → 'live'
+//  2. Add its url when live
+//  That is the only update needed. The page handles the rest.
+// ═══════════════════════════════════════════════════════════
+
+const TOOLS = [
+  {
+    roman:    'I',
+    title:    'Conviction Framework',
+    category: 'Research',
+    desc:     'The master reference. Four active theses, five survival questions, and the four-tier portfolio architecture — all in one instrument.',
+    tags:     ['Thesis', 'Framework', 'Scoring'],
+    status:   'planned',   // change to 'building' or 'live'
+    url:      null,        // add path when live: 'tools/conviction-framework.html'
+  },
+  {
+    roman:    'II',
+    title:    'Asset Researcher',
+    category: 'Intelligence',
+    desc:     'Enter any ticker or coin name. Live web research, price data, and a full conviction brief are generated automatically — no manual input required.',
+    tags:     ['Live Data', 'AI Research', 'Stocks', 'Crypto'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'III',
+    title:    'Thesis Stress-Tester',
+    category: 'Analysis',
+    desc:     'State a thesis in plain language. The tool automatically searches for evidence that supports it and evidence that breaks it — then delivers a balanced verdict.',
+    tags:     ['Thesis', 'Web Search', 'Devil\'s Advocate'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'IV',
+    title:    'Disruption Radar',
+    category: 'Intelligence',
+    desc:     'Live scanner for the variables that matter most — quantum computing breakthroughs, post-quantum regulatory updates, biotech approvals, and macro regime shifts.',
+    tags:     ['Quantum', 'Biotech', 'Macro', 'Alerts'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'V',
+    title:    'Market Radar',
+    category: 'Dashboard',
+    desc:     'A live watchlist dashboard tracking stocks and crypto across the four theses. Prices, momentum, and framework alignment — updated in real time.',
+    tags:     ['Live Prices', 'Watchlist', 'Dashboard'],
+    status:   'planned',
+    url:      null,
+  },
+  {
+    roman:    'VI',
+    title:    'Conviction Scorer',
+    category: 'Scoring',
+    desc:     'Combines live research with the five survival questions to produce a single conviction score for any asset. Includes quantum vulnerability rating and tier recommendation.',
+    tags:     ['Scoring', 'AI', 'Quantum Test'],
+    status:   'planned',
+    url:      null,
+  },
+];
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════
+
+function renderTools(filter = 'all') {
+  const grid = document.getElementById('tools-grid');
+  const visible = TOOLS.filter(t => filter === 'all' || t.status === filter);
+
+  grid.innerHTML = TOOLS.map((t, i) => {
+    const hidden = (filter !== 'all' && t.status !== filter) ? 'card-hidden' : '';
+    const delay  = (i * 0.07).toFixed(2);
+    const statusLabel = { live: 'Live', building: 'In Development', planned: 'Planned' }[t.status];
+    const tagsHtml = t.tags.map(tag => `<span class="card-tag">${tag}</span>`).join('');
+    const footerHtml = t.status === 'live' && t.url
+      ? `<a href="${t.url}" class="card-link"><span>Open Tool</span><span class="arrow">→</span></a>`
+      : `<span class="card-link-disabled">${t.status === 'building' ? 'In Development' : 'Not Yet Deployed'}</span>`;
+
+    return `
+    <div class="tool-card status-${t.status} ${hidden}" style="animation-delay:${delay}s">
+      <div class="card-roman">${t.roman}</div>
+      <div class="card-top">
+        <span class="card-category">${t.category}</span>
+        <span class="status-badge ${t.status}">${statusLabel}</span>
+      </div>
+      <div class="card-title">${t.title}</div>
+      <div class="card-desc">${t.desc}</div>
+      <div class="card-tags">${tagsHtml}</div>
+      <div class="card-footer">${footerHtml}</div>
+    </div>`;
+  }).join('');
+
+  const visCount = visible.length;
+  document.getElementById('filter-count').textContent =
+    filter === 'all'
+      ? `${TOOLS.length} tools total`
+      : `${visCount} ${filter === 'live' ? 'live' : filter === 'building' ? 'in development' : 'planned'} tool${visCount !== 1 ? 's' : ''}`;
+}
+
+function filterTools(status, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTools(status);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PROGRESS BAR
+// ═══════════════════════════════════════════════════════════
+
+function updateProgress() {
+  const live  = TOOLS.filter(t => t.status === 'live').length;
+  const total = TOOLS.length;
+  const pct   = Math.round((live / total) * 100);
+  document.getElementById('progress-count').textContent = `${live} / ${total} Live`;
+  setTimeout(() => {
+    document.getElementById('progress-fill').style.width = pct + '%';
+  }, 600);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CLOCK + DATE
+// ═══════════════════════════════════════════════════════════
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('live-time').textContent =
+    now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+document.getElementById('footer-date').textContent =
+  new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+updateClock();
+setInterval(updateClock, 1000);
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+
+renderTools('all');
+updateProgress();
+</script>
+</body>
+</html>
