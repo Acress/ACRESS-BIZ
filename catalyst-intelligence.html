@@ -286,7 +286,7 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 // ─────────────────────────────────────────
 //  CONFIG
 // ─────────────────────────────────────────
-const R2J = 'https://api.rss2json.com/v1/api.json?count=20&rss_url=';
+const PROXY = 'https://api.allorigins.win/get?url=';
 
 const FEEDS = [
   // WEEK — breaking
@@ -341,7 +341,7 @@ async function startScan(){
     prog(5,'Building asset universe...','Fetching top 100 crypto from CoinGecko');
     crypto = await getCrypto();
 
-    prog(20,'Scanning all sources...','Fetching 19 live feeds in parallel — please wait');
+    prog(20,'Scanning all sources...','Fetching feeds in batches — takes 20–40 seconds');
     const raw = await getAllFeeds();
 
     prog(80,'Processing...','Categorising and scoring '+raw.length+' items');
@@ -374,28 +374,54 @@ async function getCrypto(){
 
 async function getAllFeeds(){
   srcBar('wait');
-  const res = await Promise.allSettled(FEEDS.map(f=>getFeed(f)));
+  // Batch into groups of 5 to avoid overwhelming the proxy
+  const batches = [];
+  for(let i=0;i<FEEDS.length;i+=5) batches.push(FEEDS.slice(i,i+5));
   const all=[];
-  res.forEach((r,i)=>{
-    const name=FEEDS[i].n;
-    if(r.status==='fulfilled'){srcSt[name]='ok';all.push(...r.value);}
-    else{srcSt[name]='fail';}
-  });
+  for(const batch of batches){
+    const res = await Promise.allSettled(batch.map(f=>getFeed(f)));
+    res.forEach((r,i)=>{
+      const name=batch[i].n;
+      if(r.status==='fulfilled'&&r.value.length>0){srcSt[name]='ok';all.push(...r.value);}
+      else{srcSt[name]='fail';}
+    });
+    await new Promise(r=>setTimeout(r,300)); // small pause between batches
+  }
   srcBar('done'); return all;
 }
 
 async function getFeed(f){
-  const url=R2J+encodeURIComponent(f.u);
-  const r=await fetch(url,{signal:AbortSignal.timeout(12000)});
-  const d=await r.json();
-  if(d.status!=='ok'||!d.items?.length) return [];
-  return d.items.map(it=>({
-    title:(it.title||'').trim(),
-    desc: strip(it.description||it.content||'').slice(0,300),
-    link: it.link||'',
-    pub:  it.pubDate||'',
-    src:  f.n, dh: f.dh
-  }));
+  try {
+    const proxyUrl = PROXY + encodeURIComponent(f.u);
+    const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(15000)});
+    const d = await r.json();
+    if(!d.contents) return [];
+
+    // Parse RSS/Atom XML
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(d.contents, 'text/xml');
+
+    // Support both RSS <item> and Atom <entry>
+    const nodes = [...xml.querySelectorAll('item'), ...xml.querySelectorAll('entry')];
+    if(!nodes.length) return [];
+
+    return nodes.slice(0,20).map(el=>{
+      const title = xmlText(el,'title');
+      const desc  = strip(xmlText(el,'description')||xmlText(el,'summary')||xmlText(el,'content')||'');
+      const link  = xmlText(el,'link')||el.querySelector('link')?.getAttribute('href')||'';
+      const pub   = xmlText(el,'pubDate')||xmlText(el,'published')||xmlText(el,'updated')||'';
+      if(!title||title.length<8) return null;
+      return {title:title.trim(), desc:desc.slice(0,300), link, pub, src:f.n, dh:f.dh};
+    }).filter(Boolean);
+  } catch(e) {
+    return [];
+  }
+}
+
+function xmlText(el, tag){
+  const node = el.querySelector(tag);
+  if(!node) return '';
+  return (node.textContent||'').trim();
 }
 
 // ─────────────────────────────────────────
