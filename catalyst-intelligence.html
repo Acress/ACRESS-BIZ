@@ -170,6 +170,7 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
     <span class="tb-id">Tool II — Catalyst Intelligence</span>
   </div>
   <div class="tb-right">
+    <button onclick="resetPage()" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:1px solid var(--bord2);color:var(--dim);padding:5px 12px;cursor:pointer;transition:all .2s;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--bord2)';this.style.color='var(--dim)'">Reset</button>
     <div class="live-dot"></div>
     <span id="tb-clock">—</span>
   </div>
@@ -311,6 +312,15 @@ const MACRO_CALENDAR = [
   {title:'Ethereum Pectra Upgrade Aftermath',desc:'Post-upgrade ecosystem effects continuing to play out. Staking and L2 activity metrics to watch.',date:'2026-05-01',cat:'Governance',sig:7,dh:'MONTH'},
   {title:'SEC Crypto Regulatory Framework Deadline',desc:'Expected SEC guidance on crypto exchange and stablecoin regulations. Institutional positioning event.',date:'2026-06-30',cat:'Regulatory',sig:9,dh:'QUARTER'},
   {title:'G7 Digital Asset Policy Summit',desc:'G7 nations expected to align on crypto regulatory approach. Cross-border stablecoin rules under discussion.',date:'2026-06-15',cat:'Regulatory',sig:8,dh:'MONTH'},
+  // ── CONFERENCES & KEY INDUSTRY EVENTS ──
+  {title:'Consensus 2026 — CoinDesk Annual Conference',desc:'The largest annual crypto conference. Major protocol announcements, institutional panels, and policy discussions. Historically a catalyst for project announcements and market narratives.',date:'2026-05-14',cat:'Narrative',sig:7,dh:'MONTH'},
+  {title:'Token2049 Singapore 2026',desc:'One of the largest Web3 conferences globally. Major token launches, ecosystem announcements, and institutional crypto discussions expected.',date:'2026-09-17',cat:'Narrative',sig:7,dh:'QUARTER'},
+  {title:'Bitcoin 2026 Conference — Nashville',desc:'Annual Bitcoin conference. Key platform for BTC-related policy, institutional announcements, and protocol discussions.',date:'2026-07-22',cat:'Narrative',sig:7,dh:'QUARTER'},
+  {title:'ETHcc 2026 — Brussels',desc:'Ethereum Community Conference. Major Ethereum ecosystem announcements, L2 updates, and DeFi protocol launches typically coincide with this event.',date:'2026-07-06',cat:'Governance',sig:7,dh:'QUARTER'},
+  {title:'Permissionless 2026',desc:'Leading DeFi and Web3 developer conference. Protocol launches, governance announcements, and institutional DeFi discussions.',date:'2026-06-24',cat:'Narrative',sig:6,dh:'QUARTER'},
+  {title:'World Liberty Financial (WLFI) — Governance Event',desc:'WLFI governance and strategic announcements. Trump-affiliated DeFi protocol has demonstrated market-moving announcement capacity — monitor for token, policy, or partnership news.',date:'2026-05-20',cat:'Governance',sig:8,dh:'MONTH'},
+  {title:'IMF / World Bank Spring Meetings',desc:'Global financial policymakers convene. Crypto regulation, CBDC frameworks, and stablecoin oversight frequently discussed at sideline sessions.',date:'2026-04-14',cat:'Macro',sig:7,dh:'WEEK'},
+  {title:'Davos WEF Annual Meeting 2027',desc:'World Economic Forum. Global macro policy and digital asset regulation discussions. Institutional positioning signal.',date:'2027-01-20',cat:'Macro',sig:7,dh:'QUARTER'},
 ];
 
 // ─────────────────────────────────────────
@@ -792,13 +802,15 @@ async function fetchOneFeed(feed){
           const ageDays=(now-new Date(pub).getTime())/86400000;
           dh=ageDays<=7?'WEEK':ageDays<=14?'MONTH':'QUARTER';
         }
+        const cat = getCatFromText(tx,'');
+        const sig = getSigFromText(tx);
+        // Strict relevance gate — drop generic noise
+        if(!isRelevant(title, cat, sig)) return null;
         return make({
           title:title.trim(), desc, link,
           ticker: detectTickerFromText(tx, feed.type),
           type: feed.type,
-          cat: getCatFromText(tx,''),
-          sig: getSigFromText(tx),
-          dh, src:feed.n, pub
+          cat, sig, dh, src:feed.n, pub
         });
       }).filter(Boolean);
 
@@ -826,6 +838,25 @@ function detectTickerFromText(t, defaultType){
     if(new RegExp('\\b'+s.toLowerCase()+'\\b').test(t)) return s;
   }
   return defaultType==='macro'?'MACRO':defaultType==='stock'?'MARKET':'CRYPTO';
+}
+
+// Strict relevance — RSS items must clearly match a category or be dropped
+function isRelevant(title, cat, sig){
+  // Always keep high-significance items
+  if(sig >= 7) return true;
+  // Drop generic narrative with low signal
+  if(cat === 'Narrative' && sig < 6) return false;
+  // Must match a defined category with substance
+  const t = title.toLowerCase();
+  if(cat === 'Earnings')   return true;
+  if(cat === 'Unlock')     return true;
+  if(cat === 'Governance') return true;
+  if(cat === 'Regulatory') return true;
+  if(cat === 'Macro')      return true;
+  if(cat === 'Social'&&/sentiment|fear|greed|trending|community vote|retail/.test(t)) return true;
+  // Narrative only if it has a named asset + price action signal
+  if(cat === 'Narrative'&&/pump|dump|rally|crash|squeeze|breakout|reversal|unlock|listing|partnership|launch/.test(t)) return true;
+  return false;
 }
 
 function getSigFromText(t){
@@ -933,8 +964,7 @@ function render(){
   document.getElementById('empty-wrap').classList.remove('vis');
   wrap.style.display='block';
 
-  // Auto-scroll to results
-  setTimeout(()=>wrap.scrollIntoView({behavior:'smooth', block:'start'}), 100);
+  // No auto-scroll — user controls their position
 
   // legend
   const cc={};
@@ -948,7 +978,7 @@ function render(){
       const col=CAT_COL[it.cat]||'var(--bord2)';
       const sc=it.sig>=8?'var(--c-reg)':it.sig>=6?'var(--c-unlk)':it.sig>=4?'var(--gold)':'var(--dim)';
       return `
-      <div class="list-item" style="--icolor:${col}" onclick="toggle(this,'${x(it.link)}')">
+      <div class="list-item" style="--icolor:${col}" onclick="toggle(this)">
         <div class="item-sig"><span class="sig-n" style="color:${sc}">${it.sig}</span></div>
         <div class="item-body">
           <div class="item-meta">
@@ -956,7 +986,10 @@ function render(){
             <span class="cat-tag-sm" style="border-color:${col};color:${col}">${it.cat}</span>
           </div>
           <div class="item-title">${x(it.title)}</div>
-          ${it.desc?`<div class="item-desc-text">${x(it.desc)}</div>`:''}
+          <div class="item-desc-text">
+            ${it.desc?`<p style="margin-bottom:10px">${x(it.desc)}</p>`:''}
+            ${it.link?`<a href="${x(it.link)}" target="_blank" onclick="event.stopPropagation()" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);text-decoration:none;border:1px solid var(--gold-d);padding:4px 12px;">Open Source →</a>`:''}
+          </div>
         </div>
         <div class="item-aside">
           <span class="aside-src">${x(it.src)}</span>
@@ -970,7 +1003,7 @@ function render(){
       const col=CAT_COL[it.cat]||'var(--bord2)';
       const sc=it.sig>=8?'var(--c-reg)':it.sig>=6?'var(--c-unlk)':it.sig>=4?'var(--gold)':'var(--dim)';
       return `
-      <div class="cat-card" style="--icolor:${col};animation:fadeUp .4s ease ${(i*.04).toFixed(2)}s both" onclick="window.open('${x(it.link)}','_blank')">
+      <div class="cat-card" style="--icolor:${col};animation:fadeUp .4s ease ${(i*.04).toFixed(2)}s both">
         <div class="card-hdr">
           <div class="card-badges">
             <span class="tick-tag ${it.type}">${it.ticker}</span>
@@ -979,20 +1012,18 @@ function render(){
           <span class="card-sig" style="color:${sc}">${it.sig}</span>
         </div>
         <div class="card-title">${x(it.title)}</div>
-        ${it.desc?`<div class="card-excerpt">${x(it.desc.slice(0,120))}…</div>`:''}
+        ${it.desc?`<div class="card-excerpt">${x(it.desc.slice(0,140))}…</div>`:''}
         <div class="card-foot">
           <span class="card-date">${it.date}</span>
-          <span class="card-src">${x(it.src)}</span>
+          ${it.link?`<a href="${x(it.link)}" target="_blank" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);text-decoration:none;">Open →</a>`:'<span class="card-src">'+x(it.src)+'</span>'}
         </div>
       </div>`;
     }).join('');
   }
 }
 
-function toggle(el,link){
-  if(el.classList.contains('open')){ el.classList.remove('open'); return; }
-  el.classList.add('open');
-  if(link&&link!=='undefined'&&link!=='') setTimeout(()=>window.open(link,'_blank'),350);
+function toggle(el){
+  el.classList.toggle('open');
 }
 
 function stats(){
@@ -1003,9 +1034,25 @@ function stats(){
   ['WEEK','MONTH','QUARTER'].forEach(h=>document.getElementById('hb-'+h).textContent=items.filter(i=>i.horizon===h).length);
 }
 
-// ─────────────────────────────────────────
-//  FILTERS
-// ─────────────────────────────────────────
+function resetPage(){
+  items=[]; cryptoMarket=[]; srcSt={};
+  sessionStorage.removeItem('acb_cat');
+  sessionStorage.removeItem('acb_cat_t');
+  typeF='all'; catF='all'; horizon='WEEK';
+  document.querySelectorAll('.fbar .pill').forEach(b=>b.classList.toggle('active',b.textContent==='All'));
+  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.getElementById('q').value='';
+  document.getElementById('res-wrap').style.display='none';
+  document.getElementById('empty-wrap').classList.add('vis');
+  document.getElementById('empty-wrap').querySelector('.empty-title').textContent='No catalysts yet';
+  document.getElementById('empty-wrap').querySelector('.empty-sub').textContent='Hit "Run Full Scan" to surface the broad market';
+  ['st-all','st-wk','st-mo','st-qt'].forEach(id=>document.getElementById(id).textContent='—');
+  ['WEEK','MONTH','QUARTER'].forEach(h=>document.getElementById('hb-'+h).textContent='—');
+  document.getElementById('scan-note').innerHTML='CoinGecko · Binance · CoinPaprika · Fear&amp;Greed<br>CoinDesk · Reuters · Reddit · Google News · 14-day limit';
+  document.getElementById('tb-clock').textContent='—';
+  showErr('');
+}
+
 function setH(h,el){
   horizon=h;
   document.querySelectorAll('.htab').forEach(t=>t.classList.remove('active'));
