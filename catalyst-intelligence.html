@@ -73,7 +73,6 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 .vbtn.active,.vbtn:hover{border-color:var(--gold);color:var(--gold)}
 
 /* SOURCE TAGS */
-.src-bar{padding:7px 28px;border-bottom:1px solid var(--bord);display:flex;gap:5px;flex-wrap:wrap;background:var(--surf2);min-height:32px}
 .src-tag{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;padding:2px 7px;border:1px solid;display:inline-flex;align-items:center;gap:4px;text-transform:uppercase}
 .src-tag.ok{border-color:rgba(46,204,113,.35);color:var(--c-soc);background:rgba(46,204,113,.06)}
 .src-tag.fail{border-color:rgba(231,76,60,.35);color:var(--c-reg);background:rgba(231,76,60,.06)}
@@ -381,21 +380,35 @@ async function fetchAllCC(){
 }
 
 async function fetchCC(src){
-  const base = 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=popular';
+  const base = 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest';
   const url  = src.cat ? base+'&categories='+encodeURIComponent(src.cat) : base;
   const r = await fetch(url, {signal:AbortSignal.timeout(12000)});
   const d = await r.json();
   if(!d.Data||!d.Data.length) return [];
-  return d.Data.slice(0,20).map(item=>({
-    title: item.title||'',
-    desc:  (item.body||'').slice(0,300),
-    link:  item.url||'',
-    pub:   item.published_on ? new Date(item.published_on*1000).toISOString() : '',
-    src:   item.source_info?.name || item.source || src.label,
-    dh:    src.dh,
-    ccCat: item.categories||'',
-    ccTag: item.tags||''
-  }));
+
+  const now = Date.now();
+  return d.Data
+    .filter(item => {
+      if(!item.published_on) return true;
+      const ageHours = (now - item.published_on * 1000) / 3600000;
+      // Only include articles published within the last 7 days for Week sources
+      // Within 30 days for Month sources, 90 days for Quarter
+      if(src.dh === 'WEEK'    && ageHours > 168)  return false; // 7 days
+      if(src.dh === 'MONTH'   && ageHours > 720)  return false; // 30 days
+      if(src.dh === 'QUARTER' && ageHours > 2160) return false; // 90 days
+      return true;
+    })
+    .slice(0,20)
+    .map(item=>({
+      title: item.title||'',
+      desc:  (item.body||'').slice(0,300),
+      link:  item.url||'',
+      pub:   item.published_on ? new Date(item.published_on*1000).toISOString() : '',
+      src:   item.source_info?.name || item.source || src.label,
+      dh:    src.dh,
+      ccCat: item.categories||'',
+      ccTag: item.tags||''
+    }));
 }
 
 // ─── CoinGecko supplementary data (trending + events) ───
@@ -451,12 +464,14 @@ function proc(raw){
   if(!raw.title||raw.title.length<8) return null;
   const tx=(raw.title+' '+raw.desc+' '+(raw.ccCat||'')+' '+(raw.ccTag||'')).toLowerCase();
   const cat=getCat(tx,raw.ccCat||''), typ=getType(tx);
+  const horizon=getHorizon(tx,raw.pub,raw.dh);
+  if(!horizon) return null; // discard articles older than 90 days
   return {
     title: raw.title, desc: raw.desc, link: raw.link,
     src: raw.src, pub: raw.pub,
     cat, type: typ,
     ticker: getTicker(tx,typ),
-    horizon: getHorizon(tx,raw.pub,raw.dh),
+    horizon,
     sig: getSig(tx,cat),
     date: fmtDate(raw.pub,raw.dh)
   };
@@ -502,18 +517,21 @@ function getTicker(t,typ){
 }
 
 function getHorizon(t,pub,def){
+  // Strict age-based assignment using publish date
+  if(pub){
+    const ageHours=(Date.now()-new Date(pub).getTime())/3600000;
+    if(ageHours<=168)  return 'WEEK';    // published within 7 days
+    if(ageHours<=720)  return 'MONTH';   // published within 30 days
+    if(ageHours<=2160) return 'QUARTER'; // published within 90 days
+    return null; // too old — will be filtered out
+  }
+  // No date — use keyword hints
   if(/q2\b|q3\b|next quarter|second quarter|third quarter/.test(t)) return 'QUARTER';
   const now=new Date();
   const mo3=new Date(now.getFullYear(),now.getMonth()+2,1).toLocaleString('en',{month:'long'}).toLowerCase();
   const mo2=new Date(now.getFullYear(),now.getMonth()+1,1).toLocaleString('en',{month:'long'}).toLowerCase();
   if(new RegExp(mo3).test(t)) return 'QUARTER';
   if(new RegExp(mo2).test(t)||/next month|30 days/.test(t)) return 'MONTH';
-  if(pub){
-    const age=(Date.now()-new Date(pub).getTime())/86400000;
-    if(age<7) return def==='WEEK'?'WEEK':def;
-    if(age<30) return 'MONTH';
-    return 'QUARTER';
-  }
   return def;
 }
 
@@ -697,15 +715,7 @@ function showErr(m){
 }
 
 function srcBar(state){
-  const el=document.getElementById('src-bar');
-  if(state==='wait'){
-    el.innerHTML=FEEDS.map(f=>`<span class="src-tag wait"><span class="src-dot"></span>${f.n}</span>`).join('');
-  } else {
-    el.innerHTML=FEEDS.map(f=>{
-      const st=srcSt[f.n]||'fail';
-      return `<span class="src-tag ${st}"><span class="src-dot"></span>${f.n}</span>`;
-    }).join('');
-  }
+  // Source bar removed from UI — function kept as no-op to avoid errors
 }
 
 // ─────────────────────────────────────────
