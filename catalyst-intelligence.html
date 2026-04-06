@@ -186,8 +186,8 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
   <div class="scan-panel">
     <button class="scan-btn" id="scan-btn" onclick="startScan()">▶ Run Full Scan</button>
     <div class="scan-note" id="scan-note">
-      CoinGecko · CoinDesk · CoinTelegraph · Reuters<br>
-      Decrypt · Reddit · Google News · Free only
+      CryptoCompare · CoinGecko · 10 live categories<br>
+      Native CORS · No proxy · No API key
     </div>
   </div>
 </div>
@@ -246,9 +246,6 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
   </div>
 </div>
 
-<!-- SOURCE STATUS -->
-<div class="src-bar" id="src-bar"></div>
-
 <!-- ERROR -->
 <div class="err-bar" id="err-bar"></div>
 
@@ -279,39 +276,26 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 <!-- FOOTER -->
 <div class="footer">
   <div class="foot-brand">Acress Biz</div>
-  <div class="foot-note">Catalyst Intelligence · Tool II · Free sources only · Not financial advice</div>
+  <div class="foot-note">Catalyst Intelligence · Tool II · CryptoCompare + CoinGecko · Not financial advice</div>
 </div>
 
 <script>
 // ─────────────────────────────────────────
-//  CONFIG
+//  CONFIG — native CORS APIs, no proxy needed
 // ─────────────────────────────────────────
-const PROXY = 'https://api.allorigins.win/get?url=';
 
-const FEEDS = [
-  // WEEK — breaking
-  {n:'CoinDesk',      u:'https://www.coindesk.com/arc/outboundfeeds/rss/',                                                              dh:'WEEK'},
-  {n:'CoinTelegraph', u:'https://cointelegraph.com/rss',                                                                                dh:'WEEK'},
-  {n:'Decrypt',       u:'https://decrypt.co/feed',                                                                                      dh:'WEEK'},
-  {n:'Reuters Biz',   u:'https://feeds.reuters.com/reuters/businessNews',                                                               dh:'WEEK'},
-  {n:'Reddit Crypto', u:'https://www.reddit.com/r/CryptoCurrency/hot/.rss',                                                             dh:'WEEK'},
-  {n:'Reddit Stocks', u:'https://www.reddit.com/r/stocks/hot/.rss',                                                                     dh:'WEEK'},
-  {n:'Reddit WSB',    u:'https://www.reddit.com/r/wallstreetbets/hot/.rss',                                                             dh:'WEEK'},
-  // WEEK — targeted Google News
-  {n:'GNews·Crypto',  u:'https://news.google.com/rss/search?q=crypto+market+token+news&hl=en-US&gl=US&ceid=US:en',                     dh:'WEEK'},
-  {n:'GNews·SEC',     u:'https://news.google.com/rss/search?q=SEC+crypto+regulation+enforcement&hl=en-US&gl=US&ceid=US:en',            dh:'WEEK'},
-  {n:'GNews·Unlock',  u:'https://news.google.com/rss/search?q=token+unlock+vesting+crypto&hl=en-US&gl=US&ceid=US:en',                  dh:'WEEK'},
-  {n:'GNews·Earn',    u:'https://news.google.com/rss/search?q=earnings+results+this+week+stock&hl=en-US&gl=US&ceid=US:en',             dh:'WEEK'},
-  // MONTH
-  {n:'GN·M·Earn',     u:'https://news.google.com/rss/search?q=earnings+calendar+upcoming+next+month&hl=en-US&gl=US&ceid=US:en',        dh:'MONTH'},
-  {n:'GN·M·Unlk',     u:'https://news.google.com/rss/search?q=crypto+token+unlock+May+June+2026&hl=en-US&gl=US&ceid=US:en',           dh:'MONTH'},
-  {n:'GN·M·Fed',      u:'https://news.google.com/rss/search?q=Federal+Reserve+FOMC+meeting+rate+2026&hl=en-US&gl=US&ceid=US:en',      dh:'MONTH'},
-  {n:'GN·M·Gov',      u:'https://news.google.com/rss/search?q=crypto+governance+DAO+vote+proposal&hl=en-US&gl=US&ceid=US:en',         dh:'MONTH'},
-  // QUARTER
-  {n:'GN·Q·Earn',     u:'https://news.google.com/rss/search?q=Q2+Q3+2026+earnings+outlook+forecast&hl=en-US&gl=US&ceid=US:en',        dh:'QUARTER'},
-  {n:'GN·Q·Unlk',     u:'https://news.google.com/rss/search?q=crypto+token+unlock+Q2+Q3+2026&hl=en-US&gl=US&ceid=US:en',             dh:'QUARTER'},
-  {n:'GN·Q·Reg',      u:'https://news.google.com/rss/search?q=crypto+regulation+legislation+law+2026&hl=en-US&gl=US&ceid=US:en',      dh:'QUARTER'},
-  {n:'GN·Q·TGE',      u:'https://news.google.com/rss/search?q=token+launch+TGE+airdrop+IDO+2026&hl=en-US&gl=US&ceid=US:en',          dh:'QUARTER'},
+// CryptoCompare news categories → our categories
+const CC_SOURCES = [
+  {n:'CC·Latest',      cat:null,          dh:'WEEK',    label:'CryptoCompare News'},
+  {n:'CC·Regulation',  cat:'Regulation',  dh:'WEEK',    label:'CryptoCompare Regulation'},
+  {n:'CC·Market',      cat:'Market',      dh:'WEEK',    label:'CryptoCompare Market'},
+  {n:'CC·Technology',  cat:'Technology',  dh:'WEEK',    label:'CryptoCompare Tech'},
+  {n:'CC·Blockchain',  cat:'Blockchain',  dh:'WEEK',    label:'CryptoCompare Blockchain'},
+  {n:'CC·Trading',     cat:'Trading',     dh:'WEEK',    label:'CryptoCompare Trading'},
+  {n:'CC·Earnings',    cat:'Fiat',        dh:'WEEK',    label:'CryptoCompare Fiat/Macro'},
+  {n:'CC·ICO',         cat:'ICO',         dh:'MONTH',   label:'CryptoCompare ICO/TGE'},
+  {n:'CC·Exchanges',   cat:'Exchange',    dh:'WEEK',    label:'CryptoCompare Exchanges'},
+  {n:'CC·Mining',      cat:'Mining',      dh:'MONTH',   label:'CryptoCompare Mining'},
 ];
 
 const NASDAQ = ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','GOOG','TSLA','AVGO','COST',
@@ -335,31 +319,42 @@ let items=[], crypto=[], horizon='WEEK', typeF='all', catF='all', viewM='list', 
 // ─────────────────────────────────────────
 async function startScan(){
   busy(true); showErr('');
+  // Reset all filters so results are never hidden
+  typeF='all'; catF='all'; horizon='WEEK';
+  document.querySelectorAll('.fbar .pill').forEach((b,i)=>{ b.classList.toggle('active', b.textContent==='All'); });
+  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.getElementById('q').value='';
   document.getElementById('res-wrap').style.display='none';
   document.getElementById('empty-wrap').classList.remove('vis');
   try {
     prog(5,'Building asset universe...','Fetching top 100 crypto from CoinGecko');
     crypto = await getCrypto();
 
-    prog(20,'Scanning all sources...','Fetching feeds in batches — takes 20–40 seconds');
-    const raw = await getAllFeeds();
+    prog(25,'Fetching CryptoCompare news...','Live crypto news — no proxy needed');
+    const ccItems = await fetchAllCC();
 
-    prog(80,'Processing...','Categorising and scoring '+raw.length+' items');
+    prog(65,'Fetching CoinGecko events...','Upcoming crypto events and trending');
+    const cgItems = await fetchCoinGeckoData();
+
+    prog(80,'Processing catalysts...','Categorising and scoring all items');
+    const raw = [...ccItems, ...cgItems];
     items = dedup(raw.map(proc).filter(Boolean)).sort((a,b)=>b.sig-a.sig);
 
     sessionStorage.setItem('acb_cat', JSON.stringify(items));
     sessionStorage.setItem('acb_cat_t', Date.now());
 
     stats(); render();
+    const okCount = Object.values(srcSt).filter(v=>v==='ok').length;
+    const totCount = Object.keys(srcSt).length;
     document.getElementById('tb-clock').textContent = 'Last scan: '+new Date().toLocaleTimeString();
-    document.getElementById('scan-note').textContent = items.length+' catalysts · '+Object.values(srcSt).filter(v=>v==='ok').length+'/'+FEEDS.length+' sources OK';
-  } catch(e){ showErr('Scan error: '+(e.message||'Unknown')); document.getElementById('empty-wrap').classList.add('vis'); }
+    document.getElementById('scan-note').textContent = items.length+' catalysts · '+okCount+'/'+totCount+' sources OK';
+  } catch(e){ showErr('Scan error: '+(e.message||'Unknown. Check console for details.')); document.getElementById('empty-wrap').classList.add('vis'); console.error(e); }
   busy(false);
 }
 
 async function getCrypto(){
   try{
-    const r=await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1');
+    const r=await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1',{signal:AbortSignal.timeout(10000)});
     return (await r.json()).map(c=>({sym:c.symbol.toUpperCase(),name:c.name}));
   }catch{
     return [{sym:'BTC',name:'Bitcoin'},{sym:'ETH',name:'Ethereum'},{sym:'SOL',name:'Solana'},
@@ -372,65 +367,90 @@ async function getCrypto(){
   }
 }
 
-async function getAllFeeds(){
+// ─── CryptoCompare News API (native CORS, no key needed) ───
+async function fetchAllCC(){
   srcBar('wait');
-  // Batch into groups of 5 to avoid overwhelming the proxy
-  const batches = [];
-  for(let i=0;i<FEEDS.length;i+=5) batches.push(FEEDS.slice(i,i+5));
   const all=[];
-  for(const batch of batches){
-    const res = await Promise.allSettled(batch.map(f=>getFeed(f)));
-    res.forEach((r,i)=>{
-      const name=batch[i].n;
-      if(r.status==='fulfilled'&&r.value.length>0){srcSt[name]='ok';all.push(...r.value);}
-      else{srcSt[name]='fail';}
-    });
-    await new Promise(r=>setTimeout(r,300)); // small pause between batches
-  }
-  srcBar('done'); return all;
+  const results = await Promise.allSettled(CC_SOURCES.map(s=>fetchCC(s)));
+  results.forEach((r,i)=>{
+    const name=CC_SOURCES[i].n;
+    if(r.status==='fulfilled'&&r.value.length>0){srcSt[name]='ok';all.push(...r.value);}
+    else{srcSt[name]='fail';}
+  });
+  return all;
 }
 
-async function getFeed(f){
-  try {
-    const proxyUrl = PROXY + encodeURIComponent(f.u);
-    const r = await fetch(proxyUrl, {signal: AbortSignal.timeout(15000)});
-    const d = await r.json();
-    if(!d.contents) return [];
-
-    // Parse RSS/Atom XML
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(d.contents, 'text/xml');
-
-    // Support both RSS <item> and Atom <entry>
-    const nodes = [...xml.querySelectorAll('item'), ...xml.querySelectorAll('entry')];
-    if(!nodes.length) return [];
-
-    return nodes.slice(0,20).map(el=>{
-      const title = xmlText(el,'title');
-      const desc  = strip(xmlText(el,'description')||xmlText(el,'summary')||xmlText(el,'content')||'');
-      const link  = xmlText(el,'link')||el.querySelector('link')?.getAttribute('href')||'';
-      const pub   = xmlText(el,'pubDate')||xmlText(el,'published')||xmlText(el,'updated')||'';
-      if(!title||title.length<8) return null;
-      return {title:title.trim(), desc:desc.slice(0,300), link, pub, src:f.n, dh:f.dh};
-    }).filter(Boolean);
-  } catch(e) {
-    return [];
-  }
+async function fetchCC(src){
+  const base = 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=popular';
+  const url  = src.cat ? base+'&categories='+encodeURIComponent(src.cat) : base;
+  const r = await fetch(url, {signal:AbortSignal.timeout(12000)});
+  const d = await r.json();
+  if(!d.Data||!d.Data.length) return [];
+  return d.Data.slice(0,20).map(item=>({
+    title: item.title||'',
+    desc:  (item.body||'').slice(0,300),
+    link:  item.url||'',
+    pub:   item.published_on ? new Date(item.published_on*1000).toISOString() : '',
+    src:   item.source_info?.name || item.source || src.label,
+    dh:    src.dh,
+    ccCat: item.categories||'',
+    ccTag: item.tags||''
+  }));
 }
 
-function xmlText(el, tag){
-  const node = el.querySelector(tag);
-  if(!node) return '';
-  return (node.textContent||'').trim();
+// ─── CoinGecko supplementary data (trending + events) ───
+async function fetchCoinGeckoData(){
+  const all=[];
+
+  // Trending coins → narrative signals
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/search/trending',{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    if(d.coins){
+      srcSt['CG·Trending']='ok';
+      d.coins.slice(0,10).forEach(c=>{
+        const coin=c.item;
+        all.push({
+          title:`${coin.name} (${coin.symbol.toUpperCase()}) trending on CoinGecko`,
+          desc:`Ranked #${coin.market_cap_rank||'?'} by market cap. Currently trending across the CoinGecko platform — signal of retail interest spike.`,
+          link:`https://www.coingecko.com/en/coins/${coin.id}`,
+          pub: new Date().toISOString(),
+          src:'CoinGecko Trending', dh:'WEEK', ccCat:'Market', ccTag:coin.symbol
+        });
+      });
+    }
+  }catch{srcSt['CG·Trending']='fail';}
+
+  // CoinGecko global market data → macro signal
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/global',{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    if(d.data){
+      srcSt['CG·Global']='ok';
+      const g=d.data;
+      const btcDom=(g.market_cap_percentage?.btc||0).toFixed(1);
+      const chg=(g.market_cap_change_percentage_24h_usd||0).toFixed(2);
+      all.push({
+        title:`Global crypto market cap ${chg>0?'+':''}${chg}% in 24h — BTC dominance ${btcDom}%`,
+        desc:`Total market: $${(g.total_market_cap?.usd/1e12||0).toFixed(2)}T. Active coins: ${g.active_cryptocurrencies?.toLocaleString()}. Markets: ${g.markets?.toLocaleString()}.`,
+        link:'https://www.coingecko.com/en/global-charts',
+        pub: new Date().toISOString(),
+        src:'CoinGecko Global', dh:'WEEK', ccCat:'Market', ccTag:'market'
+      });
+    }
+  }catch{srcSt['CG·Global']='fail';}
+
+  srcBar('done');
+  return all;
 }
 
 // ─────────────────────────────────────────
 //  PROCESS
 // ─────────────────────────────────────────
 function proc(raw){
-  if(!raw.title||raw.title.length<10) return null;
-  const tx=(raw.title+' '+raw.desc).toLowerCase();
-  const cat=getCat(tx), typ=getType(tx);
+  if(!raw.title||raw.title.length<8) return null;
+  const tx=(raw.title+' '+raw.desc+' '+(raw.ccCat||'')+' '+(raw.ccTag||'')).toLowerCase();
+  const cat=getCat(tx,raw.ccCat||''), typ=getType(tx);
   return {
     title: raw.title, desc: raw.desc, link: raw.link,
     src: raw.src, pub: raw.pub,
@@ -442,9 +462,19 @@ function proc(raw){
   };
 }
 
-function getCat(t){
+function getCat(t, ccCat){
+  // Use CryptoCompare category data first if available
+  if(ccCat){
+    const cc=ccCat.toLowerCase();
+    if(/regulation/.test(cc)) return 'Regulatory';
+    if(/ico|tge|launch/.test(cc)) return 'Unlock';
+    if(/mining/.test(cc)) return 'Narrative';
+    if(/exchange/.test(cc)) return 'Narrative';
+    if(/fiat|macro|fed|cpi/.test(cc)) return 'Macro';
+  }
+  // Keyword fallback
   if(/\bearnings\b|eps\b|quarterly results|revenue beat|profit reported|missed estimates/.test(t)) return 'Earnings';
-  if(/token unlock|vesting cliff|unlock schedule|release tokens|supply increase/.test(t)) return 'Unlock';
+  if(/token unlock|vesting cliff|unlock schedule|release tokens|supply increase|tge\b|token launch/.test(t)) return 'Unlock';
   if(/governance|dao\b|snapshot vote|on-chain vote|proposal passed|protocol upgrade vote/.test(t)) return 'Governance';
   if(/\bsec\b|\bcftc\b|regulation|regulatory|enforcement action|ruling|lawsuit|legislation|compliance deadline/.test(t)) return 'Regulatory';
   if(/reddit|wallstreetbets|r\/|retail investor|social sentiment|trending|community|viral/.test(t)) return 'Social';
@@ -544,6 +574,9 @@ function render(){
 
   document.getElementById('empty-wrap').classList.remove('vis');
   wrap.style.display='block';
+
+  // Auto-scroll to results
+  setTimeout(()=>wrap.scrollIntoView({behavior:'smooth', block:'start'}), 100);
 
   // legend
   const cc={};
