@@ -283,20 +283,6 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 //  CONFIG — native CORS APIs, no proxy needed
 // ─────────────────────────────────────────
 
-// CryptoCompare news categories → our categories
-const CC_SOURCES = [
-  {n:'CC·Latest',      cat:null,          dh:'WEEK',    label:'CryptoCompare News'},
-  {n:'CC·Regulation',  cat:'Regulation',  dh:'WEEK',    label:'CryptoCompare Regulation'},
-  {n:'CC·Market',      cat:'Market',      dh:'WEEK',    label:'CryptoCompare Market'},
-  {n:'CC·Technology',  cat:'Technology',  dh:'WEEK',    label:'CryptoCompare Tech'},
-  {n:'CC·Blockchain',  cat:'Blockchain',  dh:'WEEK',    label:'CryptoCompare Blockchain'},
-  {n:'CC·Trading',     cat:'Trading',     dh:'WEEK',    label:'CryptoCompare Trading'},
-  {n:'CC·Earnings',    cat:'Fiat',        dh:'WEEK',    label:'CryptoCompare Fiat/Macro'},
-  {n:'CC·ICO',         cat:'ICO',         dh:'MONTH',   label:'CryptoCompare ICO/TGE'},
-  {n:'CC·Exchanges',   cat:'Exchange',    dh:'WEEK',    label:'CryptoCompare Exchanges'},
-  {n:'CC·Mining',      cat:'Mining',      dh:'MONTH',   label:'CryptoCompare Mining'},
-];
-
 const NASDAQ = ['AAPL','MSFT','NVDA','AMZN','META','GOOGL','GOOG','TSLA','AVGO','COST',
   'NFLX','AMD','ADBE','QCOM','TXN','AMAT','INTC','MU','LRCX','KLAC','SNPS','CDNS',
   'MRVL','PANW','CRWD','ZS','FTNT','ABNB','BKNG','SBUX','CSCO','ORCL','CRM','NOW',
@@ -308,243 +294,464 @@ const CAT_COL = {
   Regulatory:'var(--c-reg)',Social:'var(--c-soc)',Macro:'var(--c-mac)',Narrative:'var(--c-narr)'
 };
 
+// Known macro calendar — forward-looking hardcoded events
+const MACRO_CALENDAR = [
+  {title:'FOMC Interest Rate Decision',desc:'Federal Reserve meets to set interest rate policy. Market-moving event for risk assets including crypto.',date:'2026-05-07',cat:'Macro',sig:9,dh:'MONTH'},
+  {title:'FOMC Interest Rate Decision',desc:'Federal Reserve June meeting. Rate path decision critical for crypto and tech equity valuations.',date:'2026-06-18',cat:'Macro',sig:9,dh:'MONTH'},
+  {title:'FOMC Interest Rate Decision',desc:'Federal Reserve July meeting. Third rate decision of Q3 2026.',date:'2026-07-29',cat:'Macro',sig:9,dh:'QUARTER'},
+  {title:'US CPI Inflation Data Release',desc:'Monthly consumer price index release. Key determinant of Fed rate path and risk asset direction.',date:'2026-05-13',cat:'Macro',sig:8,dh:'MONTH'},
+  {title:'US CPI Inflation Data Release',desc:'June CPI print — midpoint inflation check for H1 2026.',date:'2026-06-11',cat:'Macro',sig:8,dh:'MONTH'},
+  {title:'US CPI Inflation Data Release',desc:'July CPI release — first major inflation print of Q3 2026.',date:'2026-07-14',cat:'Macro',sig:8,dh:'QUARTER'},
+  {title:'Q1 2026 Earnings Season Peak',desc:'Major US tech companies report Q1 2026 earnings. Nasdaq heavyweights AAPL MSFT NVDA META GOOGL AMZN expected.',date:'2026-04-25',cat:'Earnings',sig:8,dh:'WEEK'},
+  {title:'Q2 2026 Earnings Season Opens',desc:'Q2 earnings season begins mid-July. Banks report first, followed by tech majors in late July.',date:'2026-07-15',cat:'Earnings',sig:7,dh:'QUARTER'},
+  {title:'US Jobs Report (NFP)',desc:'Non-farm payrolls release. Strong jobs data historically suppresses rate cut expectations, pressuring crypto.',date:'2026-05-01',cat:'Macro',sig:7,dh:'MONTH'},
+  {title:'US Jobs Report (NFP)',desc:'June non-farm payrolls — key labour market read for H1 2026.',date:'2026-06-05',cat:'Macro',sig:7,dh:'MONTH'},
+  {title:'Bitcoin ETF Options Expiry',desc:'Large monthly BTC ETF options expiry. Historically drives short-term volatility around expiry date.',date:'2026-05-16',cat:'Narrative',sig:6,dh:'MONTH'},
+  {title:'Bitcoin ETF Options Expiry',desc:'June BTC ETF options expiry. Watch for max pain price influence in the week prior.',date:'2026-06-20',cat:'Narrative',sig:6,dh:'MONTH'},
+  {title:'Ethereum Pectra Upgrade Aftermath',desc:'Post-upgrade ecosystem effects continuing to play out. Staking and L2 activity metrics to watch.',date:'2026-05-01',cat:'Governance',sig:7,dh:'MONTH'},
+  {title:'SEC Crypto Regulatory Framework Deadline',desc:'Expected SEC guidance on crypto exchange and stablecoin regulations. Institutional positioning event.',date:'2026-06-30',cat:'Regulatory',sig:9,dh:'QUARTER'},
+  {title:'G7 Digital Asset Policy Summit',desc:'G7 nations expected to align on crypto regulatory approach. Cross-border stablecoin rules under discussion.',date:'2026-06-15',cat:'Regulatory',sig:8,dh:'MONTH'},
+];
+
 // ─────────────────────────────────────────
 //  STATE
 // ─────────────────────────────────────────
-let items=[], crypto=[], horizon='WEEK', typeF='all', catF='all', viewM='list', srcSt={};
+let items=[], cryptoMarket=[], horizon='WEEK', typeF='all', catF='all', viewM='list', srcSt={};
 
 // ─────────────────────────────────────────
 //  SCAN
 // ─────────────────────────────────────────
 async function startScan(){
   busy(true); showErr('');
-  // Reset all filters so results are never hidden
   typeF='all'; catF='all'; horizon='WEEK';
-  document.querySelectorAll('.fbar .pill').forEach((b,i)=>{ b.classList.toggle('active', b.textContent==='All'); });
+  document.querySelectorAll('.fbar .pill').forEach(b=>{ b.classList.toggle('active', b.textContent==='All'); });
   document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',i===0));
   document.getElementById('q').value='';
   document.getElementById('res-wrap').style.display='none';
   document.getElementById('empty-wrap').classList.remove('vis');
+
   try {
-    prog(5,'Building asset universe...','Fetching top 100 crypto from CoinGecko');
-    crypto = await getCrypto();
+    prog(5,'Building market universe...','Fetching top 250 coins from CoinGecko');
+    cryptoMarket = await fetchCGMarkets();
 
-    prog(25,'Fetching CryptoCompare news...','Live crypto news — no proxy needed');
-    const ccItems = await fetchAllCC();
+    prog(20,'Fetching market signals...','CoinGecko — price movers, trending, DeFi, global');
+    const cgItems = await fetchAllCoinGecko();
 
-    prog(65,'Fetching CoinGecko events...','Upcoming crypto events and trending');
-    const cgItems = await fetchCoinGeckoData();
+    prog(45,'Fetching futures signals...','Binance — funding rates, volume leaders');
+    const bnItems = await fetchAllBinance();
 
-    prog(80,'Processing catalysts...','Categorising and scoring all items');
-    const raw = [...ccItems, ...cgItems];
-    items = dedup(raw.map(proc).filter(Boolean)).sort((a,b)=>b.sig-a.sig);
+    prog(60,'Fetching sentiment & events...','Fear & Greed, CoinPaprika events');
+    const evItems = await fetchSentimentAndEvents();
+
+    prog(75,'Loading macro calendar...','FOMC, CPI, earnings seasons, regulatory deadlines');
+    const macroItems = buildMacroCalendar();
+
+    prog(85,'Fetching live news...','CryptoCompare (bonus — may be unavailable)');
+    const ccItems = await fetchCCBonus();
+
+    prog(92,'Processing all catalysts...','Categorising, scoring, deduplicating');
+    const raw = [...cgItems, ...bnItems, ...evItems, ...macroItems, ...ccItems];
+    items = dedup(raw.filter(Boolean)).sort((a,b)=>b.sig-a.sig);
 
     sessionStorage.setItem('acb_cat', JSON.stringify(items));
     sessionStorage.setItem('acb_cat_t', Date.now());
 
     stats(); render();
-    const okCount = Object.values(srcSt).filter(v=>v==='ok').length;
-    const totCount = Object.keys(srcSt).length;
+    const ok = Object.values(srcSt).filter(v=>v==='ok').length;
+    const tot = Object.keys(srcSt).length;
     document.getElementById('tb-clock').textContent = 'Last scan: '+new Date().toLocaleTimeString();
-    document.getElementById('scan-note').textContent = items.length+' catalysts · '+okCount+'/'+totCount+' sources OK';
-  } catch(e){ showErr('Scan error: '+(e.message||'Unknown. Check console for details.')); document.getElementById('empty-wrap').classList.add('vis'); console.error(e); }
+    document.getElementById('scan-note').textContent = items.length+' catalysts · '+ok+'/'+tot+' sources OK';
+  } catch(e){
+    showErr('Scan error: '+(e.message||'Unknown'));
+    document.getElementById('empty-wrap').classList.add('vis');
+    console.error(e);
+  }
   busy(false);
 }
 
-async function getCrypto(){
+// ─────────────────────────────────────────
+//  COINGECKO — comprehensive
+// ─────────────────────────────────────────
+async function fetchCGMarkets(){
   try{
-    const r=await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1',{signal:AbortSignal.timeout(10000)});
-    return (await r.json()).map(c=>({sym:c.symbol.toUpperCase(),name:c.name}));
+    const r=await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&price_change_percentage=24h,7d,30d',{signal:AbortSignal.timeout(12000)});
+    const d=await r.json();
+    srcSt['CG·Markets']='ok';
+    return d;
   }catch{
-    return [{sym:'BTC',name:'Bitcoin'},{sym:'ETH',name:'Ethereum'},{sym:'SOL',name:'Solana'},
-      {sym:'BNB',name:'BNB'},{sym:'XRP',name:'XRP'},{sym:'ADA',name:'Cardano'},
-      {sym:'AVAX',name:'Avalanche'},{sym:'DOT',name:'Polkadot'},{sym:'LINK',name:'Chainlink'},
-      {sym:'UNI',name:'Uniswap'},{sym:'DOGE',name:'Dogecoin'},{sym:'MATIC',name:'Polygon'},
-      {sym:'OP',name:'Optimism'},{sym:'ARB',name:'Arbitrum'},{sym:'SUI',name:'Sui'},
-      {sym:'ATOM',name:'Cosmos'},{sym:'NEAR',name:'NEAR'},{sym:'INJ',name:'Injective'},
-      {sym:'TIA',name:'Celestia'},{sym:'IMX',name:'Immutable'}];
+    srcSt['CG·Markets']='fail';
+    return [];
   }
 }
 
-// ─── CryptoCompare News API (native CORS, no key needed) ───
-async function fetchAllCC(){
-  srcBar('wait');
-  const all=[];
-  const results = await Promise.allSettled(CC_SOURCES.map(s=>fetchCC(s)));
-  results.forEach((r,i)=>{
-    const name=CC_SOURCES[i].n;
-    if(r.status==='fulfilled'&&r.value.length>0){srcSt[name]='ok';all.push(...r.value);}
-    else{srcSt[name]='fail';}
-  });
-  return all;
-}
-
-async function fetchCC(src){
-  const base = 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest';
-  const url  = src.cat ? base+'&categories='+encodeURIComponent(src.cat) : base;
-  const r = await fetch(url, {signal:AbortSignal.timeout(12000)});
-  const d = await r.json();
-  if(!d.Data||!d.Data.length) return [];
-
-  const now = Date.now();
-  return d.Data
-    .filter(item => {
-      if(!item.published_on) return true;
-      const ageHours = (now - item.published_on * 1000) / 3600000;
-      // Only include articles published within the last 7 days for Week sources
-      // Within 30 days for Month sources, 90 days for Quarter
-      if(src.dh === 'WEEK'    && ageHours > 168)  return false; // 7 days
-      if(src.dh === 'MONTH'   && ageHours > 720)  return false; // 30 days
-      if(src.dh === 'QUARTER' && ageHours > 2160) return false; // 90 days
-      return true;
-    })
-    .slice(0,20)
-    .map(item=>({
-      title: item.title||'',
-      desc:  (item.body||'').slice(0,300),
-      link:  item.url||'',
-      pub:   item.published_on ? new Date(item.published_on*1000).toISOString() : '',
-      src:   item.source_info?.name || item.source || src.label,
-      dh:    src.dh,
-      ccCat: item.categories||'',
-      ccTag: item.tags||''
-    }));
-}
-
-// ─── CoinGecko supplementary data (trending + events) ───
-async function fetchCoinGeckoData(){
+async function fetchAllCoinGecko(){
   const all=[];
 
-  // Trending coins → narrative signals
+  // 1. Price movers — 24h gainers > 15%
+  try{
+    const gainers=cryptoMarket.filter(c=>c.price_change_percentage_24h>15).slice(0,20);
+    gainers.forEach(c=>{
+      const pct=c.price_change_percentage_24h.toFixed(1);
+      all.push(make({
+        title:`${c.name} (${c.symbol.toUpperCase()}) +${pct}% in 24h — post-pump reversal watch`,
+        desc:`Price: $${c.current_price.toLocaleString()}. Market cap: $${fmt(c.market_cap)}. Volume: $${fmt(c.total_volume)}. Significant pump — monitor for distribution and short entry.`,
+        link:`https://www.coingecko.com/en/coins/${c.id}`,
+        ticker:c.symbol.toUpperCase(), type:'crypto', cat:'Narrative',
+        sig: c.price_change_percentage_24h>50?9:c.price_change_percentage_24h>30?8:6,
+        dh:'WEEK', src:'CoinGecko Markets'
+      }));
+    });
+    if(gainers.length) srcSt['CG·24h Gainers']='ok';
+  }catch{srcSt['CG·24h Gainers']='fail';}
+
+  // 2. Significant 24h losers > -15%
+  try{
+    const losers=cryptoMarket.filter(c=>c.price_change_percentage_24h<-15).slice(0,10);
+    losers.forEach(c=>{
+      const pct=c.price_change_percentage_24h.toFixed(1);
+      all.push(make({
+        title:`${c.name} (${c.symbol.toUpperCase()}) ${pct}% in 24h — capitulation or reversal signal`,
+        desc:`Price: $${c.current_price.toLocaleString()}. Volume: $${fmt(c.total_volume)}. Sharp sell-off — watch for bounce or continuation.`,
+        link:`https://www.coingecko.com/en/coins/${c.id}`,
+        ticker:c.symbol.toUpperCase(), type:'crypto', cat:'Narrative',
+        sig: Math.abs(c.price_change_percentage_24h)>40?8:6,
+        dh:'WEEK', src:'CoinGecko Markets'
+      }));
+    });
+  }catch{}
+
+  // 3. 7-day movers > 30%
+  try{
+    cryptoMarket.filter(c=>c.price_change_percentage_7d_in_currency>30).slice(0,15).forEach(c=>{
+      const pct=(c.price_change_percentage_7d_in_currency||0).toFixed(1);
+      all.push(make({
+        title:`${c.name} (${c.symbol.toUpperCase()}) +${pct}% over 7 days — extended rally signal`,
+        desc:`Weekly pump candidate for mean reversion. MCap: $${fmt(c.market_cap)}. Vol/MCap ratio: ${((c.total_volume/c.market_cap)*100).toFixed(1)}%.`,
+        link:`https://www.coingecko.com/en/coins/${c.id}`,
+        ticker:c.symbol.toUpperCase(), type:'crypto', cat:'Narrative',
+        sig: c.price_change_percentage_7d_in_currency>60?8:7,
+        dh:'WEEK', src:'CoinGecko 7d'
+      }));
+    });
+    srcSt['CG·7d Movers']='ok';
+  }catch{srcSt['CG·7d Movers']='fail';}
+
+  // 4. Volume anomalies — vol > 50% of market cap
+  try{
+    cryptoMarket.filter(c=>c.market_cap>0&&(c.total_volume/c.market_cap)>0.5).slice(0,10).forEach(c=>{
+      all.push(make({
+        title:`${c.name} (${c.symbol.toUpperCase()}) — volume ${((c.total_volume/c.market_cap)*100).toFixed(0)}% of market cap`,
+        desc:`Extreme volume relative to market cap. Vol: $${fmt(c.total_volume)}. MCap: $${fmt(c.market_cap)}. Unusual activity — potential manipulation or major catalyst.`,
+        link:`https://www.coingecko.com/en/coins/${c.id}`,
+        ticker:c.symbol.toUpperCase(), type:'crypto', cat:'Narrative',
+        sig:8, dh:'WEEK', src:'CoinGecko Volume'
+      }));
+    });
+    srcSt['CG·Volume Anomaly']='ok';
+  }catch{srcSt['CG·Volume Anomaly']='fail';}
+
+  // 5. Trending coins
   try{
     const r=await fetch('https://api.coingecko.com/api/v3/search/trending',{signal:AbortSignal.timeout(10000)});
     const d=await r.json();
     if(d.coins){
       srcSt['CG·Trending']='ok';
-      d.coins.slice(0,10).forEach(c=>{
+      d.coins.forEach(c=>{
         const coin=c.item;
-        all.push({
-          title:`${coin.name} (${coin.symbol.toUpperCase()}) trending on CoinGecko`,
-          desc:`Ranked #${coin.market_cap_rank||'?'} by market cap. Currently trending across the CoinGecko platform — signal of retail interest spike.`,
+        all.push(make({
+          title:`${coin.name} (${coin.symbol.toUpperCase()}) trending — retail interest spike`,
+          desc:`Rank #${coin.market_cap_rank||'?'} by market cap. Trending on CoinGecko — early signal of retail FOMO building.`,
           link:`https://www.coingecko.com/en/coins/${coin.id}`,
-          pub: new Date().toISOString(),
-          src:'CoinGecko Trending', dh:'WEEK', ccCat:'Market', ccTag:coin.symbol
-        });
+          ticker:coin.symbol.toUpperCase(), type:'crypto', cat:'Social',
+          sig:6, dh:'WEEK', src:'CoinGecko Trending'
+        }));
       });
     }
   }catch{srcSt['CG·Trending']='fail';}
 
-  // CoinGecko global market data → macro signal
+  // 6. Global market macro
   try{
     const r=await fetch('https://api.coingecko.com/api/v3/global',{signal:AbortSignal.timeout(10000)});
     const d=await r.json();
     if(d.data){
       srcSt['CG·Global']='ok';
       const g=d.data;
-      const btcDom=(g.market_cap_percentage?.btc||0).toFixed(1);
       const chg=(g.market_cap_change_percentage_24h_usd||0).toFixed(2);
-      all.push({
-        title:`Global crypto market cap ${chg>0?'+':''}${chg}% in 24h — BTC dominance ${btcDom}%`,
-        desc:`Total market: $${(g.total_market_cap?.usd/1e12||0).toFixed(2)}T. Active coins: ${g.active_cryptocurrencies?.toLocaleString()}. Markets: ${g.markets?.toLocaleString()}.`,
+      const btcDom=(g.market_cap_percentage?.btc||0).toFixed(1);
+      const ethDom=(g.market_cap_percentage?.eth||0).toFixed(1);
+      all.push(make({
+        title:`Crypto total market cap ${chg>0?'+':''}${chg}% · BTC dom ${btcDom}% · ETH ${ethDom}%`,
+        desc:`Total market: $${(g.total_market_cap?.usd/1e12||0).toFixed(2)}T. Active coins: ${g.active_cryptocurrencies?.toLocaleString()}. ${parseFloat(btcDom)>55?'High BTC dominance — altseason not yet underway.':parseFloat(btcDom)<45?'Low BTC dominance — altseason conditions present.':'BTC dominance neutral range.'}`,
         link:'https://www.coingecko.com/en/global-charts',
-        pub: new Date().toISOString(),
-        src:'CoinGecko Global', dh:'WEEK', ccCat:'Market', ccTag:'market'
-      });
+        ticker:'MARKET', type:'macro', cat:'Macro',
+        sig: Math.abs(parseFloat(chg))>5?8:5, dh:'WEEK', src:'CoinGecko Global'
+      }));
     }
   }catch{srcSt['CG·Global']='fail';}
 
-  srcBar('done');
+  // 7. DeFi overview
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/global/decentralized_finance_defi',{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    if(d.data){
+      srcSt['CG·DeFi']='ok';
+      const df=d.data;
+      const chg=parseFloat(df.defi_market_cap_change_24h||0).toFixed(2);
+      all.push(make({
+        title:`DeFi market ${chg>0?'+':''}${chg}% · TVL dominance ${parseFloat(df.defi_dominance||0).toFixed(1)}%`,
+        desc:`DeFi market cap: $${(parseFloat(df.defi_market_cap||0)/1e9).toFixed(1)}B. Top DeFi coin: ${df.top_coin_name}. Eth TVL vs total: ${parseFloat(df.eth_market_cap_change_24h||0).toFixed(2)}% 24h change.`,
+        link:'https://www.coingecko.com/en/defi',
+        ticker:'DEFI', type:'crypto', cat:'Narrative',
+        sig: Math.abs(parseFloat(chg))>8?7:4, dh:'WEEK', src:'CoinGecko DeFi'
+      }));
+    }
+  }catch{srcSt['CG·DeFi']='fail';}
+
+  // 8. New coins listed recently
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/coins/list/new',{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    if(d&&d.length){
+      srcSt['CG·New Listings']='ok';
+      d.slice(0,10).forEach(c=>{
+        all.push(make({
+          title:`New CoinGecko listing: ${c.name} (${c.symbol.toUpperCase()})`,
+          desc:`Recently listed on CoinGecko. Early discovery opportunity — verify liquidity and exchange availability before considering entry.`,
+          link:`https://www.coingecko.com/en/coins/${c.id}`,
+          ticker:c.symbol.toUpperCase(), type:'crypto', cat:'Narrative',
+          sig:5, dh:'WEEK', src:'CoinGecko New'
+        }));
+      });
+    }
+  }catch{srcSt['CG·New Listings']='fail';}
+
   return all;
+}
+
+// ─────────────────────────────────────────
+//  BINANCE — funding rates + volume
+// ─────────────────────────────────────────
+async function fetchAllBinance(){
+  const all=[];
+
+  // Funding rates — extremes signal overleveraged market
+  try{
+    const r=await fetch('https://fapi.binance.com/fapi/v1/premiumIndex',{signal:AbortSignal.timeout(12000)});
+    const d=await r.json();
+    if(d&&d.length){
+      srcSt['BN·Funding']='ok';
+      // High positive funding — longs over-leveraged
+      d.filter(x=>parseFloat(x.lastFundingRate)>0.001).sort((a,b)=>parseFloat(b.lastFundingRate)-parseFloat(a.lastFundingRate)).slice(0,10).forEach(x=>{
+        const sym=x.symbol.replace('USDT','').replace('BUSD','');
+        const rate=(parseFloat(x.lastFundingRate)*100).toFixed(3);
+        all.push(make({
+          title:`${sym} funding rate +${rate}% — longs heavily overleveraged`,
+          desc:`Extreme positive funding on ${x.symbol} perp. Longs are paying shorts. Historical signal for short-side entry or caution on long positions.`,
+          link:`https://www.binance.com/en/futures/${x.symbol}`,
+          ticker:sym, type:'crypto', cat:'Narrative',
+          sig: parseFloat(x.lastFundingRate)>0.003?9:7, dh:'WEEK', src:'Binance Funding'
+        }));
+      });
+      // High negative funding — shorts over-leveraged
+      d.filter(x=>parseFloat(x.lastFundingRate)<-0.001).sort((a,b)=>parseFloat(a.lastFundingRate)-parseFloat(b.lastFundingRate)).slice(0,5).forEach(x=>{
+        const sym=x.symbol.replace('USDT','').replace('BUSD','');
+        const rate=(parseFloat(x.lastFundingRate)*100).toFixed(3);
+        all.push(make({
+          title:`${sym} funding rate ${rate}% — shorts over-leveraged, squeeze risk`,
+          desc:`Extreme negative funding on ${x.symbol} perp. Shorts are paying longs — elevated short squeeze risk.`,
+          link:`https://www.binance.com/en/futures/${x.symbol}`,
+          ticker:sym, type:'crypto', cat:'Narrative',
+          sig:7, dh:'WEEK', src:'Binance Funding'
+        }));
+      });
+    }
+  }catch{srcSt['BN·Funding']='fail';}
+
+  // Top 24h volume gainers on spot
+  try{
+    const r=await fetch('https://api.binance.com/api/v3/ticker/24hr',{signal:AbortSignal.timeout(12000)});
+    const d=await r.json();
+    if(d&&d.length){
+      srcSt['BN·Volume']='ok';
+      // Filter USDT pairs only, sort by quote volume change
+      const usdt=d.filter(x=>x.symbol.endsWith('USDT')&&parseFloat(x.quoteVolume)>1000000);
+      // Top price movers
+      usdt.filter(x=>parseFloat(x.priceChangePercent)>20).sort((a,b)=>parseFloat(b.priceChangePercent)-parseFloat(a.priceChangePercent)).slice(0,15).forEach(x=>{
+        const sym=x.symbol.replace('USDT','');
+        const pct=parseFloat(x.priceChangePercent).toFixed(1);
+        all.push(make({
+          title:`${sym}/USDT +${pct}% on Binance — volume $${fmt(parseFloat(x.quoteVolume))}`,
+          desc:`24h high: $${parseFloat(x.highPrice).toLocaleString()}. Low: $${parseFloat(x.lowPrice).toLocaleString()}. Trades: ${parseInt(x.count).toLocaleString()}. Elevated volume confirms move.`,
+          link:`https://www.binance.com/en/trade/${sym}_USDT`,
+          ticker:sym, type:'crypto', cat:'Narrative',
+          sig: parseFloat(x.priceChangePercent)>50?9:7, dh:'WEEK', src:'Binance 24hr'
+        }));
+      });
+    }
+  }catch{srcSt['BN·Volume']='fail';}
+
+  return all;
+}
+
+// ─────────────────────────────────────────
+//  SENTIMENT + EVENTS
+// ─────────────────────────────────────────
+async function fetchSentimentAndEvents(){
+  const all=[];
+
+  // Fear & Greed Index
+  try{
+    const r=await fetch('https://api.alternative.me/fng/?limit=7',{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    if(d.data&&d.data.length){
+      srcSt['Fear&Greed']='ok';
+      const latest=d.data[0];
+      const val=parseInt(latest.value);
+      const label=latest.value_classification;
+      const trend=d.data.length>1?(val-parseInt(d.data[d.data.length-1].value)).toFixed(0):0;
+      all.push(make({
+        title:`Fear & Greed Index: ${val}/100 — ${label} ${trend>5?'↑ Rising':trend<-5?'↓ Falling':'→ Stable'}`,
+        desc:`Current sentiment: ${label} (${val}). 7-day trend: ${trend>0?'+':''}${trend} points. ${val>75?'Extreme greed — historically precedes corrections. Risk management critical.':val<25?'Extreme fear — historically a buying opportunity for patient capital.':'Neutral sentiment zone — no strong contrarian signal.'}`,
+        link:'https://alternative.me/crypto/fear-and-greed-index/',
+        ticker:'MARKET', type:'macro', cat:'Social',
+        sig: val>80||val<20?8:val>65||val<35?6:4, dh:'WEEK', src:'Alternative.me'
+      }));
+    }
+  }catch{srcSt['Fear&Greed']='fail';}
+
+  // CoinPaprika events for top coins
+  const TOP_CP_IDS=['btc-bitcoin','eth-ethereum','sol-solana','bnb-binance-coin','xrp-xrp','ada-cardano','avax-avalanche','dot-polkadot','link-chainlink','uni-uniswap','atom-cosmos','near-near-protocol'];
+  const cpResults=await Promise.allSettled(TOP_CP_IDS.slice(0,6).map(id=>fetchCPCoinEvents(id)));
+  cpResults.forEach((r,i)=>{
+    if(r.status==='fulfilled'&&r.value.length>0){
+      srcSt['CoinPaprika']='ok';
+      all.push(...r.value);
+    }
+  });
+  if(!Object.keys(srcSt).includes('CoinPaprika')) srcSt['CoinPaprika']='fail';
+
+  return all;
+}
+
+async function fetchCPCoinEvents(coinId){
+  const r=await fetch(`https://api.coinpaprika.com/v1/coins/${coinId}/events`,{signal:AbortSignal.timeout(10000)});
+  const d=await r.json();
+  if(!Array.isArray(d)||!d.length) return [];
+  const now=Date.now();
+  return d.filter(ev=>{
+    if(!ev.date) return false;
+    const evDate=new Date(ev.date).getTime();
+    return evDate>now-86400000; // not more than 1 day in the past
+  }).slice(0,5).map(ev=>{
+    const evDate=new Date(ev.date);
+    const daysOut=Math.ceil((evDate.getTime()-now)/86400000);
+    const dh=daysOut<=7?'WEEK':daysOut<=30?'MONTH':'QUARTER';
+    const sym=coinId.split('-')[0].toUpperCase();
+    return make({
+      title:`${sym}: ${ev.name}`,
+      desc:`${ev.description||'Scheduled event'}. Date: ${evDate.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}. ${daysOut>0?`${daysOut} days away.`:'Today.'}`,
+      link:ev.link||`https://coinpaprika.com/coin/${coinId}`,
+      ticker:sym, type:'crypto',
+      cat: /unlock|vest|release/i.test(ev.name)?'Unlock':/fork|upgrade|mainnet/i.test(ev.name)?'Governance':/listing|exchange/i.test(ev.name)?'Narrative':'Narrative',
+      sig: daysOut<=7?7:6, dh, src:'CoinPaprika Events'
+    });
+  });
+}
+
+// ─────────────────────────────────────────
+//  MACRO CALENDAR — hardcoded forward-looking
+// ─────────────────────────────────────────
+function buildMacroCalendar(){
+  const now=Date.now();
+  return MACRO_CALENDAR.map(ev=>{
+    const evDate=new Date(ev.date).getTime();
+    const daysOut=Math.ceil((evDate-now)/86400000);
+    if(daysOut<-1) return null; // skip past events (allow 1 day grace)
+    const dh=daysOut<=7?'WEEK':daysOut<=30?'MONTH':'QUARTER';
+    srcSt['Macro Calendar']='ok';
+    return make({
+      title:ev.title+(daysOut>0?` — ${daysOut} days`:''),
+      desc:ev.desc,
+      link:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
+      ticker:'MACRO', type:'macro',
+      cat:ev.cat, sig:ev.sig, dh, src:'Macro Calendar'
+    });
+  }).filter(Boolean);
+}
+
+// ─────────────────────────────────────────
+//  CRYPTOCOMPARE — bonus, graceful fail
+// ─────────────────────────────────────────
+async function fetchCCBonus(){
+  const all=[];
+  try{
+    const r=await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest',{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    if(!d.Data||!d.Data.length) throw new Error('no data');
+    srcSt['CryptoCompare']='ok';
+    const now=Date.now();
+    d.Data.filter(item=>item.published_on&&(now-item.published_on*1000)<604800000).slice(0,30).forEach(item=>{
+      const pub=new Date(item.published_on*1000).toISOString();
+      all.push(make({
+        title:item.title||'',
+        desc:(item.body||'').slice(0,300),
+        link:item.url||'',
+        ticker:'CRYPTO', type:'crypto',
+        cat:getCatFromText((item.title+' '+(item.categories||'')).toLowerCase(),''),
+        sig:5, dh:'WEEK', src:item.source_info?.name||'CryptoCompare',
+        pub
+      }));
+    });
+  }catch{ srcSt['CryptoCompare']='fail'; }
+  return all;
+}
+
+// ─────────────────────────────────────────
+//  ITEM FACTORY
+// ─────────────────────────────────────────
+function make(o){
+  return {
+    title: o.title||'',
+    desc:  o.desc||'',
+    link:  o.link||'',
+    src:   o.src||'',
+    pub:   o.pub||new Date().toISOString(),
+    cat:   o.cat||'Narrative',
+    type:  o.type||'crypto',
+    ticker:o.ticker||'MARKET',
+    horizon:o.dh||'WEEK',
+    sig:   Math.max(1,Math.min(10,o.sig||5)),
+    date:  o.date||fmtDate(o.pub||'',o.dh||'WEEK')
+  };
+}
+
+function fmt(n){
+  if(!n) return '0';
+  if(n>=1e12) return (n/1e12).toFixed(2)+'T';
+  if(n>=1e9)  return (n/1e9).toFixed(2)+'B';
+  if(n>=1e6)  return (n/1e6).toFixed(1)+'M';
+  return n.toLocaleString();
 }
 
 // ─────────────────────────────────────────
 //  PROCESS
 // ─────────────────────────────────────────
-function proc(raw){
-  if(!raw.title||raw.title.length<8) return null;
-  const tx=(raw.title+' '+raw.desc+' '+(raw.ccCat||'')+' '+(raw.ccTag||'')).toLowerCase();
-  const cat=getCat(tx,raw.ccCat||''), typ=getType(tx);
-  const horizon=getHorizon(tx,raw.pub,raw.dh);
-  if(!horizon) return null; // discard articles older than 90 days
-  return {
-    title: raw.title, desc: raw.desc, link: raw.link,
-    src: raw.src, pub: raw.pub,
-    cat, type: typ,
-    ticker: getTicker(tx,typ),
-    horizon,
-    sig: getSig(tx,cat),
-    date: fmtDate(raw.pub,raw.dh)
-  };
-}
+function proc(raw){ return raw; } // items already structured by make()
 
-function getCat(t, ccCat){
-  // Use CryptoCompare category data first if available
+function getCatFromText(t, ccCat){
   if(ccCat){
     const cc=ccCat.toLowerCase();
     if(/regulation/.test(cc)) return 'Regulatory';
     if(/ico|tge|launch/.test(cc)) return 'Unlock';
-    if(/mining/.test(cc)) return 'Narrative';
-    if(/exchange/.test(cc)) return 'Narrative';
-    if(/fiat|macro|fed|cpi/.test(cc)) return 'Macro';
+    if(/fiat|macro/.test(cc)) return 'Macro';
   }
-  // Keyword fallback
-  if(/\bearnings\b|eps\b|quarterly results|revenue beat|profit reported|missed estimates/.test(t)) return 'Earnings';
-  if(/token unlock|vesting cliff|unlock schedule|release tokens|supply increase|tge\b|token launch/.test(t)) return 'Unlock';
-  if(/governance|dao\b|snapshot vote|on-chain vote|proposal passed|protocol upgrade vote/.test(t)) return 'Governance';
-  if(/\bsec\b|\bcftc\b|regulation|regulatory|enforcement action|ruling|lawsuit|legislation|compliance deadline/.test(t)) return 'Regulatory';
-  if(/reddit|wallstreetbets|r\/|retail investor|social sentiment|trending|community|viral/.test(t)) return 'Social';
-  if(/federal reserve|fed rate|\bfomc\b|\bcpi\b|inflation data|gdp\b|jobs report|interest rate decision|central bank/.test(t)) return 'Macro';
+  if(/\bearnings\b|eps\b|quarterly results|revenue/.test(t)) return 'Earnings';
+  if(/token unlock|vesting|unlock schedule|tge\b|token launch/.test(t)) return 'Unlock';
+  if(/governance|dao\b|snapshot vote|protocol upgrade vote/.test(t)) return 'Governance';
+  if(/\bsec\b|\bcftc\b|regulation|regulatory|enforcement|ruling|legislation/.test(t)) return 'Regulatory';
+  if(/reddit|wallstreetbets|trending|community|viral|sentiment/.test(t)) return 'Social';
+  if(/federal reserve|fed rate|\bfomc\b|\bcpi\b|inflation|gdp\b|jobs report|central bank/.test(t)) return 'Macro';
   return 'Narrative';
-}
-
-function getType(t){
-  const isCrypto=/bitcoin|ethereum|solana|crypto|blockchain|defi|nft\b|token|altcoin|\bbtc\b|\beth\b|\bsol\b|\bbnb\b|\bxrp\b/.test(t);
-  const isStock =/stock market|equity|nasdaq|nyse|\bs&p\b|shares|dividend|\bipo\b|wall street|dow jones/.test(t);
-  const isMacro =/federal reserve|interest rate|\bfomc\b|\bcpi\b|inflation|gdp\b|central bank|treasury/.test(t);
-  if(isMacro) return 'macro';
-  if(isStock&&!isCrypto) return 'stock';
-  if(isCrypto) return 'crypto';
-  return 'macro';
-}
-
-function getTicker(t,typ){
-  for(const c of crypto){
-    const s=c.sym.toLowerCase(), n=c.name.toLowerCase().replace(/[^a-z0-9 ]/g,'');
-    if(new RegExp('\\b'+s+'\\b').test(t)||t.includes(n)) return c.sym;
-  }
-  for(const s of NASDAQ) if(new RegExp('\\b'+s.toLowerCase()+'\\b').test(t)) return s;
-  return typ==='macro'?'MACRO':typ==='crypto'?'CRYPTO':'MARKET';
-}
-
-function getHorizon(t,pub,def){
-  // Strict age-based assignment using publish date
-  if(pub){
-    const ageHours=(Date.now()-new Date(pub).getTime())/3600000;
-    if(ageHours<=168)  return 'WEEK';    // published within 7 days
-    if(ageHours<=720)  return 'MONTH';   // published within 30 days
-    if(ageHours<=2160) return 'QUARTER'; // published within 90 days
-    return null; // too old — will be filtered out
-  }
-  // No date — use keyword hints
-  if(/q2\b|q3\b|next quarter|second quarter|third quarter/.test(t)) return 'QUARTER';
-  const now=new Date();
-  const mo3=new Date(now.getFullYear(),now.getMonth()+2,1).toLocaleString('en',{month:'long'}).toLowerCase();
-  const mo2=new Date(now.getFullYear(),now.getMonth()+1,1).toLocaleString('en',{month:'long'}).toLowerCase();
-  if(new RegExp(mo3).test(t)) return 'QUARTER';
-  if(new RegExp(mo2).test(t)||/next month|30 days/.test(t)) return 'MONTH';
-  return def;
-}
-
-function getSig(t,cat){
-  let s=4;
-  if(cat==='Regulatory') s+=2; if(cat==='Macro') s+=1;
-  if(cat==='Earnings')   s+=1; if(cat==='Unlock') s+=1;
-  if(/breaking|urgent|crash\b|emergency|halt\b|ban\b/.test(t)) s+=2;
-  if(/billion|\$[0-9]+b\b|major|significant|historic/.test(t)) s+=1;
-  if(/\bsec\b|\bfed\b|senate|congress|exploit|hack/.test(t)) s+=1;
-  if(/opinion|how to|guide|tutorial|beginner/.test(t)) s-=2;
-  if(/speculation|rumor|could\b|might\b/.test(t)) s-=1;
-  return Math.max(1,Math.min(10,s));
 }
 
 function dedup(arr){
