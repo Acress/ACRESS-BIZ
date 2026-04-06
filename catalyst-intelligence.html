@@ -178,15 +178,15 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 <!-- MASTHEAD -->
 <div class="masthead">
   <div>
-    <div class="eyebrow">Broad Market · Free Sources · No API Key</div>
+    <div class="eyebrow">Broad Market · 25+ Sources · No API Key</div>
     <h1>Catalyst <em>Intelligence</em></h1>
     <div class="mast-desc">Monitors the broad market — top 100 crypto and major stocks — for breaking news, token unlocks, earnings, regulatory events, governance votes, and social sentiment across three forward-looking horizons.</div>
   </div>
   <div class="scan-panel">
     <button class="scan-btn" id="scan-btn" onclick="startScan()">▶ Run Full Scan</button>
     <div class="scan-note" id="scan-note">
-      CryptoCompare · CoinGecko · 10 live categories<br>
-      Native CORS · No proxy · No API key
+      CoinGecko · Binance · CoinPaprika · Fear&Greed<br>
+      CoinDesk · Reuters · Reddit · Google News · 14-day limit
     </div>
   </div>
 </div>
@@ -346,11 +346,12 @@ async function startScan(){
     prog(75,'Loading macro calendar...','FOMC, CPI, earnings seasons, regulatory deadlines');
     const macroItems = buildMacroCalendar();
 
-    prog(85,'Fetching live news...','CryptoCompare (bonus — may be unavailable)');
+    prog(85,'Fetching bonus RSS sources...','CoinDesk · CoinTelegraph · Decrypt · Reuters · Reddit · Google News');
     const ccItems = await fetchCCBonus();
+    const rssItems = await fetchRSSBonus();
 
-    prog(92,'Processing all catalysts...','Categorising, scoring, deduplicating');
-    const raw = [...cgItems, ...bnItems, ...evItems, ...macroItems, ...ccItems];
+    prog(94,'Processing all catalysts...','Categorising, scoring, deduplicating');
+    const raw = [...cgItems, ...bnItems, ...evItems, ...macroItems, ...ccItems, ...rssItems];
     items = dedup(raw.filter(Boolean)).sort((a,b)=>b.sig-a.sig);
 
     sessionStorage.setItem('acb_cat', JSON.stringify(items));
@@ -690,7 +691,8 @@ async function fetchCCBonus(){
     if(!d.Data||!d.Data.length) throw new Error('no data');
     srcSt['CryptoCompare']='ok';
     const now=Date.now();
-    d.Data.filter(item=>item.published_on&&(now-item.published_on*1000)<604800000).slice(0,30).forEach(item=>{
+    const limit=14*24*3600000; // 14 days
+    d.Data.filter(item=>item.published_on&&(now-item.published_on*1000)<limit).slice(0,30).forEach(item=>{
       const pub=new Date(item.published_on*1000).toISOString();
       all.push(make({
         title:item.title||'',
@@ -704,6 +706,137 @@ async function fetchCCBonus(){
     });
   }catch{ srcSt['CryptoCompare']='fail'; }
   return all;
+}
+
+// ─────────────────────────────────────────
+//  RSS BONUS — corsproxy.io, 14-day limit
+// ─────────────────────────────────────────
+const RSS_BONUS = [
+  {n:'CoinDesk',      u:'https://www.coindesk.com/arc/outboundfeeds/rss/',          type:'crypto'},
+  {n:'CoinTelegraph', u:'https://cointelegraph.com/rss',                             type:'crypto'},
+  {n:'Decrypt',       u:'https://decrypt.co/feed',                                   type:'crypto'},
+  {n:'Reuters Biz',   u:'https://feeds.reuters.com/reuters/businessNews',            type:'macro'},
+  {n:'Reddit Crypto', u:'https://www.reddit.com/r/CryptoCurrency/hot/.rss',          type:'crypto'},
+  {n:'Reddit Stocks', u:'https://www.reddit.com/r/stocks/hot/.rss',                  type:'stock'},
+  {n:'Reddit WSB',    u:'https://www.reddit.com/r/wallstreetbets/hot/.rss',           type:'stock'},
+  {n:'GNews·Crypto',  u:'https://news.google.com/rss/search?q=crypto+market+token+news&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·SEC',     u:'https://news.google.com/rss/search?q=SEC+crypto+regulation+enforcement&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·Unlock',  u:'https://news.google.com/rss/search?q=token+unlock+vesting+crypto&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·Earn',    u:'https://news.google.com/rss/search?q=earnings+results+stock&hl=en-US&gl=US&ceid=US:en', type:'stock'},
+  {n:'GNews·Macro',   u:'https://news.google.com/rss/search?q=Federal+Reserve+FOMC+rate+decision&hl=en-US&gl=US&ceid=US:en', type:'macro'},
+  {n:'GNews·M·Earn',  u:'https://news.google.com/rss/search?q=earnings+calendar+upcoming+next+month&hl=en-US&gl=US&ceid=US:en', type:'stock'},
+  {n:'GNews·M·Unlk',  u:'https://news.google.com/rss/search?q=crypto+token+unlock+May+June+2026&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·Q·Reg',   u:'https://news.google.com/rss/search?q=crypto+regulation+legislation+2026&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·Q·TGE',   u:'https://news.google.com/rss/search?q=token+launch+TGE+airdrop+2026&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·Q·Unlk',  u:'https://news.google.com/rss/search?q=crypto+token+unlock+Q2+Q3+2026&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·M·Gov',   u:'https://news.google.com/rss/search?q=crypto+governance+DAO+vote+proposal&hl=en-US&gl=US&ceid=US:en', type:'crypto'},
+  {n:'GNews·M·Fed',   u:'https://news.google.com/rss/search?q=Federal+Reserve+meeting+rate+2026&hl=en-US&gl=US&ceid=US:en', type:'macro'},
+];
+
+const PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+];
+
+const RSS_AGE_LIMIT = 14 * 24 * 3600000; // 14 days in ms
+
+async function fetchRSSBonus(){
+  const all=[];
+  // Batch into groups of 4 to avoid overwhelming proxies
+  const batches=[];
+  for(let i=0;i<RSS_BONUS.length;i+=4) batches.push(RSS_BONUS.slice(i,i+4));
+  for(const batch of batches){
+    const res=await Promise.allSettled(batch.map(f=>fetchOneFeed(f)));
+    res.forEach((r,i)=>{
+      const name=batch[i].n;
+      if(r.status==='fulfilled'&&r.value.length>0){
+        srcSt[name]='ok'; all.push(...r.value);
+      } else { srcSt[name]='fail'; }
+    });
+    await new Promise(r=>setTimeout(r,200));
+  }
+  return all;
+}
+
+async function fetchOneFeed(feed){
+  // Try each proxy in sequence until one works
+  for(const makeUrl of PROXIES){
+    try{
+      const r=await fetch(makeUrl(feed.u),{signal:AbortSignal.timeout(12000)});
+      if(!r.ok) continue;
+      const text=await r.text();
+      if(!text||text.length<200) continue;
+
+      // Parse XML
+      const parser=new DOMParser();
+      const xml=parser.parseFromString(text,'text/xml');
+      const nodes=[...xml.querySelectorAll('item'),...xml.querySelectorAll('entry')];
+      if(!nodes.length) continue;
+
+      const now=Date.now();
+      const items=nodes.slice(0,25).map(el=>{
+        const title=xmlTxt(el,'title');
+        if(!title||title.length<8) return null;
+        const pub=xmlTxt(el,'pubDate')||xmlTxt(el,'published')||xmlTxt(el,'updated')||'';
+        // Strict 14-day age filter
+        if(pub){
+          const age=now-new Date(pub).getTime();
+          if(age>RSS_AGE_LIMIT||age<0) return null;
+        }
+        const desc=strip(xmlTxt(el,'description')||xmlTxt(el,'summary')||xmlTxt(el,'content')||'').slice(0,300);
+        const link=xmlTxt(el,'link')||el.querySelector('link')?.getAttribute('href')||'';
+        const tx=(title+' '+desc).toLowerCase();
+        // Horizon based on pub date age
+        let dh='WEEK';
+        if(pub){
+          const ageDays=(now-new Date(pub).getTime())/86400000;
+          dh=ageDays<=7?'WEEK':ageDays<=14?'MONTH':'QUARTER';
+        }
+        return make({
+          title:title.trim(), desc, link,
+          ticker: detectTickerFromText(tx, feed.type),
+          type: feed.type,
+          cat: getCatFromText(tx,''),
+          sig: getSigFromText(tx),
+          dh, src:feed.n, pub
+        });
+      }).filter(Boolean);
+
+      if(items.length>0) return items;
+    }catch{ continue; }
+  }
+  return [];
+}
+
+function xmlTxt(el,tag){
+  const node=el.querySelector(tag);
+  return node?(node.textContent||'').trim():'';
+}
+
+function detectTickerFromText(t, defaultType){
+  // Check crypto symbols
+  const cryptoSymbols=['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOT','LINK','UNI',
+    'DOGE','MATIC','OP','ARB','SUI','ATOM','NEAR','INJ','TIA','IMX','LTC','BCH',
+    'FIL','HBAR','VET','APT','SEI','STX','MANA','SAND','AXS','GALA','ZRO','JUP'];
+  for(const sym of cryptoSymbols){
+    if(new RegExp('\\b'+sym.toLowerCase()+'\\b').test(t)) return sym;
+  }
+  // Check stock tickers
+  for(const s of NASDAQ){
+    if(new RegExp('\\b'+s.toLowerCase()+'\\b').test(t)) return s;
+  }
+  return defaultType==='macro'?'MACRO':defaultType==='stock'?'MARKET':'CRYPTO';
+}
+
+function getSigFromText(t){
+  let s=4;
+  if(/breaking|urgent|crash\b|emergency|halt\b|ban\b|exploit|hack/.test(t)) s+=2;
+  if(/\bsec\b|\bfed\b|senate|congress|billion|\$[0-9]+b\b|major|significant/.test(t)) s+=1;
+  if(/\bcftc\b|regulation|regulatory|enforcement|ruling|legislation/.test(t)) s+=2;
+  if(/\bfomc\b|\bcpi\b|inflation|interest rate|central bank/.test(t)) s+=1;
+  if(/opinion|how to|guide|tutorial|beginner|sponsored/.test(t)) s-=2;
+  if(/speculation|rumor|could\b|might\b|possibly/.test(t)) s-=1;
+  return Math.max(1,Math.min(10,s));
 }
 
 // ─────────────────────────────────────────
