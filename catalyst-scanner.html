@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catalyst Scanner — Acress Biz</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-:root {
+<style>:root {
   --bg:     #080a0f;
   --bg2:    #0e1018;
   --bg3:    #141720;
@@ -23,8 +22,6 @@
   --blue:   #4a9eff;
   --purple: #a855f7;
   --amber:  #f97316;
-
-  /* catalyst type colours */
   --listing:    #00d084;
   --unlock:     #ff4560;
   --mainnet:    #4a9eff;
@@ -34,109 +31,71 @@
   --airdrop:    #ec4899;
   --burn:       #ef4444;
   --macro:      #06b6d4;
+  --safe-pad: env(safe-area-inset-bottom, 0px);
 }
-
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6;min-height:100vh;overflow-x:hidden}
-
-/* grain */
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;overflow-x:hidden;max-width:100vw;}
 body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
-
-/* ── TOPBAR ── */
-.topbar{border-bottom:1px solid var(--bord);padding:0 24px;height:48px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:200}
-.tb-l{display:flex;align-items:center;gap:14px}
-.back-btn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);text-decoration:none;transition:color .2s}
+/* TOPBAR */
+.topbar{border-bottom:1px solid var(--bord);padding:0 14px;height:44px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:200;gap:8px;}
+.tb-l{display:flex;align-items:center;gap:10px;min-width:0}
+.back-btn{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-decoration:none;white-space:nowrap}
 .back-btn:hover{color:var(--gold)}
-.tb-sep{color:var(--bord2)}
-.tb-title{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
-.tb-r{display:flex;align-items:center;gap:16px}
-.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite}
-.tb-clock{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
-.reset-btn{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:1px solid var(--bord2);color:var(--dim);padding:5px 12px;cursor:pointer;transition:all .2s}
-.reset-btn:hover{border-color:var(--red);color:var(--red)}
+.tb-sep{color:var(--bord2);flex-shrink:0}
+.tb-title{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);display:none}
+.tb-r{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;flex-shrink:0}
+.tb-clock{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);white-space:nowrap}
+.reset-btn{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;background:none;border:1px solid var(--bord2);color:var(--dim);padding:4px 10px;cursor:pointer;white-space:nowrap}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
-/* ── HERO ── */
-.hero{padding:40px 24px 32px;border-bottom:1px solid var(--bord);display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden}
-.hero-bg{position:absolute;right:-40px;top:-20px;font-family:'Bebas Neue',sans-serif;font-size:180px;color:rgba(240,165,0,0.03);line-height:1;user-select:none;pointer-events:none;letter-spacing:-4px}
-.hero-tag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.hero-tag::before{content:'';display:block;width:20px;height:1px;background:var(--gold2)}
-.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,5vw,60px);color:var(--bright);letter-spacing:2px;line-height:1;margin-bottom:10px}
+/* HERO */
+.hero{padding:20px 14px 18px;border-bottom:1px solid var(--bord);position:relative;overflow:hidden;}
+.hero-bg{display:none}
+.hero-tag{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.hero-tag::before{content:'';display:block;width:14px;height:1px;background:var(--gold2)}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--bright);letter-spacing:2px;line-height:1;margin-bottom:6px}
 .hero h1 span{color:var(--gold)}
-.hero-desc{font-size:14px;color:var(--dim);max-width:520px;line-height:1.7}
-
-/* capital input */
-.capital-wrap{display:flex;flex-direction:column;gap:8px;flex-shrink:0}
-.cap-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+.hero-desc{font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:14px}
+.capital-wrap{display:flex;flex-direction:column;gap:8px}
+.cap-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
 .cap-row{display:flex;gap:8px;align-items:center}
-.cap-prefix{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--gold);line-height:1}
-.cap-input{background:var(--bg3);border:1px solid var(--bord2);border-top:2px solid var(--gold);color:var(--bright);font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;padding:8px 12px;outline:none;width:160px;transition:border-color .2s}
-.cap-input:focus{border-color:var(--gold)}
-.scan-btn{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;background:var(--gold);color:var(--bg);border:none;padding:12px 32px;cursor:pointer;transition:opacity .2s;white-space:nowrap}
-.scan-btn:hover{opacity:.85}
+.cap-prefix{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--gold);line-height:1}
+.cap-input{background:var(--bg3);border:1px solid var(--bord2);border-top:2px solid var(--gold);color:var(--bright);font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:1px;padding:6px 10px;outline:none;flex:1;min-width:0}
+.scan-btn{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:3px;background:var(--gold);color:var(--bg);border:none;padding:12px;cursor:pointer;width:100%;margin-top:4px}
 .scan-btn:disabled{opacity:.35;cursor:not-allowed}
-
-/* ── STATS STRIP ── */
-.stats-strip{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--bord);background:var(--bg2)}
-.stat-box{padding:14px 16px;border-right:1px solid var(--bord);text-align:center}
-.stat-box:last-child{border-right:none}
-.stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1;display:block;margin-bottom:3px}
-.stat-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
-
-/* ── HORIZON TABS ── */
-.htabs{display:flex;border-bottom:1px solid var(--bord)}
-.htab{flex:1;padding:14px 16px;text-align:center;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;background:var(--bg2);border-right:1px solid var(--bord);position:relative}
-.htab:last-child{border-right:none}
-.htab:hover{background:var(--bg3)}
-.htab.active{border-bottom-color:var(--gold);background:var(--bg)}
-.htab-name{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:var(--bright);display:block;margin-bottom:2px}
-.htab-sub{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
-.htab-cnt{position:absolute;top:8px;right:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);background:var(--gold-g);border:1px solid var(--gold2);padding:1px 7px}
-
-/* ── FILTERS ── */
-.fbar{padding:12px 24px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--bg2)}
+/* STATS */
+.stats-strip{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--bord);background:var(--bg2);}
+.stat-box{padding:10px 8px;border-right:1px solid var(--bord);border-bottom:1px solid var(--bord);text-align:center}
+.stat-box:nth-child(3n){border-right:none}
+.stat-box:nth-last-child(-n+3){border-bottom:none}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;display:block;margin-bottom:2px}
+.stat-lbl{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+/* HTABS hidden - replaced by QFP */
+.htabs{display:none}
+/* FBAR hidden on mobile */
+.fbar{display:none}
 .flbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);white-space:nowrap}
 .fdiv{width:1px;height:18px;background:var(--bord2);flex-shrink:0}
 .pill{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;background:none;border:1px solid var(--bord);color:var(--text);padding:4px 10px;cursor:pointer;transition:all .15s;white-space:nowrap}
-.pill:hover{border-color:var(--bord2)}
 .pill.active{background:var(--gold);border-color:var(--gold);color:var(--bg)}
-/* Bullish pills — green tint at rest, bright green when active */
 .pill.bull{border-color:rgba(0,208,132,.35);color:var(--green)}
-.pill.bull:hover{border-color:var(--green);background:rgba(0,208,132,.06)}
 .pill.bull.active{background:var(--green);border-color:var(--green);color:var(--bg)}
-/* Bearish pills — red tint at rest, bright red when active */
 .pill.bear{border-color:rgba(255,69,96,.35);color:var(--red)}
-.pill.bear:hover{border-color:var(--red);background:rgba(255,69,96,.06)}
 .pill.bear.active{background:var(--red);border-color:var(--red);color:var(--bright)}
-/* Neutral pills — blue tint */
 .pill.neut{border-color:rgba(74,158,255,.35);color:var(--blue)}
-.pill.neut:hover{border-color:var(--blue);background:rgba(74,158,255,.06)}
 .pill.neut.active{background:var(--blue);border-color:var(--blue);color:var(--bright)}
-.sort-sel{background:var(--bg3);border:1px solid var(--bord2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;padding:5px 10px;outline:none;cursor:pointer;margin-left:auto}
-.sort-sel:focus{border-color:var(--gold)}
-.search-wrap{position:relative}
-.s-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:11px;pointer-events:none}
-.search-inp{background:var(--bg3);border:1px solid var(--bord2);color:var(--bright);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 10px 5px 24px;outline:none;width:180px;transition:border-color .2s}
-.search-inp:focus{border-color:var(--gold)}
-
-/* ── QUICK FILTER PANEL ── */
-.qfp{background:var(--bg2);border-bottom:2px solid var(--gold);position:sticky;top:48px;z-index:150;display:none}
+/* QFP - portrait: 4 stacked scrollable rows */
+.qfp{background:var(--bg2);border-bottom:2px solid var(--gold);position:sticky;top:44px;z-index:150;display:none}
 .qfp.vis{display:block}
-.qfp-inner{padding:10px 24px;display:flex;align-items:center;gap:0;flex-wrap:nowrap;overflow-x:auto}
-.qfp-inner::-webkit-scrollbar{height:3px}
-.qfp-inner::-webkit-scrollbar-track{background:var(--bg2)}
-.qfp-inner::-webkit-scrollbar-thumb{background:var(--bord2)}
-.qfp-section{display:flex;align-items:center;gap:6px;padding:0 14px;flex-shrink:0}
-.qfp-section:first-child{padding-left:0}
-.qfp-divider{width:1px;height:32px;background:var(--bord2);flex-shrink:0}
-.qfp-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);white-space:nowrap;margin-right:4px}
-.qbtn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;background:none;border:1px solid var(--bord2);color:var(--text);padding:6px 13px;cursor:pointer;transition:all .15s;white-space:nowrap;border-radius:0}
+.qfp-row{display:flex;align-items:center;gap:6px;padding:7px 14px;border-bottom:1px solid var(--bord);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.qfp-row:last-child{border-bottom:none}
+.qfp-row::-webkit-scrollbar{display:none}
+.qfp-row-lbl{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);white-space:nowrap;flex-shrink:0;min-width:38px;}
+.qbtn{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.5px;text-transform:uppercase;background:none;border:1px solid var(--bord2);color:var(--text);padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;border-radius:0;transition:all .15s;}
 .qbtn:hover{border-color:var(--text)}
-.qbtn.active{background:var(--gold);border-color:var(--gold);color:var(--bg);font-weight:500}
+.qbtn.active,.qbtn.all-active{background:var(--gold);border-color:var(--gold);color:var(--bg);font-weight:500}
 .qbtn.h-active{background:var(--blue);border-color:var(--blue);color:var(--bright)}
-.qbtn.all-active{background:var(--gold);border-color:var(--gold);color:var(--bg)}
-/* asset quick buttons */
 .qbtn.qa-crypto.active{background:#3b82f6;border-color:#3b82f6;color:var(--bright)}
 .qbtn.qa-meme.active{background:var(--purple);border-color:var(--purple);color:var(--bright)}
 .qbtn.qa-stock.active{background:#06b6d4;border-color:#06b6d4;color:var(--bg)}
@@ -144,118 +103,127 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 .qbtn.qa-defi.active{background:var(--green);border-color:var(--green);color:var(--bg)}
 .qbtn.qa-l1.active{background:#f97316;border-color:#f97316;color:var(--bg)}
 .qbtn.qa-l2.active{background:#60a5fa;border-color:#60a5fa;color:var(--bg)}
-/* active count badge on QFP */
-.qfp-status{margin-left:auto;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);padding-left:14px;white-space:nowrap}
-.qfp-status strong{color:var(--gold)}
-/* active state override for catalyst buttons that have inline border/color styles */
-#qfp .qfp-section:nth-child(5) .qbtn.active{background:var(--gold);border-color:var(--gold) !important;color:var(--bg) !important;font-weight:500}
-/* Bullish active — green */
-#qfp .qbtn[onclick*="listing"].active,
-#qfp .qbtn[onclick*="mainnet"].active,
-#qfp .qbtn[onclick*="airdrop"].active,
-#qfp .qbtn[onclick*="conference"].active,
-#qfp .qbtn[onclick*="social"].active{background:var(--green) !important;border-color:var(--green) !important;color:var(--bg) !important}
-/* Bearish active — red */
-#qfp .qbtn[onclick*="unlock"].active{background:var(--red) !important;border-color:var(--red) !important;color:var(--bright) !important}
-/* Neutral active — blue */
-#qfp .qbtn[onclick*="governance"].active,
-#qfp .qbtn[onclick*="macro"].active{background:var(--blue) !important;border-color:var(--blue) !important;color:var(--bright) !important}
-/* qt-all active */
-#qt-all.active{background:var(--gold) !important;border-color:var(--gold) !important;color:var(--bg) !important}
-.src-strip{padding:8px 24px;border-bottom:1px solid var(--bord);display:flex;gap:4px;flex-wrap:wrap;background:var(--bg2);min-height:34px}
-.src-tag{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border:1px solid;display:inline-flex;align-items:center;gap:3px}
+.qbtn.qa-ai.active{background:#8b5cf6;border-color:#8b5cf6;color:var(--bright)}
+.qbtn.qa-gaming.active{background:#ec4899;border-color:#ec4899;color:var(--bright)}
+#qfp .qbtn[onclick*="listing"].active,#qfp .qbtn[onclick*="mainnet"].active,#qfp .qbtn[onclick*="airdrop"].active,#qfp .qbtn[onclick*="conference"].active,#qfp .qbtn[onclick*="social"].active{background:var(--green)!important;border-color:var(--green)!important;color:var(--bg)!important}
+#qfp .qbtn[onclick*="unlock"].active{background:var(--red)!important;border-color:var(--red)!important;color:var(--bright)!important}
+#qfp .qbtn[onclick*="governance"].active,#qfp .qbtn[onclick*="macro"].active{background:var(--blue)!important;border-color:var(--blue)!important;color:var(--bright)!important}
+#qt-all.active{background:var(--gold)!important;border-color:var(--gold)!important;color:var(--bg)!important}
+.qfp-search-row{padding:7px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bord)}
+.qfp-status-inline{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim);flex-shrink:0;white-space:nowrap}
+.qfp-status-inline strong{color:var(--gold)}
+.sort-sel{background:var(--bg3);border:1px solid var(--bord2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:9px;padding:5px 6px;outline:none;cursor:pointer;flex-shrink:0}
+.search-wrap{position:relative;flex:1;min-width:0}
+.s-icon{position:absolute;left:7px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:10px;pointer-events:none}
+.search-inp{background:var(--bg3);border:1px solid var(--bord2);color:var(--bright);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 8px 5px 22px;outline:none;width:100%}
+/* old QFP horizontal parts hidden */
+.qfp-inner,.qfp-section,.qfp-divider,.qfp-status{display:none!important}
+/* SOURCE STATUS */
+.src-strip{padding:6px 14px;border-bottom:1px solid var(--bord);display:flex;gap:4px;flex-wrap:wrap;background:var(--bg2);min-height:30px}
+.src-tag{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:.5px;text-transform:uppercase;padding:2px 6px;border:1px solid;display:inline-flex;align-items:center;gap:2px}
 .src-tag.ok{border-color:rgba(0,208,132,.35);color:var(--green);background:rgba(0,208,132,.06)}
 .src-tag.fail{border-color:rgba(255,69,96,.35);color:var(--red);background:rgba(255,69,96,.06)}
 .src-tag.wait{border-color:var(--bord2);color:var(--dim)}
-.src-dot{width:4px;height:4px;border-radius:50%;background:currentColor}
-
-/* ── LOADING ── */
-.load-wrap{padding:60px 24px;text-align:center;display:none}
+.src-dot{width:3px;height:3px;border-radius:50%;background:currentColor}
+/* LOADING */
+.load-wrap{padding:40px 14px;text-align:center;display:none}
 .load-wrap.vis{display:block}
-.spinner{width:40px;height:40px;border:2px solid var(--bord2);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
+.spinner{width:36px;height:36px;border:2px solid var(--bord2);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.load-step{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);margin-bottom:6px}
-.load-sub{font-size:13px;color:var(--dim);font-style:italic;margin-bottom:14px}
-.prog-rail{width:280px;height:4px;background:var(--bord2);margin:0 auto;border-radius:0}
+.load-step{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--gold);margin-bottom:4px}
+.load-sub{font-size:12px;color:var(--dim);font-style:italic;margin-bottom:12px}
+.prog-rail{width:100%;max-width:280px;height:4px;background:var(--bord2);margin:0 auto}
 .prog-fill{height:100%;background:var(--gold);transition:width .5s ease;width:0%}
-
-/* ── EMPTY ── */
-.empty-wrap{padding:60px 24px;text-align:center;display:none}
+/* EMPTY */
+.empty-wrap{padding:40px 14px;text-align:center;display:none}
 .empty-wrap.vis{display:block}
-.empty-icon{font-size:40px;opacity:.15;margin-bottom:14px}
-.empty-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--bright);margin-bottom:8px}
-.empty-sub{font-size:13px;color:var(--dim)}
-
-/* ── ERROR ── */
-.err-bar{margin:10px 24px;padding:11px 16px;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--red);display:none}
+.empty-icon{font-size:32px;opacity:.15;margin-bottom:12px}
+.empty-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--bright);margin-bottom:6px}
+.empty-sub{font-size:12px;color:var(--dim)}
+/* ERROR */
+.err-bar{margin:8px 14px;padding:10px 12px;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--red);display:none}
 .err-bar.vis{display:block}
-
-/* ── RESULTS ── */
-.res-hdr{padding:10px 24px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
-.res-cnt{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
-.cat-legend{display:flex;gap:10px;flex-wrap:wrap}
-.leg-i{display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
-.leg-dot{width:7px;height:7px;border-radius:1px;flex-shrink:0}
-
-/* ── SIGNAL CARD ── */
+/* RESULTS */
+.res-hdr{padding:8px 14px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px}
+.res-cnt{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+.cat-legend{display:flex;gap:8px;flex-wrap:wrap}
+.leg-i{display:flex;align-items:center;gap:3px;font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim)}
+.leg-dot{width:6px;height:6px;border-radius:1px;flex-shrink:0}
+/* SIGNAL CARD - portrait: score | main only */
 .signals-list{display:flex;flex-direction:column}
-.sig-card{border-bottom:1px solid var(--bord);display:grid;grid-template-columns:56px 1fr 220px;align-items:stretch;cursor:pointer;transition:background .15s;position:relative}
+.sig-card{border-bottom:1px solid var(--bord);display:grid;grid-template-columns:44px 1fr;align-items:stretch;cursor:pointer;transition:background .15s;position:relative;}
 .sig-card:hover{background:var(--bg2)}
-.sig-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--card-color,var(--bord2))}
-
-/* score column */
-.score-col{display:flex;align-items:center;justify-content:center;border-right:1px solid var(--bord);padding:0 4px}
-.score-num{font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1}
-
-/* main column */
-.main-col{padding:13px 16px 12px;min-width:0}
-.card-meta{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap}
-.coin-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;padding:2px 9px;border:1px solid;white-space:nowrap}
-.cat-badge{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border:1px solid var(--bord2);color:var(--dim);white-space:nowrap}
-.card-title{font-size:15px;font-weight:500;color:var(--bright);line-height:1.3;margin-bottom:4px}
-.card-desc{font-size:13px;color:var(--dim);line-height:1.5;display:none}
+.sig-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--card-color,var(--bord2))}
+.score-col{display:flex;align-items:center;justify-content:center;border-right:1px solid var(--bord);padding:0 2px}
+.score-num{font-family:'Bebas Neue',sans-serif;font-size:24px;line-height:1}
+.main-col{padding:10px 12px;min-width:0}
+.card-meta{display:flex;align-items:center;gap:4px;margin-bottom:5px;flex-wrap:wrap}
+.coin-badge{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;padding:2px 7px;border:1px solid;white-space:nowrap}
+.cat-badge{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:1px;text-transform:uppercase;padding:2px 5px;border:1px solid var(--bord2);color:var(--dim);white-space:nowrap}
+.card-title{font-size:13px;font-weight:500;color:var(--bright);line-height:1.35;margin-bottom:5px}
+.card-quick{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+.cq-item{display:flex;flex-direction:column;gap:1px}
+.cq-lbl{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+.cq-val{font-family:'Bebas Neue',sans-serif;font-size:16px;line-height:1}
+.right-col{display:none}
+.card-desc{font-size:12px;color:var(--dim);line-height:1.5;display:none}
 .sig-card.open .card-desc{display:block}
-.precedence-bar{display:flex;align-items:center;gap:8px;margin-top:8px;display:none}
-.sig-card.open .precedence-bar{display:flex}
-.prec-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);white-space:nowrap}
-.prec-track{flex:1;height:4px;background:var(--bord2);border-radius:0}
-.prec-fill{height:100%;background:var(--gold);border-radius:0}
-.prec-pct{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold);white-space:nowrap}
-.trade-block{margin-top:12px;display:none;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.precedence-bar{display:none}
+.prec-track{flex:1;height:3px;background:var(--bord2)}
+.prec-fill{height:100%;background:var(--gold)}
+.trade-block{margin-top:10px;display:none;grid-template-columns:1fr 1fr;gap:6px}
 .sig-card.open .trade-block{display:grid}
-.trade-cell{background:var(--bg3);border:1px solid var(--bord2);padding:10px 12px}
-.t-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:4px}
-.t-val{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;display:block;line-height:1}
-.t-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);display:block;margin-top:2px}
-.open-link{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);text-decoration:none;border:1px solid var(--gold2);padding:4px 12px;transition:background .2s}
-.open-link:hover{background:var(--gold-g)}
-
-/* right column */
-.right-col{padding:13px 16px;border-left:1px solid var(--bord);display:flex;flex-direction:column;justify-content:space-between;gap:8px}
-.event-date{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--gold);line-height:1}
-.days-badge{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 8px;border:1px solid;display:inline-block;margin-top:4px}
+.trade-cell{background:var(--bg3);border:1px solid var(--bord2);padding:8px 10px}
+.t-lbl{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:3px}
+.t-val{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.5px;display:block;line-height:1}
+.t-sub{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim);display:block;margin-top:2px}
+.open-link{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);text-decoration:none;border:1px solid var(--gold2);padding:4px 10px}
+.event-date{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1px;color:var(--gold);line-height:1}
+.days-badge{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.5px;padding:2px 6px;border:1px solid;display:inline-block;margin-top:3px}
 .days-badge.urgent{border-color:rgba(255,69,96,.5);color:var(--red);background:rgba(255,69,96,.08)}
 .days-badge.soon{border-color:rgba(240,165,0,.5);color:var(--gold);background:rgba(240,165,0,.08)}
 .days-badge.ahead{border-color:rgba(74,158,255,.5);color:var(--blue);background:rgba(74,158,255,.08)}
 .pos-size{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--bright);line-height:1}
 .pos-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
 .src-name{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);text-align:right;margin-top:auto}
-.impact-strip{display:flex;align-items:center;gap:4px}
-.impact-dot{width:8px;height:8px;border-radius:50%}
-
-/* ── FOOTER ── */
-.footer{padding:20px 24px;border-top:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:16px}
-.foot-brand{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--bright)}
-.foot-note{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim)}
-
-@media(max-width:720px){
-  .sig-card{grid-template-columns:48px 1fr}
-  .right-col{display:none}
-  .stats-strip{grid-template-columns:1fr 1fr}
-  .trade-block{grid-template-columns:1fr}
-}
+/* FOOTER */
+.footer{padding:14px;border-top:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+.foot-brand{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--bright)}
+.foot-note{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim)}
 @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-</style>
+/* TABLET 600px+ */
+@media(min-width:600px){
+  .topbar{padding:0 20px}
+  .tb-title{display:block}
+  .hero{padding:28px 20px 24px}
+  .hero h1{font-size:42px}
+  .capital-wrap{flex-direction:row;align-items:flex-end;flex-wrap:wrap;gap:12px}
+  .cap-input{width:140px;flex:none}
+  .scan-btn{width:auto;margin-top:0}
+  .stats-strip{grid-template-columns:repeat(6,1fr)}
+  .stat-box:nth-child(3n){border-right:1px solid var(--bord)}
+  .stat-box:nth-last-child(-n+3){border-bottom:1px solid var(--bord)}
+  .stat-box:nth-child(6n){border-right:none}
+  .stat-box:nth-last-child(-n+6){border-bottom:none}
+  .trade-block{grid-template-columns:1fr 1fr 1fr}
+}
+/* DESKTOP 900px+ */
+@media(min-width:900px){
+  .topbar{padding:0 24px;height:48px}
+  .hero{padding:40px 24px 32px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px}
+  .hero-bg{display:block;position:absolute;right:-40px;top:-20px;font-family:'Bebas Neue',sans-serif;font-size:180px;color:rgba(240,165,0,0.03);line-height:1;user-select:none;pointer-events:none;letter-spacing:-4px}
+  .hero h1{font-size:clamp(36px,5vw,60px)}
+  .hero-desc{max-width:520px}
+  .sig-card{grid-template-columns:56px 1fr 220px}
+  .right-col{display:flex;flex-direction:column;justify-content:space-between;gap:8px;padding:13px 16px;border-left:1px solid var(--bord)}
+  .score-num{font-size:28px}
+  .card-title{font-size:15px}
+  .main-col{padding:13px 16px 12px}
+  .trade-block{grid-template-columns:1fr 1fr 1fr}
+  .qfp{top:48px}
+  .fbar{display:flex}
+  .tb-clock{font-size:10px}
+}</style>
 </head>
 <body>
 
@@ -277,9 +245,9 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 <div class="hero">
   <div class="hero-bg">SCAN</div>
   <div>
-    <div class="hero-tag">Broad Market · 250+ Coins · 8 Asset Categories · 3,000+ via CoinMarketCal · No API Key</div>
+    <div class="hero-tag">520 Coins · Webull · Coinbase · Binance · 10 Asset Classes · No API Key</div>
     <h1>Catalyst <span>Scanner</span></h1>
-    <div class="hero-desc">Scans the entire broad crypto market -- top 250 coins by market cap via CoinPaprika events, 3,000+ projects via CoinMarketCal community calendar, 8 CoinGecko asset categories, exchange announcements, Reddit, and RSS. First in, first out discipline on every signal.</div>
+    <div class="hero-desc">Scans your full exchange universe -- 520 tradeable coins from Webull, Coinbase, Binance Global and Binance US. Events from CoinPaprika, CoinMarketCal, Reddit, and exchange announcements. 10 asset classes. First in, first out on every signal.</div>
   </div>
   <div class="capital-wrap">
     <div class="cap-label">Your Trading Capital ($)</div>
@@ -291,71 +259,65 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
   </div>
 </div>
 
-<!-- ══ QUICK FILTER PANEL — sticky, shows after scan ══ -->
+<!-- QUICK FILTER PANEL — 4 scrollable rows, portrait-first -->
 <div class="qfp" id="qfp">
-  <div class="qfp-inner">
 
-    <!-- ASSET TYPE -->
-    <div class="qfp-section">
-      <span class="qfp-lbl">Asset</span>
-      <button class="qbtn all-active" id="qa-all" onclick="quickAsset('all',this)">All</button>
-      <button class="qbtn qa-crypto" onclick="quickAsset('crypto',this)">🔵 Crypto</button>
-      <button class="qbtn qa-meme"   onclick="quickAsset('meme',this)">🐸 Meme</button>
-      <button class="qbtn qa-stock"  onclick="quickAsset('stock',this)">📈 Stocks</button>
-      <button class="qbtn qa-etf"    onclick="quickAsset('etf',this)">🏛 ETFs</button>
-      <button class="qbtn qa-defi"   onclick="quickAsset('defi',this)">⚡ DeFi</button>
-      <button class="qbtn qa-l1"     onclick="quickAsset('l1',this)">🔗 L1</button>
-      <button class="qbtn qa-l2"     onclick="quickAsset('l2',this)">🔷 L2</button>
-    </div>
-
-    <div class="qfp-divider"></div>
-
-    <!-- TIME HORIZON -->
-    <div class="qfp-section">
-      <span class="qfp-lbl">Horizon</span>
-      <button class="qbtn h-active" id="qh-all" onclick="quickHorizon('all',this)">All</button>
-      <button class="qbtn" id="qh-W1"      onclick="quickHorizon('W1',this)">Wk 1 <span id="qhc-W1" style="opacity:.6">—</span></button>
-      <button class="qbtn" id="qh-W2"      onclick="quickHorizon('W2',this)">Wk 2 <span id="qhc-W2" style="opacity:.6">—</span></button>
-      <button class="qbtn" id="qh-W3"      onclick="quickHorizon('W3',this)">Wk 3 <span id="qhc-W3" style="opacity:.6">—</span></button>
-      <button class="qbtn" id="qh-MONTH"   onclick="quickHorizon('MONTH',this)">Month <span id="qhc-MONTH" style="opacity:.6">—</span></button>
-      <button class="qbtn" id="qh-QUARTER" onclick="quickHorizon('QUARTER',this)">Quarter <span id="qhc-QUARTER" style="opacity:.6">—</span></button>
-    </div>
-
-    <div class="qfp-divider"></div>
-
-    <!-- CATALYST TYPE -->
-    <div class="qfp-section">
-      <span class="qfp-lbl">Catalyst</span>
-      <button class="qbtn" id="qt-all" onclick="quickType('all',this)" style="border-color:var(--gold);color:var(--gold)">All</button>
-      <button class="qbtn" onclick="quickType('listing',this)"    style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Listings</button>
-      <button class="qbtn" onclick="quickType('mainnet',this)"    style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Mainnet</button>
-      <button class="qbtn" onclick="quickType('airdrop',this)"    style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Airdrops</button>
-      <button class="qbtn" onclick="quickType('conference',this)" style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Conference</button>
-      <button class="qbtn" onclick="quickType('social',this)"     style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Social</button>
-      <button class="qbtn" onclick="quickType('unlock',this)"     style="border-color:rgba(255,69,96,.4);color:var(--red)">▼ Unlocks</button>
-      <button class="qbtn" onclick="quickType('governance',this)" style="border-color:rgba(74,158,255,.4);color:var(--blue)">◆ Governance</button>
-      <button class="qbtn" onclick="quickType('macro',this)"      style="border-color:rgba(74,158,255,.4);color:var(--blue)">◆ Macro</button>
-    </div>
-
-    <div class="qfp-divider"></div>
-
-    <!-- SORT + SEARCH -->
-    <div class="qfp-section">
-      <select class="sort-sel" id="sort-sel" onchange="render()" style="font-size:9px;padding:5px 8px">
-        <option value="score">Score ↓</option>
-        <option value="date">Date ↑</option>
-        <option value="impact">Impact ↓</option>
-        <option value="winrate">Win % ↓</option>
-        <option value="position">Position ↓</option>
-      </select>
-      <div class="search-wrap">
-        <span class="s-icon">⌕</span>
-        <input class="search-inp" id="q" placeholder="Coin or keyword..." oninput="render()" style="width:140px">
-      </div>
-    </div>
-
-    <div class="qfp-status" id="qfp-status">Scan to load signals</div>
+  <!-- ROW 1: ASSET -->
+  <div class="qfp-row">
+    <span class="qfp-row-lbl">Asset</span>
+    <button class="qbtn all-active" id="qa-all" onclick="quickAsset('all',this)">All</button>
+    <button class="qbtn qa-crypto" onclick="quickAsset('crypto',this)">Crypto</button>
+    <button class="qbtn qa-meme"   onclick="quickAsset('meme',this)">Meme</button>
+    <button class="qbtn qa-stock"  onclick="quickAsset('stock',this)">Stocks</button>
+    <button class="qbtn qa-etf"    onclick="quickAsset('etf',this)">ETFs</button>
+    <button class="qbtn qa-defi"   onclick="quickAsset('defi',this)">DeFi</button>
+    <button class="qbtn qa-l1"     onclick="quickAsset('l1',this)">L1</button>
+    <button class="qbtn qa-l2"     onclick="quickAsset('l2',this)">L2</button>
+    <button class="qbtn qa-ai"     onclick="quickAsset('ai',this)">AI</button>
+    <button class="qbtn qa-gaming" onclick="quickAsset('gaming',this)">Gaming</button>
   </div>
+
+  <!-- ROW 2: HORIZON -->
+  <div class="qfp-row">
+    <span class="qfp-row-lbl">Horizon</span>
+    <button class="qbtn h-active" id="qh-all" onclick="quickHorizon('all',this)">All</button>
+    <button class="qbtn" id="qh-W1"      onclick="quickHorizon('W1',this)">Wk1 <span id="qhc-W1" style="opacity:.55;font-size:8px"></span></button>
+    <button class="qbtn" id="qh-W2"      onclick="quickHorizon('W2',this)">Wk2 <span id="qhc-W2" style="opacity:.55;font-size:8px"></span></button>
+    <button class="qbtn" id="qh-W3"      onclick="quickHorizon('W3',this)">Wk3 <span id="qhc-W3" style="opacity:.55;font-size:8px"></span></button>
+    <button class="qbtn" id="qh-MONTH"   onclick="quickHorizon('MONTH',this)">Month <span id="qhc-MONTH" style="opacity:.55;font-size:8px"></span></button>
+    <button class="qbtn" id="qh-QUARTER" onclick="quickHorizon('QUARTER',this)">Quarter <span id="qhc-QUARTER" style="opacity:.55;font-size:8px"></span></button>
+  </div>
+
+  <!-- ROW 3: CATALYST -->
+  <div class="qfp-row">
+    <span class="qfp-row-lbl">Type</span>
+    <button class="qbtn" id="qt-all" onclick="quickType('all',this)" style="border-color:var(--gold);color:var(--gold)">All</button>
+    <button class="qbtn" onclick="quickType('listing',this)"    style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Listings</button>
+    <button class="qbtn" onclick="quickType('mainnet',this)"    style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Mainnet</button>
+    <button class="qbtn" onclick="quickType('airdrop',this)"    style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Airdrops</button>
+    <button class="qbtn" onclick="quickType('conference',this)" style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Conference</button>
+    <button class="qbtn" onclick="quickType('social',this)"     style="border-color:rgba(0,208,132,.4);color:var(--green)">▲ Social</button>
+    <button class="qbtn" onclick="quickType('unlock',this)"     style="border-color:rgba(255,69,96,.4);color:var(--red)">▼ Unlocks</button>
+    <button class="qbtn" onclick="quickType('governance',this)" style="border-color:rgba(74,158,255,.4);color:var(--blue)">◆ Gov</button>
+    <button class="qbtn" onclick="quickType('macro',this)"      style="border-color:rgba(74,158,255,.4);color:var(--blue)">◆ Macro</button>
+  </div>
+
+  <!-- ROW 4: SORT + SEARCH + STATUS -->
+  <div class="qfp-search-row">
+    <select class="sort-sel" id="sort-sel" onchange="render()">
+      <option value="score">Score</option>
+      <option value="date">Date</option>
+      <option value="impact">Impact</option>
+      <option value="winrate">Win%</option>
+      <option value="position">Position</option>
+    </select>
+    <div class="search-wrap">
+      <span class="s-icon">⌕</span>
+      <input class="search-inp" id="q" placeholder="Coin or keyword..." oninput="render()">
+    </div>
+    <span class="qfp-status-inline" id="qfp-status">—</span>
+  </div>
+
 </div>
 
 <!-- SOURCE STATUS -->
@@ -363,7 +325,7 @@ body::after{content:'';position:fixed;inset:0;background-image:url("data:image/s
 <div class="src-strip" id="src-strip"></div>
 
 <!-- STATS STRIP -->
-<div class="stats-strip" style="grid-template-columns:repeat(6,1fr)">
+<div class="stats-strip">
   <div class="stat-box"><span class="stat-val" id="st-total" style="color:var(--bright)">—</span><span class="stat-lbl">Total</span></div>
   <div class="stat-box"><span class="stat-val" id="st-w1" style="color:var(--green)">—</span><span class="stat-lbl">Wk 1</span></div>
   <div class="stat-box"><span class="stat-val" id="st-w2" style="color:var(--blue)">—</span><span class="stat-lbl">Wk 2</span></div>
@@ -434,29 +396,45 @@ const PRECEDENCE = {
 };
 
 // ══════════════════════════════════════════════════════════
-//  ASSET CLASSIFICATION
+//  ASSET CLASSIFICATION — 520 coins from Crypto Master Database
+//  Source: Crypto_Master_All_Exchanges_March2026.xlsx
+//  Exchanges: Webull · Coinbase · Binance Global · Binance US
 // ══════════════════════════════════════════════════════════
-const MEME_COINS = new Set(['DOGE','SHIB','PEPE','FLOKI','BONK','WIF','BRETT','MOG','TURBO','NEIRO','POPCAT','MEME','BABYDOGE','ELON','DEGEN','LADYS','WOJAK','SATS','RATS','ORDI','CAT','CHEEMS','CONAN','MYRO','BOME','MEW','SLERF','GME','TRUMP','MELANIA']);
-const LAYER1 = new Set(['BTC','ETH','SOL','BNB','ADA','AVAX','DOT','NEAR','ATOM','FTM','ALGO','XTZ','EOS','TRX','ICP','HBAR','VET','FLR','XRP','TON','SUI','APT','SEI','INJ']);
-const LAYER2 = new Set(['ARB','OP','MATIC','IMX','LRC','METIS','BOBA','ZKS','MANTA','SCROLL','LINEA','BASE','BLAST','STRK','ZKEVM','MANTLE','MODE']);
-const DEFI   = new Set(['UNI','AAVE','COMP','MKR','SNX','CRV','BAL','SUSHI','1INCH','DYDX','GMX','GNS','STG','PENDLE','LDO','RPL','FXS','CVX','FRAX','OSMO','JUNO','KAVA','RUNE','TWT','CAKE','JOE','RAY','ORCA','MNDE','REZ','SKY']);
-const STOCKS  = new Set(['AAPL','MSFT','NVDA','AMZN','META','GOOGL','GOOG','TSLA','AVGO','NFLX','AMD','ADBE','QCOM','COIN','PLTR','MSTR','RIOT','MARA','HUT','CLSK','CORZ','IREN']);
-const ETFS    = new Set(['IBIT','FBTC','ARKB','BITB','BTCO','EZBC','BTCW','HODL','GBTC','ETHA','FETH','CETH','QETH','ETHW','ETHE','BITU','BITQ','BLOK','DAPP','WGMI','BKCH']);
+
+// All 520 tradeable coins from your exchange database
+const EXCHANGE_COINS = ["BCH","BNB","BTC","DASH","ETC","ETH","FIL","LINK","LTC","PAXG","QNT","VET","XTZ","ZEC","AEUR","BFUSD","DAI","FDUSD","FRAX","KGST","RLUSD","TUSD","USD1","USDC","USDE","USDP","USDT","USELESS","XUSD","BNSOL","CBETH","JITOSOL","LSETH","MSOL","WBETH","WBTC","ADA","ALGO","APT","ARB","ATOM","AVAX","BERA","CELO","CFX","CRO","DOT","EGLD","FLR","HBAR","HIVE","ICP","IMX","IOST","IOTA","KAIA","KAVA","LINEA","MANTA","MANTLE","METIS","NEAR","NEO","NTRN","ONDO","ONE","OP","OSMO","POL","QTUM","SEI","SOL","STRK","SUI","THETA","TON","TRX","XEC","XLM","XRP","ZIL","ZK","1INCH","AAVE","AERO","ALCX","BAL","CAKE","COMP","COW","CRV","CVX","DODO","DYDX","ENA","ENSO","ETHFI","EUL","FARM","FIDA","GMX","GNS","INJ","JST","LAYER","LDO","LQTY","MORPHO","NEXO","ORCA","PENDLE","QI","RAY","RDNT","RESOLV","RPL","RUNE","SNX","SPELL","SSV","STG","SUSHI","SYRUP","THE","UNI","USUAL","VELODROME","YFI","ZRX","AI","AIOZ","AIXBT","ALLO","ARKM","BICO","CGPT","FET","GRT","HYPER","IO","KAITO","KITE","MDT","OCEAN","RENDER","SAHARA","SENT","TAO","VIRTUAL","ALICE","ANIME","APE","AXS","BEAMX","BIGTIME","CATI","ENJ","FLOW","GALA","GODS","HIGH","ILV","LRDS","MAGIC","MANA","ORBS","ORDI","PENGU","PIXEL","RONIN","SAND","VOXEL","1000CHEEMS","1000MOG","1000REKT","BOME","BONK","BRETT","BROCCOLI714","DOGE","DOGS","FARTCOIN","FLOKI","GIGA","GIGGLE","HMSTR","LUNC","MEME","MEW","MOODENG","NEIRO","NOBODY","PEPE","PNUT","POPCAT","PUMP","SHIB","TROLL","TRUMP","TURBO","WIF","ACM","ALPINE","ASR","ATM","BAR","CITY","JUV","LAZIO","OG","PORTO","PSG","SANTOS","0G","1000CAT","1000SATS","1MBABYDOGE","2Z","A2Z","ABT","ACE","ACH","ACS","ACT","ACX","ADX","AERGO","AEVO","AGLD","AKT","ALEO","ALEPH","ALT","AMP","ANKR","API3","AR","ARDR","ARK","ARPA","ASM","AST","ASTER","ASTR","AT","ATA","AUCTION","AUDIO","AURORA","AVA","AVNT","AVT","AWE","AXL","BABY","BADGER","BANANA","BANANAS31","BAND","BANK","BARD","BAT","BB","BEAM","BEL","BIFI","BIO","BLAST","BLUR","BLZ","BMT","BNT","BOBA","BOSON","BREV","BTRST","BTTC","C98","CELR","CETUS","CGLD","CHR","CHZ","CKB","COOKIE","CORECHAIN","COS","COTI","CTK","CTSI","CTX","CVC","CYBER","DATA","DCR","DEGO","DENT","DEXE","DEXT","DGB","DIA","DIMO","DNT","DOLO","DOOD","DRIFT","DUSK","DYM","EDEN","EDGE","EDU","EIGEN","ELA","ENS","EPIC","ERA","ESP","EURI","FF","FIO","FIS","FLUX","FOGO","FORM","FORT","FORTH","FOX","FTT","FUN","GAS","GFI","GHST","GLM","GLMR","GMT","GNO","GPS","GST","GTC","GUN","HAEDAL","HEI","HEMI","HFT","HNT","HOLO","HOME","HONEY","HOOK","HOT","HUMA","HYPE","ICX","ID","IDEX","INDEX","INIT","INV","IOTX","IP","IQ","JASMY","JOE","JTO","JUP","KARRAT","KERNEL","KMNO","KNC","KRL","KSM","L3","LA","LCX","LISTA","LPT","LRC","LSK","LTO","LUMIA","LUNA","MANTRA","MASK","MAV","MBL","MBOX","ME","MET","MINA","MIRA","MITO","MLN","MMT","MOVE","MOVR","MTL","MUBARAK","NEWT","NFP","NIGHT","NIL","NMR","NOM","NOT","NPC","NXPC","OGN","ONG","ONT","OPEN","OPN","OXT","PARTI","PEOPLE","PHA","PHB","PIVX","PLUME","POLYX","POND","PORTAL","POWR","PRIME","PROM","PROVE","PUNDIX","PURR","PYR","PYTH","QKC","QUICK","RAD","RARE","RAVE","RED","REEF","REQ","REZ","RHEA","RIF","RLC","ROBO","ROSE","RSR","RVN","SAFE","SAGA","SAPIEN","SC","SCR","SCRT","SFP","SHELL","SIGN","SKL","SKY","SLP","SOLV","SOMI","SOPH","SPK","SPX","STEEM","STO","STORJ","STRAX","STX","SUN","SUPER","SXP","SXT","SYN","SYS","TFUEL","TIA","TKO","TLM","TNSR","TOSHI","TOWNS","TRAC","TRB","TREE","TRU","TST","TURTLE","TUT","TWT","UMA","USTC","UTK","VANA","VANRY","VARA","VIC","VTHO","VVV","WAL","WAN","WAXP","WCT","WELL","WIN","WLD","WLFI","WOO","XAI","XDC","XNO","XPL","XVG","XVS","YB","YGG","ZAMA","ZBT","ZEN","ZKC","ZKP","ZORA","ZRO"];
+
+// Category sets — exact from Excel database
+const MEME_COINS  = new Set(["1000CHEEMS","1000MOG","1000REKT","BOME","BONK","BRETT","BROCCOLI714","DOGE","DOGS","FARTCOIN","FLOKI","GIGA","GIGGLE","HMSTR","LUNC","MEME","MEW","MOODENG","NEIRO","NOBODY","PEPE","PNUT","POPCAT","PUMP","SHIB","TROLL","TRUMP","TURBO","WIF"]);
+const LAYER1      = new Set(["ADA","ALGO","APT","ATOM","AVAX","BCH","BERA","BNB","BTC","CELO","CFX","CRO","DASH","DOT","EGLD","ETC","ETH","FIL","FLR","HBAR","HIVE","ICP","IOST","IOTA","KAIA","KAVA","LINK","LTC","NEAR","NEO","NTRN","ONE","OSMO","PAXG","QNT","QTUM","SEI","SOL","SUI","THETA","TON","TRX","VET","XEC","XLM","XRP","XTZ","ZEC","ZIL"]);
+const LAYER2      = new Set(["ARB","BOBA","IMX","LINEA","MANTA","MANTLE","METIS","ONDO","OP","POL","STRK","ZK"]);
+const DEFI        = new Set(["1INCH","AAVE","AERO","ALCX","BAL","CAKE","COMP","COW","CRV","CVX","DODO","DYDX","ENA","ENSO","ETHFI","EUL","FARM","FIDA","GMX","GNS","INJ","JST","LAYER","LDO","LQTY","MORPHO","NEXO","ORCA","PENDLE","QI","RAY","RDNT","RESOLV","RPL","RUNE","SNX","SPELL","SSV","STG","SUSHI","SYRUP","THE","UNI","USUAL","VELODROME","YFI","ZRX"]);
+const AI_TOKENS   = new Set(["AI","AIOZ","AIXBT","ALLO","ARKM","BICO","CGPT","FET","GRT","HYPER","IO","KAITO","KITE","MDT","OCEAN","RENDER","SAHARA","SENT","TAO","VIRTUAL"]);
+const GAMING      = new Set(["ALICE","ANIME","APE","AXS","BEAMX","BIGTIME","CATI","ENJ","FLOW","GALA","GODS","HIGH","ILV","LRDS","MAGIC","MANA","ORBS","ORDI","PENGU","PIXEL","RONIN","SAND","VOXEL"]);
+const FAN_TOKENS  = new Set(["ACM","ALPINE","ASR","ATM","BAR","CITY","JUV","LAZIO","OG","PORTO","PSG","SANTOS"]);
+const STABLECOINS = new Set(["AEUR","BFUSD","DAI","FDUSD","FRAX","KGST","RLUSD","TUSD","USD1","USDC","USDE","USDP","USDT","USELESS","XUSD"]);
+const STOCKS      = new Set(["AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","TSLA","AVGO","NFLX","AMD","ADBE","QCOM","COIN","PLTR","MSTR","RIOT","MARA","HUT","CLSK","CORZ","IREN"]);
+const ETFS        = new Set(["IBIT","FBTC","ARKB","BITB","BTCO","EZBC","BTCW","HODL","GBTC","ETHA","FETH","CETH","QETH","ETHW","ETHE","BITU","BITQ","BLOK","DAPP","WGMI","BKCH"]);
 
 function classifyAsset(coin){
-  const c=coin.toUpperCase();
-  if(ETFS.has(c))    return 'etf';
-  if(STOCKS.has(c))  return 'stock';
+  const c = coin.toUpperCase();
+  if(ETFS.has(c))       return 'etf';
+  if(STOCKS.has(c))     return 'stock';
+  if(STABLECOINS.has(c))return 'stable';
   if(MEME_COINS.has(c)) return 'meme';
-  if(LAYER2.has(c))  return 'l2';
-  if(DEFI.has(c))    return 'defi';
-  if(LAYER1.has(c))  return 'l1';
-  return 'crypto'; // default
+  if(FAN_TOKENS.has(c)) return 'fan';
+  if(GAMING.has(c))     return 'gaming';
+  if(AI_TOKENS.has(c))  return 'ai';
+  if(LAYER2.has(c))     return 'l2';
+  if(DEFI.has(c))       return 'defi';
+  if(LAYER1.has(c))     return 'l1';
+  return 'crypto';
 }
 
 const ASSET_LABELS = {
   all:'All Assets', crypto:'Crypto', meme:'Meme Coin',
-  stock:'Stock', etf:'ETF', defi:'DeFi', l1:'Layer 1', l2:'Layer 2'
+  stock:'Stock', etf:'ETF', defi:'DeFi', l1:'Layer 1', l2:'Layer 2',
+  ai:'AI Token', gaming:'Gaming/NFT', fan:'Fan Token', stable:'Stablecoin'
 };
 
 // Precedence data: text, verification source URL, entry/exit times
@@ -609,14 +587,47 @@ const PREC_CONTEXT = {
 const CG_IDS = {
   BTC:'bitcoin',ETH:'ethereum',SOL:'solana',BNB:'binancecoin',XRP:'ripple',
   ADA:'cardano',AVAX:'avalanche-2',DOT:'polkadot',LINK:'chainlink',UNI:'uniswap',
-  DOGE:'dogecoin',SHIB:'shiba-inu',MATIC:'matic-network',ARB:'arbitrum',OP:'optimism',
-  ATOM:'cosmos',NEAR:'near',INJ:'injective-protocol',SUI:'sui',APT:'aptos',
-  TIA:'celestia',SEI:'sei-network',FLR:'flare-networks',STG:'stargate-finance',
-  SNX:'synthetix-network-token',WLFI:'world-liberty-financial',TAO:'bittensor',
-  PEPE:'pepe',BONK:'bonk',WIF:'dogwifcoin',FLOKI:'floki',
+  DOGE:'dogecoin',SHIB:'shiba-inu',LTC:'litecoin',BCH:'bitcoin-cash',ETC:'ethereum-classic',
+  MATIC:'matic-network',ARB:'arbitrum',OP:'optimism',ATOM:'cosmos',NEAR:'near',
+  INJ:'injective-protocol',SUI:'sui',APT:'aptos',TIA:'celestia',SEI:'sei-network',
+  FLR:'flare-networks',STG:'stargate-finance',SNX:'synthetix-network-token',
+  WLFI:'world-liberty-financial',TAO:'bittensor',
+  PEPE:'pepe',BONK:'bonk',WIF:'dogwifcoin',FLOKI:'floki',TRUMP:'maga',
+  BRETT:'based-brett',POPCAT:'popcat',NEIRO:'neiro-on-eth',
   ZRO:'layerzero',W:'wormhole',PYTH:'pyth-network',
   AAVE:'aave',MKR:'maker',CRV:'curve-dao-token',LDO:'lido-dao',
+  UNI:'uniswap',SUSHI:'sushi',COMP:'compound-governance-token',
   MNDE:'marinade',REZ:'renzo',GTC:'gitcoin',DRIFT:'drift-protocol',
+  HBAR:'hedera-hashgraph',ICP:'internet-computer',QNT:'quant-network',
+  VET:'vechain',EGLD:'elrond-erd-2',CRO:'crypto-com-chain',
+  IMX:'immutable-x',MANTA:'manta-network',STRK:'starknet',
+  TON:'the-open-network',TRX:'tron',XLM:'stellar',XRP:'ripple',
+  ALGO:'algorand',DOT:'polkadot',FIL:'filecoin',THETA:'theta-token',
+  AERO:'aerodrome-finance',RUNE:'thorchain',PENDLE:'pendle',
+  GMX:'gmx',DYDX:'dydx',RAY:'raydium',JTO:'jito-governance-token',
+  JUP:'jupiter-exchange-solana',ENA:'ethena',ONDO:'ondo-finance',
+  RENDER:'render-token',FET:'fetch-ai',GRT:'the-graph',OCEAN:'ocean-protocol',
+  ARKM:'arkham',VIRTUAL:'virtual-protocol',AIXBT:'aixbt-by-virtuals',
+  AXS:'axie-infinity',SAND:'the-sandbox',MANA:'decentraland',
+  GALA:'gala',ENJ:'enjincoin',RONIN:'ronin',FLOW:'flow',
+  APE:'apecoin',BLUR:'blur',ORDI:'ordinals',
+  PENGU:'pudgy-penguins',PIXEL:'pixels',
+  CHZ:'chiliz',ACM:'ac-milan-fan-token',BAR:'fc-barcelona-fan-token',
+  PSG:'paris-saint-germain-fan-token',JUV:'juventus-fan-token',
+  ROSE:'oasis-network',KSM:'kusama',ZEN:'horizen',ENS:'ethereum-name-service',
+  LRC:'loopring',SKL:'skale',GLM:'golem',STORJ:'storj',NMR:'numeraire',
+  BAND:'band-protocol',KNC:'kyber-network-crystal',ZRX:'0x',BAL:'balancer',
+  ANKR:'ankr',CELR:'celer-network',HOT:'holotoken',IOTA:'iota',
+  JASMY:'jasmy',WAXP:'wax',RVN:'ravencoin',SC:'siacoin',
+  STX:'stacks',TWT:'trust-wallet-token',GMT:'stepn',SLP:'smooth-love-potion',
+  AXL:'axelar',LUNA:'terra-luna-2',LUNC:'terra-luna',FTT:'ftx-token',
+  HNT:'helium',MINA:'mina-protocol',MASK:'mask-network',HIGH:'highstreet',
+  TIA:'celestia',PYTH:'pyth-network',W:'wormhole',BOME:'book-of-meme',
+  WLD:'worldcoin-wld',NOT:'notcoin',DOGS:'dogs-on-the-moon',
+  HMSTR:'hamster-kombat',EIGEN:'eigenlayer',DRIFT:'drift-protocol',
+  MANTRA:'mantra-dao',BERA:'berachain-bera',HYPE:'hyperliquid',
+  MOVE:'movement',USUAL:'usual',VVV:'venice-finance',
+  WLFI:'world-liberty-financial',KAITO:'kaito',IP:'story-protocol',
 };
 
 // Global price cache -- populated during scan
@@ -938,35 +949,38 @@ async function fetchCPCoinList(){
   }
 }
 
-// CoinPaprika: fetch events for top 250 coins in rate-limited batches
+// CoinPaprika: fetch events for all 520 EXCHANGE_COINS in rate-limited batches
 async function fetchCoinPaprikaBroad(cgTop250, cpIdMap){
   const BATCH_SIZE=10;
-  const BATCH_DELAY=600; // ms between batches -- stay within free tier
+  const BATCH_DELAY=600;
   const all=[];
 
-  // Build list of CP IDs for top 250 CG coins
+  // Use EXCHANGE_COINS (520 tradeable coins) as primary universe
+  // Supplement with any CG top 250 coins not already in the list
+  const cgExtra = cgTop250
+    .map(c=>(c.symbol||'').toUpperCase())
+    .filter(s=>s&&!EXCHANGE_COINS.includes(s));
+  const universe = [...EXCHANGE_COINS, ...cgExtra.slice(0,50)];
+
+  // Build targets with CP IDs
   const targets=[];
-  cgTop250.slice(0,250).forEach(cgCoin=>{
-    const sym=(cgCoin.symbol||'').toUpperCase();
+  universe.forEach(sym=>{
     const entry=cpIdMap[sym];
-    if(entry) targets.push({sym, cpId:entry.id, cgCoin});
+    if(entry) targets.push({sym, cpId:entry.id});
   });
 
-  // Batch fetch events
-  let ok=0, fail=0;
+  let ok=0;
   for(let i=0;i<targets.length;i+=BATCH_SIZE){
     const batch=targets.slice(i,i+BATCH_SIZE);
     const results=await Promise.allSettled(batch.map(t=>fetchCPEvents(t.cpId,t.sym)));
     results.forEach(r=>{
       if(r.status==='fulfilled'&&r.value.length){ok++; all.push(...r.value);}
-      else fail++;
     });
-    // progress update
-    const pct=30+Math.round((i/targets.length)*18);
-    prog(pct,`Scanning CoinPaprika events...`,`${Math.min(i+BATCH_SIZE,targets.length)} / ${targets.length} coins scanned`);
+    const pct=18+Math.round((i/targets.length)*20);
+    prog(pct,`Scanning CoinPaprika events...`,`${Math.min(i+BATCH_SIZE,targets.length)} / ${targets.length} coins (${EXCHANGE_COINS.length} from your exchange database)`);
     if(i+BATCH_SIZE<targets.length) await delay(BATCH_DELAY);
   }
-  srcSt[`CoinPaprika Events (${targets.length} coins)`]=ok>0?'ok':'fail';
+  srcSt[`CoinPaprika (${targets.length} coins)`]=ok>0?'ok':'fail';
   return all;
 }
 
@@ -1373,27 +1387,14 @@ function render(){
         </div>
         <div class="card-title">${x(s.title)}</div>
 
-        <!-- PRECEDENCE -- always visible -->
-        <div style="display:flex;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">Hist. Avg</span>
-            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${histColor};line-height:1">${histSign}${s.prec.avg}%</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">Win Rate</span>
-            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);line-height:1">${s.prec.win}%</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">Position</span>
-            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--bright);line-height:1">$${s.positionAmt.toLocaleString()}</span>
-          </div>
-          <div style="flex:1;min-width:120px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim)">CONFIDENCE</span>
-              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:${histColor}">${Math.round((s.prec.win+Math.min(100,Math.abs(s.prec.avg)))/2)}%</span>
-            </div>
-            <div style="height:3px;background:var(--bord2)"><div style="height:100%;background:${histColor};width:${Math.round((s.prec.win+Math.min(100,Math.abs(s.prec.avg)))/2)}%"></div></div>
-          </div>
+        <!-- QUICK STATS — portrait-optimised, always visible -->
+        <div class="card-quick">
+          <div class="cq-item"><span class="cq-lbl">Hist Avg</span><span class="cq-val" style="color:${histColor}">${histSign}${s.prec.avg}%</span></div>
+          <div class="cq-item"><span class="cq-lbl">Win Rate</span><span class="cq-val" style="color:var(--gold)">${s.prec.win}%</span></div>
+          <div class="cq-item"><span class="cq-lbl">Position</span><span class="cq-val" style="color:var(--bright)">$${s.positionAmt.toLocaleString()}</span></div>
+          <div class="cq-item"><span class="cq-lbl">Enter</span><span class="cq-val" style="color:var(--green);font-size:12px">${s.entryDate}</span></div>
+          <div class="cq-item"><span class="cq-lbl">Exit</span><span class="cq-val" style="color:var(--red);font-size:12px">${s.exitDate}</span></div>
+          <div class="cq-item"><span class="cq-lbl">Event</span><span class="days-badge ${daysCls}" style="margin-top:0;font-size:7px;display:inline-block">${daysLabel}</span></div>
         </div>
 
         <!-- EXPANDED CONTENT -->
