@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macro Event Radar</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07090c;--s1:#0d1117;--s2:#131920;--s3:#1a2230;
+  --b:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.09);
+  --text:#e2e8f0;--muted:#5a6a82;--mu2:#2d3a4a;
+  --green:#00d68f;--gdim:rgba(0,214,143,0.10);
+  --red:#ff4d6d;--rdim:rgba(255,77,109,0.10);
+  --amber:#ffb830;--adim:rgba(255,184,48,0.10);
+  --blue:#4d9fff;--bdim:rgba(77,159,255,0.10);
+  --purple:#a78bfa;--pdim:rgba(167,139,250,0.10);
+  --orange:#ff8c42;
+  --mono:'DM Mono',monospace;--disp:'Syne',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.5;min-height:100vh}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+header{display:flex;align-items:center;justify-content:space-between;padding:9px 22px;border-bottom:1px solid var(--b);background:var(--s1)}
+.logo{font-family:var(--disp);font-size:15px;font-weight:700}
+.logo span{color:var(--red)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;display:inline-block;margin-right:5px}
+.controls{padding:10px 22px;background:var(--s1);border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.scan-btn{font-family:var(--disp);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--red);color:#fff;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;transition:all .13s}
+.scan-btn:hover{background:#ff6b85}
+.scan-btn:disabled{background:var(--s3);color:var(--muted);cursor:not-allowed}
+.focus-sel{background:var(--s2);border:1px solid var(--b2);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 10px;outline:none}
+.focus-sel option{background:var(--s2)}
+.spinner{width:12px;height:12px;border:2px solid var(--b2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;display:none;vertical-align:middle;margin-right:6px}
+.spinner.show{display:inline-block}
+.main{max-width:1400px;margin:0 auto;padding:14px 22px;display:grid;grid-template-columns:1fr 320px;gap:14px}
+@media(max-width:880px){.main{grid-template-columns:1fr}}
+.status-bar{grid-column:1/-1;background:var(--s2);border:1px solid var(--b2);border-radius:5px;padding:9px 13px;font-size:11px;color:var(--muted);min-height:34px;display:flex;align-items:center}
+.col-title{font-family:var(--disp);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.col-title::after{content:'';flex:1;height:1px;background:var(--b2)}
+.event-card{background:var(--s1);border:1px solid var(--b2);border-radius:7px;margin-bottom:10px;overflow:hidden;animation:fadein .25s ease}
+.event-card.sev-critical{border-left:3px solid var(--red)}
+.event-card.sev-high{border-left:3px solid var(--amber)}
+.event-card.sev-medium{border-left:3px solid var(--blue)}
+.event-card.sev-low{border-left:3px solid var(--muted)}
+.ev-hdr{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:10px}
+.ev-hdr:hover{background:rgba(255,255,255,0.02)}
+.ev-meta{flex:1}
+.ev-type{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+.ev-hl{font-family:var(--disp);font-size:13px;font-weight:600;line-height:1.3;margin-bottom:4px}
+.ev-sum{font-size:11px;color:var(--muted);line-height:1.5}
+.ev-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.badge{display:inline-block;font-size:9px;font-weight:500;padding:2px 5px;border-radius:3px}
+.bg{background:var(--gdim);color:var(--green)}
+.br{background:var(--rdim);color:var(--red)}
+.ba{background:var(--adim);color:var(--amber)}
+.bb{background:var(--bdim);color:var(--blue)}
+.bm{background:var(--s3);color:var(--muted)}
+.ev-arr{font-size:14px;color:var(--muted);flex-shrink:0;transition:transform .2s;user-select:none;margin-top:2px}
+.ev-arr.open{transform:rotate(180deg)}
+.ev-body{display:none;border-top:1px solid var(--b)}
+.ev-body.open{display:block}
+.sec-box{padding:11px 13px;border-bottom:1px solid var(--b)}
+.sec-box:last-child{border-bottom:none}
+.sec-ttl{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:5px}
+.asset-item{background:var(--s3);border-radius:4px;padding:7px 9px}
+.asset-sym{font-weight:600;font-size:11px;margin-bottom:2px}
+.asset-nm{font-size:9px;color:var(--muted);margin-bottom:3px}
+.asset-dir{font-size:10px;font-weight:500}
+.asset-dir.up{color:var(--green)}
+.asset-dir.down{color:var(--red)}
+.asset-dir.mixed{color:var(--amber)}
+.asset-mag{font-size:9px;color:var(--muted)}
+.prec-card{background:var(--s3);border-radius:4px;padding:9px 11px;margin-bottom:6px}
+.prec-card:last-child{margin-bottom:0}
+.prec-date{font-weight:600;color:var(--blue);font-size:10px;margin-bottom:3px}
+.prec-ev{font-weight:500;font-size:11px;margin-bottom:4px;line-height:1.4}
+.prec-moves{display:flex;flex-wrap:wrap;gap:4px}
+.pm{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:500}
+.pm.pos{background:var(--gdim);color:var(--green)}
+.pm.neg{background:var(--rdim);color:var(--red)}
+.pm.neu{background:var(--s2);color:var(--muted)}
+.prec-lesson{font-size:10px;color:var(--amber);margin-top:6px;padding-top:5px;border-top:1px solid var(--b);line-height:1.4}
+.sidebar{}
+.side-box{background:var(--s1);border:1px solid var(--b2);border-radius:7px;padding:13px;margin-bottom:10px}
+.side-ttl{font-family:var(--disp);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.risk-score{font-family:var(--disp);font-size:30px;font-weight:700}
+.risk-bar{height:5px;background:var(--s3);border-radius:3px;overflow:hidden;margin:6px 0 4px}
+.risk-fill{height:100%;border-radius:3px;transition:width .5s}
+.rr{display:flex;align-items:center;font-size:10px;gap:6px;margin-bottom:4px}
+.rr-bar{flex:1;height:3px;background:var(--s3);border-radius:2px;overflow:hidden}
+.rr-fill{height:100%;border-radius:2px}
+.watch-item{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--b);font-size:11px}
+.watch-item:last-child{border-bottom:none}
+.watch-sym{font-weight:600}
+.watch-rsn{font-size:9px;color:var(--muted);margin-top:1px}
+.cal-item{padding:6px 0;border-bottom:1px solid var(--b);font-size:11px}
+.cal-item:last-child{border-bottom:none}
+.cal-dt{font-size:9px;color:var(--blue);margin-bottom:2px}
+.news-item{padding:6px 0;border-bottom:1px solid var(--b);font-size:11px;line-height:1.4}
+.news-item:last-child{border-bottom:none}
+.news-item a{color:var(--blue);text-decoration:none}
+.news-item a:hover{text-decoration:underline}
+.news-src{font-size:9px;color:var(--muted);margin-bottom:2px}
+.empty-state{text-align:center;padding:28px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">MACRO<span>RADAR</span></div>
+    <div style="font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Free · No API key · Live news + built-in precedents</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted)">
+    <span class="live-dot"></span>
+    <span id="last-scan">Not scanned yet</span>
+  </div>
+</header>
+
+<div class="controls">
+  <button class="scan-btn" onclick="runScan()" id="scan-btn">
+    <span class="spinner" id="spinner"></span>⚡ Run Scan
+  </button>
+  <div>
+    <select class="focus-sel" id="focus">
+      <option value="all">All markets</option>
+      <option value="oil">Oil & Energy</option>
+      <option value="crypto">Crypto</option>
+      <option value="stocks">Stocks & Indices</option>
+      <option value="commodities">Commodities</option>
+      <option value="macro">Macro / Fed</option>
+    </select>
+  </div>
+  <div style="font-size:10px;color:var(--muted)">Scans Reuters · BBC · AP · Al Jazeera · CryptoPanic — free, no login</div>
+  <div style="margin-left:auto;font-size:10px;color:var(--muted)" id="status-text">Ready</div>
+</div>
+
+<div class="main">
+  <div class="status-bar" id="status-bar">Press Run Scan to detect active macro events and surface historical precedents.</div>
+
+  <div id="events-col">
+    <div class="col-title">Active Events & Signals</div>
+    <div id="events-container">
+      <div class="empty-state">
+        <div style="font-size:28px;margin-bottom:8px">📡</div>
+        <div style="font-family:var(--disp);font-size:13px;margin-bottom:6px">No scan run yet</div>
+        <div style="font-size:11px;line-height:1.7;max-width:400px;margin:0 auto">Scans live news for geopolitical events, Fed decisions, trade wars, commodity shocks. Each detected event is matched against real historical precedents with specific asset moves.</div>
+      </div>
+    </div>
+    <div class="col-title" style="margin-top:16px">Latest Headlines</div>
+    <div id="news-container"><div style="font-size:11px;color:var(--muted)">Run scan to load headlines.</div></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="side-box">
+      <div class="side-ttl">Global Risk Level</div>
+      <div class="risk-score" id="risk-score" style="color:var(--muted)">—</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:5px" id="risk-lbl">Run scan to assess risk</div>
+      <div class="risk-bar"><div class="risk-fill" id="risk-fill" style="width:0%;background:var(--muted)"></div></div>
+      <div id="risk-breakdown"></div>
+    </div>
+    <div class="side-box">
+      <div class="side-ttl">Assets to Watch</div>
+      <div id="watch-list"><div style="font-size:11px;color:var(--muted)">Run scan to populate.</div></div>
+    </div>
+    <div class="side-box">
+      <div class="side-ttl">Upcoming Scheduled Events</div>
+      <div id="cal-list"><div style="font-size:11px;color:var(--muted)">Run scan to load calendar.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// MASTER EVENT LIBRARY — built from historical research
+// Each entry: keywords, severity, type, asset impact map, precedents
+// ═══════════════════════════════════════════════════════
+const EVENT_LIBRARY = [
+  {
+    id: 'hormuz',
+    keywords: ['hormuz','strait of hormuz','iran blockade','persian gulf tanker','gulf shipping','irgc tanker'],
+    type: 'MARITIME CHOKEPOINT',
+    severity: 'critical',
+    baseHeadline: 'Strait of Hormuz Tension Detected',
+    summary: 'Disruptions to the Strait of Hormuz — through which 20% of global oil and 25% of LNG flows — have historically triggered the largest commodity price shocks in modern history.',
+    assets: [
+      {sym:'BNO',name:'Brent Oil ETF',cls:'etf',dir:'up',mag:'+15–50% (disruption duration dependent)'},
+      {sym:'UGA',name:'US Gas ETF',cls:'etf',dir:'up',mag:'+20–40%'},
+      {sym:'XOM',name:'ExxonMobil',cls:'stock',dir:'up',mag:'+5–15%'},
+      {sym:'CVX',name:'Chevron',cls:'stock',dir:'up',mag:'+4–12%'},
+      {sym:'XLE',name:'Energy Select ETF',cls:'etf',dir:'up',mag:'+10–35%'},
+      {sym:'MOS',name:'Mosaic (Fertilizer)',cls:'stock',dir:'up',mag:'+10–25%'},
+      {sym:'DAL',name:'Delta Air Lines',cls:'stock',dir:'down',mag:'-10–30%'},
+      {sym:'UAL',name:'United Airlines',cls:'stock',dir:'down',mag:'-12–35%'},
+      {sym:'GLD',name:'Gold ETF',cls:'etf',dir:'up',mag:'+3–12%'},
+      {sym:'BTC',name:'Bitcoin',cls:'crypto',dir:'down',mag:'-8–20% short term'},
+    ],
+    precedents: [
+      {
+        date:'June 2019',
+        event:'Iranian tanker attacks in Gulf of Oman — US attributed attacks to IRGC, raising closure fears',
+        moves:[
+          {a:'Brent Oil',c:'+4.5% single day',d:'pos'},
+          {a:'XOM',c:'+2.1%',d:'pos'},
+          {a:'DAL',c:'-2.8%',d:'neg'},
+          {a:'Gold',c:'+1.2%',d:'pos'},
+        ],
+        duration:'Elevated for 2-3 weeks, then faded as no further escalation',
+        lesson:'Tanker attack without actual closure produces a 3-7% oil spike. Actual closure produces 30-50%+ moves. The key variable is whether shipping actually stops.'
+      },
+      {
+        date:'Feb–Apr 2026',
+        event:'US-Israel strikes on Iran — Iran closes Strait of Hormuz, largest energy disruption since 1970s',
+        moves:[
+          {a:'WTI Oil',c:'+50% in 45 days',d:'pos'},
+          {a:'Brent',c:'$57→$112/barrel',d:'pos'},
+          {a:'XLE ETF',c:'+38%',d:'pos'},
+          {a:'DAL',c:'-41%',d:'neg'},
+          {a:'LNG Asia JKM',c:'+140%',d:'pos'},
+          {a:'USD',c:'strengthened vs EUR/JPY',d:'pos'},
+          {a:'BTC',c:'-15% initial, partial recovery',d:'neg'},
+        ],
+        duration:'45 days closure, then ceasefire — oil crashed 16% on reopening day',
+        lesson:'Buy oil and energy on any credible Hormuz escalation. Exit before resolution — oil crashed 16% the day the strait reopened. The "buy the rumour, sell the news" pattern is extremely reliable here.'
+      },
+      {
+        date:'1980',
+        event:'Iran-Iraq War — tanker attacks in Persian Gulf during "Tanker War" phase',
+        moves:[
+          {a:'Oil',c:'+130% over conflict period',d:'pos'},
+          {a:'US Equities',c:'-10% 1981 correction',d:'neg'},
+          {a:'Gold',c:'peaked $850 then volatile',d:'neu'},
+        ],
+        duration:'Years — oil elevated throughout 1980s conflict',
+        lesson:'Prolonged Middle East conflict sustains oil elevation but markets eventually adjust. Short-term trade: buy oil. Long-term: inflation eats equities.'
+      }
+    ]
+  },
+
+  {
+    id: 'suez',
+    keywords: ['suez canal','suez blockage','suez closure','red sea attack','houthi ship','houthi attack','bab el-mandeb','red sea shipping','cape of good hope reroute'],
+    type: 'MARITIME CHOKEPOINT',
+    severity: 'high',
+    baseHeadline: 'Suez Canal / Red Sea Disruption Detected',
+    summary: 'Red Sea and Suez Canal disruptions force rerouting around Africa, adding 10-14 days to Asia-Europe routes and spiking shipping costs 200-400%.',
+    assets: [
+      {sym:'ZIM',name:'ZIM Shipping',cls:'stock',dir:'mixed',mag:'volatile — initially up on rates, then down on volume loss'},
+      {sym:'MATX',name:'Matson Inc',cls:'stock',dir:'up',mag:'+5–15% on rate spike'},
+      {sym:'DAL',name:'Delta Air Lines',cls:'stock',dir:'up',mag:'slight +2–5% as air cargo benefits'},
+      {sym:'OIL',name:'Brent Crude',cls:'commodity',dir:'up',mag:'+3–8% on rerouting costs'},
+      {sym:'WHEAT',name:'Wheat Futures',cls:'commodity',dir:'up',mag:'+5–15% if Black Sea involved'},
+      {sym:'EWG',name:'Germany ETF',cls:'etf',dir:'down',mag:'-3–8% (Europe energy dependent)'},
+      {sym:'GLD',name:'Gold',cls:'etf',dir:'up',mag:'+2–5%'},
+    ],
+    precedents: [
+      {
+        date:'March 2021',
+        event:'Ever Given container ship blocks Suez Canal for 6 days',
+        moves:[
+          {a:'Shipping stocks',c:'+8–12%',d:'pos'},
+          {a:'Oil',c:'+6%',d:'pos'},
+          {a:'European ETFs',c:'-1–2%',d:'neg'},
+        ],
+        duration:'6-day blockage, recovered within 2 weeks',
+        lesson:'Single-ship blockage is a temporary spike. Persistent disruption (Houthi attacks) has lasting effect on freight rates and European supply chains.'
+      },
+      {
+        date:'2024',
+        event:'Houthi attacks force Red Sea rerouting — major shipping companies suspend routes',
+        moves:[
+          {a:'Baltic Dry Index',c:'+300%',d:'pos'},
+          {a:'Maersk',c:'+15% then -20%',d:'neu'},
+          {a:'European gas',c:'+12%',d:'pos'},
+          {a:'European autos',c:'-3–5%',d:'neg'},
+        ],
+        duration:'Months — shipping rates elevated throughout H1 2024',
+        lesson:'Houthi attacks produce prolonged freight rate elevation. Short shipping companies that rely on Red Sea routes. Long air cargo alternatives and Cape-route beneficiaries.'
+      }
+    ]
+  },
+
+  {
+    id: 'tariff',
+    keywords: ['tariff','trade war','trade dispute','import duty','china tariff','trump tariff','reciprocal tariff','trade retaliation','trade deal','wto'],
+    type: 'TRADE WAR',
+    severity: 'high',
+    baseHeadline: 'Tariff / Trade War Signal Detected',
+    summary: 'Tariff announcements produce immediate USD strength, equity market selloffs in manufacturing and tech, and agricultural commodity weakness from retaliation.',
+    assets: [
+      {sym:'SPY',name:'S&P 500 ETF',cls:'etf',dir:'down',mag:'-3–15% depending on scope'},
+      {sym:'QQQ',name:'Nasdaq ETF',cls:'etf',dir:'down',mag:'-5–18% (tech heavy)'},
+      {sym:'GLD',name:'Gold',cls:'etf',dir:'up',mag:'+3–8%'},
+      {sym:'SOXX',name:'Semiconductor ETF',cls:'etf',dir:'down',mag:'-8–20%'},
+      {sym:'BA',name:'Boeing',cls:'stock',dir:'down',mag:'-5–15%'},
+      {sym:'SOYB',name:'Soybean ETF',cls:'etf',dir:'down',mag:'-5–12% (China retaliation)'},
+      {sym:'EEM',name:'Emerging Markets ETF',cls:'etf',dir:'down',mag:'-8–15%'},
+      {sym:'BTC',name:'Bitcoin',cls:'crypto',dir:'down',mag:'-10–20% risk-off'},
+      {sym:'UUP',name:'USD Bull ETF',cls:'etf',dir:'up',mag:'+2–5%'},
+    ],
+    precedents: [
+      {
+        date:'April 2025',
+        event:'Trump announces sweeping tariffs 10–50% on most trading partners',
+        moves:[
+          {a:'S&P 500',c:'-15% in one week',d:'neg'},
+          {a:'SOXX',c:'-22%',d:'neg'},
+          {a:'Gold',c:'+8%',d:'pos'},
+          {a:'BTC',c:'-18%',d:'neg'},
+          {a:'USD',c:'+3%',d:'pos'},
+        ],
+        duration:'Acute phase 1-2 weeks, partial reversal on April 9 when exemptions announced — SPY +9% single day',
+        lesson:'Tariff announcements = sell everything except gold and USD. But watch for reversal trades — the April 9 exemption caused one of the largest single-day equity rallies in history. The reversal trade is often bigger than the initial crash.'
+      },
+      {
+        date:'2018–2019',
+        event:'US-China trade war — escalating tariffs on $500B+ of goods',
+        moves:[
+          {a:'S&P 500',c:'-20% Dec 2018',d:'neg'},
+          {a:'CSI 300 (China)',c:'-32%',d:'neg'},
+          {a:'Soybeans',c:'-20%',d:'neg'},
+          {a:'Gold',c:'+8% safe haven',d:'pos'},
+        ],
+        duration:'18 months of escalation before Phase 1 deal',
+        lesson:'Trade wars are prolonged. Initial crash is acute but markets re-price over months. Agricultural commodities suffer longest as China redirects purchases to Brazil.'
+      }
+    ]
+  },
+
+  {
+    id: 'fed',
+    keywords: ['federal reserve','fed rate','fomc','jerome powell','interest rate','rate hike','rate cut','basis point','monetary policy','quantitative','treasury yield','jackson hole'],
+    type: 'CENTRAL BANK',
+    severity: 'high',
+    baseHeadline: 'Federal Reserve Policy Signal Detected',
+    summary: 'Fed decisions are the single most reliably scheduled market-moving events. Markets move on the language as much as the rate itself.',
+    assets: [
+      {sym:'TLT',name:'20Y Treasury ETF',cls:'etf',dir:'mixed',mag:'Hike: down 2-5%. Cut: up 3-8%'},
+      {sym:'GLD',name:'Gold',cls:'etf',dir:'mixed',mag:'Hike: down 1-3%. Cut: up 3-7%'},
+      {sym:'BTC',name:'Bitcoin',cls:'crypto',dir:'mixed',mag:'Hike: down 5-15%. Cut: up 10-25%'},
+      {sym:'QQQ',name:'Nasdaq ETF',cls:'etf',dir:'mixed',mag:'Hike: down 3-8%. Cut: up 4-10%'},
+      {sym:'UUP',name:'USD Bull ETF',cls:'etf',dir:'mixed',mag:'Hike: up 1-3%. Cut: down 1-3%'},
+      {sym:'XLU',name:'Utilities ETF',cls:'etf',dir:'mixed',mag:'Rate sensitive — hike hurts, cut helps'},
+      {sym:'XLRE',name:'Real Estate ETF',cls:'etf',dir:'mixed',mag:'Very rate sensitive'},
+    ],
+    precedents: [
+      {
+        date:'March 2022',
+        event:'Fed begins most aggressive hiking cycle since 1980s — 0% to 4.5% in 12 months',
+        moves:[
+          {a:'BTC',c:'-65% over hiking cycle',d:'neg'},
+          {a:'QQQ',c:'-35%',d:'neg'},
+          {a:'TLT',c:'-40%',d:'neg'},
+          {a:'USD',c:'+20%',d:'pos'},
+          {a:'Gold',c:'flat — surprised analysts',d:'neu'},
+        ],
+        duration:'12 months of sustained pressure',
+        lesson:'Rate hiking cycles are slow-moving but devastating for growth assets. BTC and tech suffer most. Short bonds (long TBT) is the cleanest trade in a hiking cycle.'
+      },
+      {
+        date:'September 2024',
+        event:'Fed surprise 50bps cut — first cut since 2020',
+        moves:[
+          {a:'BTC',c:'+15% in 2 weeks',d:'pos'},
+          {a:'Gold',c:'+5% immediate',d:'pos'},
+          {a:'S&P 500',c:'+3% day of cut',d:'pos'},
+          {a:'TLT',c:'+4%',d:'pos'},
+          {a:'USD',c:'-1.5%',d:'neg'},
+        ],
+        duration:'Rally sustained for 2-3 weeks before consolidation',
+        lesson:'Fed cuts are rocket fuel for risk assets. BTC responds faster and larger than equities. Buy BTC and gold on credible pivot signals — not after the cut, before it.'
+      }
+    ]
+  },
+
+  {
+    id: 'opec',
+    keywords: ['opec','oil production','production cut','oil output','saudi aramco','oil supply','crude output','opec+','brent crude','wti crude','oil inventory'],
+    type: 'COMMODITY SUPPLY',
+    severity: 'medium',
+    baseHeadline: 'OPEC / Oil Production Signal Detected',
+    summary: 'OPEC production decisions directly move oil prices and all oil-correlated assets within minutes of announcement.',
+    assets: [
+      {sym:'USO',name:'US Oil ETF',cls:'etf',dir:'mixed',mag:'Cut: +3-8%. Increase: -3-8%'},
+      {sym:'XOM',name:'ExxonMobil',cls:'stock',dir:'mixed',mag:'Follows oil direction'},
+      {sym:'CVX',name:'Chevron',cls:'stock',dir:'mixed',mag:'Follows oil direction'},
+      {sym:'XLE',name:'Energy ETF',cls:'etf',dir:'mixed',mag:'Cut: +4-10%. Increase: -4-10%'},
+      {sym:'DAL',name:'Delta',cls:'stock',dir:'mixed',mag:'Inverse to oil — cut hurts, increase helps'},
+      {sym:'OIH',name:'Oil Services ETF',cls:'etf',dir:'mixed',mag:'Follows oil direction'},
+    ],
+    precedents: [
+      {
+        date:'April 2023',
+        event:'OPEC+ surprise cut of 1.16 million bpd — announced on Sunday',
+        moves:[
+          {a:'WTI Oil',c:'+8% Monday open',d:'pos'},
+          {a:'XLE',c:'+5.2%',d:'pos'},
+          {a:'DAL',c:'-3.1%',d:'neg'},
+          {a:'S&P 500',c:'-0.6% (inflation concern)',d:'neg'},
+        ],
+        duration:'Oil elevated 2-3 weeks, then gradual fade as compliance questioned',
+        lesson:'Surprise OPEC cuts on weekends create Monday gap-ups in oil. The move often fades within weeks as compliance weakens. Take profit on energy within 1-2 weeks.'
+      },
+      {
+        date:'November 2016',
+        event:'First OPEC-Russia coordinated production cut since 2008',
+        moves:[
+          {a:'WTI Oil',c:'+9% single day',d:'pos'},
+          {a:'XLE',c:'+7%',d:'pos'},
+          {a:'USO',c:'+8%',d:'pos'},
+        ],
+        duration:'Oil doubled from $26 to $54 over 6 months',
+        lesson:'When OPEC and Russia coordinate and comply, oil rallies are sustained. Watch for Russia compliance as the differentiating factor.'
+      }
+    ]
+  },
+
+  {
+    id: 'russia_ukraine',
+    keywords: ['ukraine','russia ukraine','kyiv','zelensky','nato russia','russian military','ukraine war','russian offensive','ukraine ceasefire','russian sanctions','black sea grain'],
+    type: 'GEOPOLITICAL',
+    severity: 'high',
+    baseHeadline: 'Russia-Ukraine Conflict Signal Detected',
+    summary: 'The Russia-Ukraine war affects global wheat, fertilizer, energy prices, and European equities through energy dependency and sanctions.',
+    assets: [
+      {sym:'WEAT',name:'Wheat ETF',cls:'etf',dir:'up',mag:'+10-30% on escalation'},
+      {sym:'MOS',name:'Mosaic (Fertilizer)',cls:'stock',dir:'up',mag:'+8-20%'},
+      {sym:'NTR',name:'Nutrien (Fertilizer)',cls:'stock',dir:'up',mag:'+8-15%'},
+      {sym:'EWG',name:'Germany ETF',cls:'etf',dir:'down',mag:'-5-15% (gas dependent)'},
+      {sym:'GLD',name:'Gold',cls:'etf',dir:'up',mag:'+3-8%'},
+      {sym:'PAL',name:'Palladium',cls:'commodity',dir:'up',mag:'+10-30% (Russia 40% of supply)'},
+      {sym:'CORN',name:'Corn ETF',cls:'etf',dir:'up',mag:'+5-15%'},
+      {sym:'BTC',name:'Bitcoin',cls:'crypto',dir:'down',mag:'-10-20% initial risk-off'},
+    ],
+    precedents: [
+      {
+        date:'February 24 2022',
+        event:'Russia full-scale invasion of Ukraine — market open after weekend announcement',
+        moves:[
+          {a:'Oil',c:'+9% to $105/barrel',d:'pos'},
+          {a:'Wheat',c:'+40% in 2 weeks',d:'pos'},
+          {a:'Palladium',c:'+80%',d:'pos'},
+          {a:'MOEX Russia',c:'-33% single day',d:'neg'},
+          {a:'German DAX',c:'-10%',d:'neg'},
+          {a:'Gold',c:'+6%',d:'pos'},
+          {a:'BTC',c:'-13% first week',d:'neg'},
+        ],
+        duration:'Initial spike 2-4 weeks, then markets partially adjusted to new normal',
+        lesson:'War onset = buy wheat, oil, palladium, gold immediately. Sell European energy-dependent equities. BTC falls with risk-off but recovers faster than equities.'
+      }
+    ]
+  },
+
+  {
+    id: 'crypto_reg',
+    keywords: ['crypto regulation','sec crypto','cftc crypto','bitcoin etf','crypto ban','crypto law','binance sec','coinbase sec','crypto tax','stablecoin regulation','bitcoin legal','crypto exchange shutdown'],
+    type: 'REGULATORY',
+    severity: 'medium',
+    baseHeadline: 'Crypto Regulatory Signal Detected',
+    summary: 'Crypto regulatory events follow consistent playbooks — negative enforcement crashes alts hardest, positive regulatory clarity produces sustained rallies.',
+    assets: [
+      {sym:'BTC',name:'Bitcoin',cls:'crypto',dir:'mixed',mag:'Enforcement: -10-25%. ETF/clarity: +10-30%'},
+      {sym:'ETH',name:'Ethereum',cls:'crypto',dir:'mixed',mag:'Follows BTC but amplified'},
+      {sym:'COIN',name:'Coinbase',cls:'stock',dir:'mixed',mag:'Enforcement: -20-40%. Positive: +15-30%'},
+      {sym:'MSTR',name:'MicroStrategy',cls:'stock',dir:'mixed',mag:'High BTC correlation'},
+    ],
+    precedents: [
+      {
+        date:'January 2024',
+        event:'SEC approves Bitcoin spot ETF — first US Bitcoin ETF after decade of rejections',
+        moves:[
+          {a:'BTC',c:'+150% in 3 months prior',d:'pos'},
+          {a:'BTC on day',c:'+4% then -8% "sell the news"',d:'neu'},
+          {a:'COIN',c:'+30% in ETF run-up',d:'pos'},
+          {a:'MSTR',c:'+100% in ETF run-up',d:'pos'},
+        ],
+        duration:'Buy the anticipation rally — 3-month run-up was the real trade',
+        lesson:'Regulatory approval is priced in over months. The actual event is a sell. Position before the announcement, not after.'
+      },
+      {
+        date:'November 2022',
+        event:'FTX collapse — second largest crypto exchange fails overnight',
+        moves:[
+          {a:'BTC',c:'-25% in 1 week',d:'neg'},
+          {a:'All alts',c:'-30-60%',d:'neg'},
+          {a:'COIN',c:'-45%',d:'neg'},
+          {a:'BNB',c:'-35%',d:'neg'},
+        ],
+        duration:'Crypto bear market extended 6 more months',
+        lesson:'Exchange collapse = sell everything crypto immediately. No recovery play until dust settles. Watch for contagion — which other exchanges have FTX exposure?'
+      }
+    ]
+  },
+
+  {
+    id: 'cpi_nfp',
+    keywords: ['cpi report','inflation data','consumer price','core inflation','jobs report','nonfarm payroll','nfp','unemployment rate','payroll','labor market','jobless claims'],
+    type: 'ECONOMIC DATA',
+    severity: 'medium',
+    baseHeadline: 'Key US Economic Data Signal Detected',
+    summary: 'CPI and NFP releases move markets immediately. The deviation from consensus forecast determines magnitude — surprise beats or misses cause 1-3% moves in minutes.',
+    assets: [
+      {sym:'SPY',name:'S&P 500',cls:'etf',dir:'mixed',mag:'Hot CPI: -1-3%. Cool CPI: +1-3%'},
+      {sym:'TLT',name:'20Y Treasury',cls:'etf',dir:'mixed',mag:'Hot CPI: -2-4%. Cool CPI: +2-5%'},
+      {sym:'GLD',name:'Gold',cls:'etf',dir:'mixed',mag:'Hot CPI: mixed. Cool CPI: +1-2%'},
+      {sym:'BTC',name:'Bitcoin',cls:'crypto',dir:'mixed',mag:'Hot CPI: -5-10%. Cool CPI: +5-12%'},
+      {sym:'UUP',name:'USD Bull',cls:'etf',dir:'mixed',mag:'Strong NFP: +0.5-1.5%. Weak: -0.5-1%'},
+    ],
+    precedents: [
+      {
+        date:'June 2022',
+        event:'CPI prints 9.1% — 40-year high, far above 8.8% consensus',
+        moves:[
+          {a:'S&P 500',c:'-3.2% same day',d:'neg'},
+          {a:'BTC',c:'-8% week following',d:'neg'},
+          {a:'TLT',c:'-2.8%',d:'neg'},
+          {a:'USD',c:'+1.3%',d:'pos'},
+        ],
+        duration:'Triggered emergency 75bps Fed hike expectation — market pressure sustained weeks',
+        lesson:'CPI above consensus by 0.3%+ triggers outsized moves. Watch BTC as the most sensitive barometer — it moves first and fastest on inflation surprises.'
+      }
+    ]
+  },
+
+  {
+    id: 'china',
+    keywords: ['china economy','china stimulus','china property','china evergrande','taiwan strait','china taiwan','pla taiwan','china military','china sanctions','chip export china','china tech','china slowdown'],
+    type: 'GEOPOLITICAL',
+    severity: 'high',
+    baseHeadline: 'China Economic / Geopolitical Signal Detected',
+    summary: 'China events affect global supply chains, rare earth metals, technology stocks, and Asian equity markets.',
+    assets: [
+      {sym:'FXI',name:'China Large-Cap ETF',cls:'etf',dir:'mixed',mag:'Stimulus: +5-15%. Crisis: -10-25%'},
+      {sym:'SOXX',name:'Semiconductor ETF',cls:'etf',dir:'down',mag:'-8-20% on Taiwan/chip tension'},
+      {sym:'NVDA',name:'Nvidia',cls:'stock',dir:'down',mag:'-10-25% on chip restriction risk'},
+      {sym:'BABA',name:'Alibaba',cls:'stock',dir:'mixed',mag:'Regulatory: -30-50%. Stimulus: +10-20%'},
+      {sym:'EEM',name:'Emerging Markets ETF',cls:'etf',dir:'mixed',mag:'Follows China direction'},
+      {sym:'REMX',name:'Rare Earth ETF',cls:'etf',dir:'up',mag:'+10-30% on export restriction risk'},
+    ],
+    precedents: [
+      {
+        date:'2021',
+        event:'China tech crackdown — regulatory assault on Alibaba, Tencent, Didi',
+        moves:[
+          {a:'BABA',c:'-70% over crackdown period',d:'neg'},
+          {a:'FXI',c:'-35%',d:'neg'},
+          {a:'US tech',c:'minor spillover -2-3%',d:'neg'},
+        ],
+        duration:'18-month crackdown — "uninvestable" narrative',
+        lesson:'Chinese regulatory crackdowns are sudden and severe. US-listed Chinese stocks are highest risk. Diversify out of Chinese tech on first signs of regulatory targeting.'
+      }
+    ]
+  },
+
+  {
+    id: 'gold_metals',
+    keywords: ['gold price','gold rally','silver surge','safe haven','dollar weakness','inflation hedge','gold etf','precious metals','treasury yields fall'],
+    type: 'COMMODITY',
+    severity: 'medium',
+    baseHeadline: 'Precious Metals / Safe Haven Signal Detected',
+    summary: 'Gold and silver move on real interest rates, dollar strength, and geopolitical risk. Rising gold is a warning signal for broader risk sentiment.',
+    assets: [
+      {sym:'GLD',name:'SPDR Gold ETF',cls:'etf',dir:'up',mag:'+3-15% on risk events'},
+      {sym:'SLV',name:'Silver ETF',cls:'etf',dir:'up',mag:'Often 2x gold move'},
+      {sym:'GDX',name:'Gold Miners ETF',cls:'etf',dir:'up',mag:'+10-30% leveraged to gold'},
+      {sym:'GDXJ',name:'Junior Miners ETF',cls:'etf',dir:'up',mag:'+15-40% highest leverage'},
+    ],
+    precedents: [
+      {
+        date:'2020',
+        event:'COVID pandemic fear — gold surges as ultimate safe haven',
+        moves:[
+          {a:'GLD',c:'+30% in 6 months to ATH $2089',d:'pos'},
+          {a:'GDX',c:'+70%',d:'pos'},
+          {a:'GDXJ',c:'+85%',d:'pos'},
+          {a:'SLV',c:'+140%',d:'pos'},
+        ],
+        duration:'6-month sustained rally then correction',
+        lesson:'When gold runs, junior miners (GDXJ) provide the best leverage — typically 3-5x the gold percentage move. But they crash just as hard on reversal.'
+      }
+    ]
+  },
+
+  {
+    id: 'agriculture',
+    keywords: ['wheat price','grain supply','drought','la nina','el nino','food price','crop failure','fertilizer','ukraine grain','black sea grain','soybean','corn price','food crisis'],
+    type: 'COMMODITY',
+    severity: 'medium',
+    baseHeadline: 'Agricultural Commodity Disruption Signal Detected',
+    summary: 'Agricultural disruptions from weather events, war, or export restrictions cause multi-month commodity price spikes.',
+    assets: [
+      {sym:'WEAT',name:'Wheat ETF',cls:'etf',dir:'up',mag:'+10-40% on supply shock'},
+      {sym:'CORN',name:'Corn ETF',cls:'etf',dir:'up',mag:'+8-25%'},
+      {sym:'SOYB',name:'Soybean ETF',cls:'etf',dir:'up',mag:'+8-20%'},
+      {sym:'MOS',name:'Mosaic (Fertilizer)',cls:'stock',dir:'up',mag:'+15-40%'},
+      {sym:'NTR',name:'Nutrien',cls:'stock',dir:'up',mag:'+10-30%'},
+    ],
+    precedents: [
+      {
+        date:'February 2022',
+        event:'Russia invades Ukraine — world loses 25-30% of wheat exports',
+        moves:[
+          {a:'Wheat futures',c:'+40% in 2 weeks',d:'pos'},
+          {a:'Corn',c:'+15%',d:'pos'},
+          {a:'MOS',c:'+25%',d:'pos'},
+        ],
+        duration:'Elevated 6+ months',
+        lesson:'Ukraine-Russia together = 30% of global wheat. Any disruption to Black Sea shipping triggers immediate agricultural spikes. MOS and NTR are the equity proxies.'
+      }
+    ]
+  },
+
+  {
+    id: 'malacca',
+    keywords: ['strait of malacca','south china sea','piracy malacca','singapore strait','indonesia strait','asia shipping route'],
+    type: 'MARITIME CHOKEPOINT',
+    severity: 'medium',
+    baseHeadline: 'Strait of Malacca / South China Sea Signal Detected',
+    summary: 'The Strait of Malacca handles 25% of global trade and is the primary route for China-Europe maritime commerce. Disruption hits Asian manufacturing and semiconductor supply chains.',
+    assets: [
+      {sym:'FXI',name:'China ETF',cls:'etf',dir:'down',mag:'-3-8%'},
+      {sym:'EWS',name:'Singapore ETF',cls:'etf',dir:'down',mag:'-5-10%'},
+      {sym:'SOXX',name:'Semiconductors',cls:'etf',dir:'down',mag:'-5-12% (Taiwan chip shipments)'},
+      {sym:'ZIM',name:'ZIM Shipping',cls:'stock',dir:'mixed',mag:'Rate spike initially positive'},
+    ],
+    precedents: [
+      {
+        date:'2024',
+        event:'South China Sea tensions — Philippine-China standoffs at Scarborough Shoal',
+        moves:[
+          {a:'Philippine Peso',c:'-2.5%',d:'neg'},
+          {a:'Asia shipping rates',c:'+8-12%',d:'pos'},
+          {a:'Regional ETFs',c:'-2-4%',d:'neg'},
+        ],
+        duration:'Tensions ongoing but no full closure',
+        lesson:'Malacca has no good rerouting option for China trade. Any credible closure threat would be catastrophic for Asian manufacturing stocks — SOXX and FXI would crater.'
+      }
+    ]
+  }
+];
+
+// SCHEDULED EVENTS CALENDAR — upcoming known events
+const CALENDAR = [
+  { when:'FOMC Meeting',freq:'8x per year',assets:'TLT, BTC, QQQ, GLD, USD',impact:'Rate decision + language drives all risk assets' },
+  { when:'US CPI Release',freq:'Monthly (mid-month)',assets:'BTC, SPY, TLT, USD',impact:'Inflation above/below consensus moves risk assets ±3-8%' },
+  { when:'US NFP (Jobs Report)',freq:'First Friday of month',assets:'USD, SPY, TLT',impact:'Strong jobs = hawkish Fed fear. Weak = rate cut hopes' },
+  { when:'OPEC+ Meeting',freq:'Quarterly + emergency',assets:'XLE, XOM, DAL, USO',impact:'Production cut/increase moves oil ±5-10% immediately' },
+  { when:'US GDP Release',freq:'Quarterly',assets:'USD, SPY, EEM',impact:'Growth surprise affects risk appetite broadly' },
+  { when:'China PMI',freq:'Monthly (end of month)',assets:'FXI, EEM, SOXX, commodities',impact:'China factory activity signals global demand' },
+  { when:'EIA Oil Inventory',freq:'Weekly (Wednesday)',assets:'USO, XLE, XOM',impact:'Large build = oil falls. Large draw = oil rises ±2-4%' },
+  { when:'US Treasury Auction',freq:'Varies',assets:'TLT, USD, SPY',impact:'Weak demand raises yields, pressures equities' },
+];
+
+// ═══════════════════════════════════════════════════════
+// NEWS FEEDS — free RSS via CORS proxy
+// ═══════════════════════════════════════════════════════
+const NEWS_FEEDS = [
+  { name:'Reuters Business', url:'https://feeds.reuters.com/reuters/businessNews' },
+  { name:'Reuters World',    url:'https://feeds.reuters.com/reuters/worldNews' },
+  { name:'BBC Business',     url:'https://feeds.bbci.co.uk/news/business/rss.xml' },
+  { name:'BBC World',        url:'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  { name:'AP News',          url:'https://rsshub.app/apnews/topics/business' },
+  { name:'Al Jazeera',       url:'https://www.aljazeera.com/xml/rss/all.xml' },
+  { name:'CryptoPanic',      url:'https://cryptopanic.com/api/free/v1/posts/?auth_token=free&kind=news&public=true&format=rss' },
+];
+
+const CORS_PROXIES = [
+  'https://corsproxy.io/?',
+  'https://api.allorigins.win/raw?url=',
+  'https://thingproxy.freeboard.io/fetch/',
+];
+
+async function fetchFeed(feedUrl) {
+  for(const proxy of CORS_PROXIES) {
+    try {
+      const r = await fetch(proxy + encodeURIComponent(feedUrl), { signal: AbortSignal.timeout(8000) });
+      if(!r.ok) continue;
+      const text = await r.text();
+      return parseRSS(text);
+    } catch(e) { continue; }
+  }
+  return [];
+}
+
+function parseRSS(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'application/xml');
+  const items = doc.querySelectorAll('item, entry');
+  const results = [];
+  items.forEach(item => {
+    const title = item.querySelector('title')?.textContent?.trim() || '';
+    const desc = item.querySelector('description,summary')?.textContent?.trim().replace(/<[^>]*>/g,'').slice(0,200) || '';
+    const link = item.querySelector('link')?.textContent?.trim() || item.querySelector('link')?.getAttribute('href') || '#';
+    const pub = item.querySelector('pubDate,published,updated')?.textContent?.trim() || '';
+    if(title) results.push({ title, desc, link, pub });
+  });
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════
+// EVENT DETECTION ENGINE
+// ═══════════════════════════════════════════════════════
+function detectEvents(headlines, focus) {
+  const matched = new Map(); // event id -> {event, headlines, score}
+
+  for(const h of headlines) {
+    const text = (h.title + ' ' + h.desc).toLowerCase();
+    for(const ev of EVENT_LIBRARY) {
+      // Focus filter
+      if(focus !== 'all') {
+        const focusMap = {
+          oil: ['hormuz','suez','opec','malacca'],
+          crypto: ['crypto_reg','fed'],
+          stocks: ['tariff','fed','cpi_nfp','china'],
+          commodities: ['hormuz','suez','opec','russia_ukraine','gold_metals','agriculture'],
+          macro: ['fed','cpi_nfp','tariff','china']
+        };
+        if(focusMap[focus] && !focusMap[focus].includes(ev.id)) continue;
+      }
+
+      const matchCount = ev.keywords.filter(k => text.includes(k)).length;
+      if(matchCount > 0) {
+        if(!matched.has(ev.id)) {
+          matched.set(ev.id, { event: ev, headlines: [], score: 0 });
+        }
+        const entry = matched.get(ev.id);
+        entry.headlines.push(h);
+        entry.score += matchCount;
+      }
+    }
+  }
+
+  // Sort by score desc, return top events
+  return [...matched.values()]
+    .sort((a,b) => b.score - a.score)
+    .slice(0, 8)
+    .map(m => ({
+      ...m.event,
+      detectedHeadlines: m.headlines.slice(0, 3),
+      score: m.score
+    }));
+}
+
+function calculateRisk(events) {
+  if(!events.length) return { score: 20, level: 'LOW', label: 'No significant events detected', col: 'var(--green)', cats: { geopolitical: 10, economic: 15, market_volatility: 15, commodity: 10 } };
+  const sevScore = { critical: 90, high: 65, medium: 40, low: 20 };
+  const scores = events.map(e => sevScore[e.severity] || 20);
+  const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+  const max = Math.max(...scores);
+  const composite = Math.round(avg * 0.5 + max * 0.5);
+
+  const geoTypes = ['GEOPOLITICAL','MILITARY','MARITIME CHOKEPOINT','SANCTIONS'];
+  const ecoTypes = ['CENTRAL BANK','ECONOMIC DATA','TRADE WAR'];
+  const comTypes = ['COMMODITY SUPPLY','COMMODITY'];
+
+  const cats = {
+    geopolitical: Math.round(events.filter(e=>geoTypes.includes(e.type)).reduce((a,e)=>a+(sevScore[e.severity]||20),0) / Math.max(1,events.filter(e=>geoTypes.includes(e.type)).length)),
+    economic: Math.round(events.filter(e=>ecoTypes.includes(e.type)).reduce((a,e)=>a+(sevScore[e.severity]||20),0) / Math.max(1,events.filter(e=>ecoTypes.includes(e.type)).length)),
+    market_volatility: Math.min(100, composite + 10),
+    commodity: Math.round(events.filter(e=>comTypes.includes(e.type)).reduce((a,e)=>a+(sevScore[e.severity]||20),0) / Math.max(1,events.filter(e=>comTypes.includes(e.type)).length))
+  };
+
+  let level, col;
+  if(composite >= 80) { level='CRITICAL'; col='var(--red)'; }
+  else if(composite >= 60) { level='HIGH'; col='var(--orange)'; }
+  else if(composite >= 40) { level='ELEVATED'; col='var(--amber)'; }
+  else if(composite >= 25) { level='MODERATE'; col='var(--blue)'; }
+  else { level='LOW'; col='var(--green)'; }
+
+  const label = `${events.length} active signal${events.length>1?'s':`}`} — ${events.filter(e=>e.severity==='critical').length} critical, ${events.filter(e=>e.severity==='high').length} high`;
+  return { score: composite, level, label, col, cats };
+}
+
+function buildWatchlist(events) {
+  const seen = new Set();
+  const items = [];
+  for(const ev of events.slice(0,4)) {
+    for(const a of (ev.assets||[]).slice(0,2)) {
+      if(!seen.has(a.sym)) {
+        seen.add(a.sym);
+        items.push({ symbol: a.sym, name: a.name, direction: a.dir, reason: ev.baseHeadline, conviction: ev.severity === 'critical' ? 'high' : ev.severity === 'high' ? 'medium' : 'low' });
+      }
+    }
+  }
+  return items.slice(0,8);
+}
+
+// ═══════════════════════════════════════════════════════
+// RUN SCAN
+// ═══════════════════════════════════════════════════════
+async function runScan() {
+  const btn = document.getElementById('scan-btn');
+  const spinner = document.getElementById('spinner');
+  const statusBar = document.getElementById('status-bar');
+  const statusText = document.getElementById('status-text');
+
+  btn.disabled = true;
+  spinner.classList.add('show');
+
+  const steps = [
+    'Fetching Reuters headlines...', 'Fetching BBC news...', 'Fetching AP news...',
+    'Fetching Al Jazeera...', 'Fetching CryptoPanic...', 'Detecting macro events...',
+    'Matching historical precedents...', 'Building asset impact maps...'
+  ];
+  let si = 0;
+  statusBar.textContent = steps[0];
+  const iv = setInterval(() => { si = Math.min(si+1, steps.length-1); statusBar.textContent = steps[si]; }, 1800);
+
+  const focus = document.getElementById('focus').value;
+  let allHeadlines = [];
+  let feedsLoaded = 0;
+
+  // Fetch feeds concurrently
+  const feedResults = await Promise.allSettled(
+    NEWS_FEEDS.map(f => fetchFeed(f.url).then(items => items.map(i => ({...i, source: f.name}))))
+  );
+
+  for(const r of feedResults) {
+    if(r.status === 'fulfilled' && r.value.length) {
+      allHeadlines.push(...r.value);
+      feedsLoaded++;
+    }
+  }
+
+  clearInterval(iv);
+
+  if(!allHeadlines.length) {
+    statusBar.textContent = 'Could not load news feeds. Check internet connection and try again.';
+    btn.disabled = false; spinner.classList.remove('show');
+    return;
+  }
+
+  // Remove duplicates and sort by recency
+  const unique = [];
+  const seen = new Set();
+  for(const h of allHeadlines) {
+    const key = h.title.slice(0,40).toLowerCase();
+    if(!seen.has(key)) { seen.add(key); unique.push(h); }
+  }
+
+  // Detect events
+  const events = detectEvents(unique, focus);
+  const risk = calculateRisk(events);
+  const watchlist = buildWatchlist(events);
+
+  // Render
+  renderRisk(risk);
+  renderEvents(events);
+  renderNews(unique.slice(0, 12));
+  renderWatchlist(watchlist);
+  renderCalendar();
+
+  const ts = new Date().toLocaleTimeString();
+  statusBar.textContent = `Scan complete — ${unique.length} headlines from ${feedsLoaded} feeds · ${events.length} events detected · ${ts}`;
+  statusText.textContent = ts;
+  document.getElementById('last-scan').textContent = 'Last scan: ' + ts;
+
+  btn.disabled = false; spinner.classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ═══════════════════════════════════════════════════════
+function renderRisk(risk) {
+  document.getElementById('risk-score').textContent = risk.level;
+  document.getElementById('risk-score').style.color = risk.col;
+  document.getElementById('risk-lbl').textContent = risk.label;
+  document.getElementById('risk-fill').style.width = risk.score + '%';
+  document.getElementById('risk-fill').style.background = risk.col;
+  const bd = document.getElementById('risk-breakdown');
+  bd.innerHTML = Object.entries(risk.cats).map(([k,v]) => `
+    <div class="rr">
+      <span style="text-transform:capitalize;min-width:100px;font-size:10px">${k.replace('_',' ')}</span>
+      <div class="rr-bar"><div class="rr-fill" style="width:${v||0}%;background:${risk.col}"></div></div>
+      <span style="font-size:10px;font-weight:600;color:${risk.col};min-width:28px;text-align:right">${v||0}</span>
+    </div>`).join('');
+}
+
+function renderEvents(events) {
+  const c = document.getElementById('events-container');
+  if(!events.length) {
+    c.innerHTML = `<div class="empty-state"><div style="font-size:28px;margin-bottom:8px">✅</div><div style="font-family:var(--disp);font-size:13px">No significant events matched today's headlines</div><div style="font-size:11px;margin-top:6px">Markets appear calm relative to known macro event categories.</div></div>`;
+    return;
+  }
+  c.innerHTML = events.map((ev,i) => {
+    const sevCol = { critical:'var(--red)', high:'var(--amber)', medium:'var(--blue)', low:'var(--muted)' }[ev.severity] || 'var(--muted)';
+    const assets = (ev.assets||[]).slice(0,8);
+    const precs = ev.precedents||[];
+    const headlines = ev.detectedHeadlines||[];
+
+    return `<div class="event-card sev-${ev.severity}" id="ecard-${i}">
+      <div class="ev-hdr" onclick="tog(${i})">
+        <div class="ev-meta">
+          <div class="ev-type" style="color:${sevCol}">${ev.severity.toUpperCase()} · ${ev.type}</div>
+          <div class="ev-hl">${ev.baseHeadline}</div>
+          <div class="ev-sum">${ev.summary}</div>
+          ${headlines.length ? `<div style="margin-top:6px;font-size:10px;color:var(--blue)">📰 Matched: "${headlines[0].title.slice(0,80)}${headlines[0].title.length>80?'…':''}"</div>` : ''}
+          <div class="ev-badges">
+            ${assets.slice(0,5).map(a=>`<span class="badge ${a.dir==='up'?'bg':a.dir==='down'?'br':'ba'}">${a.sym} ${a.dir==='up'?'↑':a.dir==='down'?'↓':'↕'}</span>`).join('')}
+            ${assets.length>5?`<span class="badge bm">+${assets.length-5} more</span>`:''}
+          </div>
+        </div>
+        <div class="ev-arr" id="earr-${i}">▼</div>
+      </div>
+      <div class="ev-body" id="ebody-${i}">
+        ${assets.length?`
+        <div class="sec-box">
+          <div class="sec-ttl">Asset Impact Map</div>
+          <div class="asset-grid">
+            ${assets.map(a=>`
+              <div class="asset-item">
+                <div class="asset-sym" style="color:${a.dir==='up'?'var(--green)':a.dir==='down'?'var(--red)':'var(--amber)'}">${a.sym}</div>
+                <div class="asset-nm">${a.name}</div>
+                <div class="asset-dir ${a.dir}">${a.dir==='up'?'↑ Bullish':a.dir==='down'?'↓ Bearish':'↕ Mixed'}</div>
+                <div class="asset-mag">${a.mag}</div>
+              </div>`).join('')}
+          </div>
+        </div>`:''}
+        ${precs.length?`
+        <div class="sec-box">
+          <div class="sec-ttl" style="display:flex;justify-content:space-between"><span>Historical Precedents</span><span style="color:var(--blue)">${precs.length} found</span></div>
+          ${precs.map(p=>`
+            <div class="prec-card">
+              <div class="prec-date">📅 ${p.date}</div>
+              <div class="prec-ev">${p.event}</div>
+              <div class="prec-moves">
+                ${(p.moves||[]).map(m=>`<span class="pm ${m.d==='pos'?'pos':m.d==='neg'?'neg':'neu'}">${m.a}: ${m.c}</span>`).join('')}
+              </div>
+              ${p.duration?`<div style="font-size:9px;color:var(--muted);margin-top:5px">⏱ ${p.duration}</div>`:''}
+              ${p.lesson?`<div class="prec-lesson">💡 ${p.lesson}</div>`:''}
+            </div>`).join('')}
+        </div>`:`
+        <div class="sec-box">
+          <div class="sec-ttl">Historical Precedents</div>
+          <div style="font-size:11px;color:var(--muted)">Precedents for this event type are not in the current database. Run a broader internet search for specific historical data.</div>
+        </div>`}
+        ${headlines.length>1?`
+        <div class="sec-box">
+          <div class="sec-ttl">Matched Headlines (${headlines.length})</div>
+          ${headlines.map(h=>`<div class="news-item"><div class="news-src">${h.source||''}</div><a href="${h.link}" target="_blank">${h.title}</a></div>`).join('')}
+        </div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Auto-open first event
+  tog(0);
+}
+
+function tog(i) {
+  const b = document.getElementById('ebody-'+i);
+  const a = document.getElementById('earr-'+i);
+  if(!b) return;
+  const open = b.classList.contains('open');
+  b.classList.toggle('open',!open);
+  a?.classList.toggle('open',!open);
+}
+
+function renderNews(items) {
+  const c = document.getElementById('news-container');
+  if(!items.length) { c.innerHTML='<div style="font-size:11px;color:var(--muted)">No headlines loaded.</div>'; return; }
+  c.innerHTML = items.map(h=>`
+    <div class="news-item">
+      <div class="news-src">${h.source||''} ${h.pub?'· '+new Date(h.pub).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'}):''}  </div>
+      <a href="${h.link}" target="_blank">${h.title}</a>
+    </div>`).join('');
+}
+
+function renderWatchlist(items) {
+  const el = document.getElementById('watch-list');
+  if(!items.length) { el.innerHTML='<div style="font-size:11px;color:var(--muted)">No specific watchlist generated.</div>'; return; }
+  const cc = { high:'var(--green)', medium:'var(--amber)', low:'var(--muted)' };
+  el.innerHTML = items.map(item=>`
+    <div class="watch-item">
+      <div>
+        <div class="watch-sym" style="color:${item.direction==='up'?'var(--green)':item.direction==='down'?'var(--red)':'var(--amber)'}">${item.symbol}</div>
+        <div class="watch-rsn">${(item.reason||'').slice(0,40)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:10px;font-weight:600;color:${item.direction==='up'?'var(--green)':item.direction==='down'?'var(--red)':'var(--amber)'}">${item.direction==='up'?'↑ Long':item.direction==='down'?'↓ Short':'👁 Watch'}</div>
+        <div style="font-size:9px;color:${cc[item.conviction]||'var(--muted)'};">${item.conviction} conviction</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderCalendar() {
+  const el = document.getElementById('cal-list');
+  el.innerHTML = CALENDAR.map(ev=>`
+    <div class="cal-item">
+      <div class="cal-dt">🗓 ${ev.when} <span style="color:var(--muted)">(${ev.freq})</span></div>
+      <div style="font-size:10px;color:var(--muted)">${ev.assets}</div>
+      <div style="font-size:10px;color:var(--text);margin-top:2px">${ev.impact}</div>
+    </div>`).join('');
+}
+</script>
+</body>
+</html>
