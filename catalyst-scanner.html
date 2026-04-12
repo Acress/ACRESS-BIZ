@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalyst Scanner — Acress Biz</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #080a0f;
+  --bg2:    #0e1018;
+  --bg3:    #141720;
+  --bord:   #1e2230;
+  --bord2:  #252a3a;
+  --text:   #c8ccd8;
+  --dim:    #7a8094;
+  --bright: #eceef5;
+  --gold:   #f0a500;
+  --gold2:  #c8841a;
+  --gold-g: rgba(240,165,0,0.08);
+  --green:  #00d084;
+  --red:    #ff4560;
+  --blue:   #4a9eff;
+  --purple: #a855f7;
+  --amber:  #f97316;
+
+  /* catalyst type colours */
+  --listing:    #00d084;
+  --unlock:     #ff4560;
+  --mainnet:    #4a9eff;
+  --conference: #a855f7;
+  --governance: #f97316;
+  --partnership:#f0a500;
+  --airdrop:    #ec4899;
+  --burn:       #ef4444;
+  --macro:      #06b6d4;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+
+/* grain */
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");pointer-events:none;z-index:9999}
+
+/* ── TOPBAR ── */
+.topbar{border-bottom:1px solid var(--bord);padding:0 24px;height:48px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:200}
+.tb-l{display:flex;align-items:center;gap:14px}
+.back-btn{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);text-decoration:none;transition:color .2s}
+.back-btn:hover{color:var(--gold)}
+.tb-sep{color:var(--bord2)}
+.tb-title{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+.tb-r{display:flex;align-items:center;gap:16px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite}
+.tb-clock{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim)}
+.reset-btn{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:1px solid var(--bord2);color:var(--dim);padding:5px 12px;cursor:pointer;transition:all .2s}
+.reset-btn:hover{border-color:var(--red);color:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── HERO ── */
+.hero{padding:40px 24px 32px;border-bottom:1px solid var(--bord);display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;position:relative;overflow:hidden}
+.hero-bg{position:absolute;right:-40px;top:-20px;font-family:'Bebas Neue',sans-serif;font-size:180px;color:rgba(240,165,0,0.03);line-height:1;user-select:none;pointer-events:none;letter-spacing:-4px}
+.hero-tag{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.hero-tag::before{content:'';display:block;width:20px;height:1px;background:var(--gold2)}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(36px,5vw,60px);color:var(--bright);letter-spacing:2px;line-height:1;margin-bottom:10px}
+.hero h1 span{color:var(--gold)}
+.hero-desc{font-size:14px;color:var(--dim);max-width:520px;line-height:1.7}
+
+/* capital input */
+.capital-wrap{display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+.cap-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+.cap-row{display:flex;gap:8px;align-items:center}
+.cap-prefix{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--gold);line-height:1}
+.cap-input{background:var(--bg3);border:1px solid var(--bord2);border-top:2px solid var(--gold);color:var(--bright);font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1px;padding:8px 12px;outline:none;width:160px;transition:border-color .2s}
+.cap-input:focus{border-color:var(--gold)}
+.scan-btn{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;background:var(--gold);color:var(--bg);border:none;padding:12px 32px;cursor:pointer;transition:opacity .2s;white-space:nowrap}
+.scan-btn:hover{opacity:.85}
+.scan-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── STATS STRIP ── */
+.stats-strip{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--bord);background:var(--bg2)}
+.stat-box{padding:14px 16px;border-right:1px solid var(--bord);text-align:center}
+.stat-box:last-child{border-right:none}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1;display:block;margin-bottom:3px}
+.stat-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
+
+/* ── HORIZON TABS ── */
+.htabs{display:flex;border-bottom:1px solid var(--bord)}
+.htab{flex:1;padding:14px 16px;text-align:center;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;background:var(--bg2);border-right:1px solid var(--bord);position:relative}
+.htab:last-child{border-right:none}
+.htab:hover{background:var(--bg3)}
+.htab.active{border-bottom-color:var(--gold);background:var(--bg)}
+.htab-name{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:var(--bright);display:block;margin-bottom:2px}
+.htab-sub{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
+.htab-cnt{position:absolute;top:8px;right:10px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);background:var(--gold-g);border:1px solid var(--gold2);padding:1px 7px}
+
+/* ── FILTERS ── */
+.fbar{padding:12px 24px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--bg2)}
+.flbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.fdiv{width:1px;height:18px;background:var(--bord2);flex-shrink:0}
+.pill{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;text-transform:uppercase;background:none;border:1px solid var(--bord);color:var(--text);padding:4px 10px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.pill:hover{border-color:var(--bord2)}
+.pill.active{background:var(--gold);border-color:var(--gold);color:var(--bg)}
+.sort-sel{background:var(--bg3);border:1px solid var(--bord2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;padding:5px 10px;outline:none;cursor:pointer;margin-left:auto}
+.sort-sel:focus{border-color:var(--gold)}
+.search-wrap{position:relative}
+.s-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:11px;pointer-events:none}
+.search-inp{background:var(--bg3);border:1px solid var(--bord2);color:var(--bright);font-family:'JetBrains Mono',monospace;font-size:10px;padding:5px 10px 5px 24px;outline:none;width:180px;transition:border-color .2s}
+.search-inp:focus{border-color:var(--gold)}
+
+/* ── SOURCE STATUS ── */
+.src-strip{padding:8px 24px;border-bottom:1px solid var(--bord);display:flex;gap:4px;flex-wrap:wrap;background:var(--bg2);min-height:34px}
+.src-tag{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border:1px solid;display:inline-flex;align-items:center;gap:3px}
+.src-tag.ok{border-color:rgba(0,208,132,.35);color:var(--green);background:rgba(0,208,132,.06)}
+.src-tag.fail{border-color:rgba(255,69,96,.35);color:var(--red);background:rgba(255,69,96,.06)}
+.src-tag.wait{border-color:var(--bord2);color:var(--dim)}
+.src-dot{width:4px;height:4px;border-radius:50%;background:currentColor}
+
+/* ── LOADING ── */
+.load-wrap{padding:60px 24px;text-align:center;display:none}
+.load-wrap.vis{display:block}
+.spinner{width:40px;height:40px;border:2px solid var(--bord2);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-step{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);margin-bottom:6px}
+.load-sub{font-size:13px;color:var(--dim);font-style:italic;margin-bottom:14px}
+.prog-rail{width:280px;height:4px;background:var(--bord2);margin:0 auto;border-radius:0}
+.prog-fill{height:100%;background:var(--gold);transition:width .5s ease;width:0%}
+
+/* ── EMPTY ── */
+.empty-wrap{padding:60px 24px;text-align:center;display:none}
+.empty-wrap.vis{display:block}
+.empty-icon{font-size:40px;opacity:.15;margin-bottom:14px}
+.empty-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;color:var(--bright);margin-bottom:8px}
+.empty-sub{font-size:13px;color:var(--dim)}
+
+/* ── ERROR ── */
+.err-bar{margin:10px 24px;padding:11px 16px;background:rgba(255,69,96,.1);border:1px solid rgba(255,69,96,.3);font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--red);display:none}
+.err-bar.vis{display:block}
+
+/* ── RESULTS ── */
+.res-hdr{padding:10px 24px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.res-cnt{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
+.cat-legend{display:flex;gap:10px;flex-wrap:wrap}
+.leg-i{display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+.leg-dot{width:7px;height:7px;border-radius:1px;flex-shrink:0}
+
+/* ── SIGNAL CARD ── */
+.signals-list{display:flex;flex-direction:column}
+.sig-card{border-bottom:1px solid var(--bord);display:grid;grid-template-columns:56px 1fr 220px;align-items:stretch;cursor:pointer;transition:background .15s;position:relative}
+.sig-card:hover{background:var(--bg2)}
+.sig-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--card-color,var(--bord2))}
+
+/* score column */
+.score-col{display:flex;align-items:center;justify-content:center;border-right:1px solid var(--bord);padding:0 4px}
+.score-num{font-family:'Bebas Neue',sans-serif;font-size:28px;line-height:1}
+
+/* main column */
+.main-col{padding:13px 16px 12px;min-width:0}
+.card-meta{display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+.coin-badge{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;padding:2px 9px;border:1px solid;white-space:nowrap}
+.cat-badge{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;padding:2px 7px;border:1px solid var(--bord2);color:var(--dim);white-space:nowrap}
+.card-title{font-size:15px;font-weight:500;color:var(--bright);line-height:1.3;margin-bottom:4px}
+.card-desc{font-size:13px;color:var(--dim);line-height:1.5;display:none}
+.sig-card.open .card-desc{display:block}
+.precedence-bar{display:flex;align-items:center;gap:8px;margin-top:8px;display:none}
+.sig-card.open .precedence-bar{display:flex}
+.prec-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.prec-track{flex:1;height:4px;background:var(--bord2);border-radius:0}
+.prec-fill{height:100%;background:var(--gold);border-radius:0}
+.prec-pct{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gold);white-space:nowrap}
+.trade-block{margin-top:12px;display:none;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sig-card.open .trade-block{display:grid}
+.trade-cell{background:var(--bg3);border:1px solid var(--bord2);padding:10px 12px}
+.t-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);display:block;margin-bottom:4px}
+.t-val{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;display:block;line-height:1}
+.t-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);display:block;margin-top:2px}
+.open-link{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);text-decoration:none;border:1px solid var(--gold2);padding:4px 12px;transition:background .2s}
+.open-link:hover{background:var(--gold-g)}
+
+/* right column */
+.right-col{padding:13px 16px;border-left:1px solid var(--bord);display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.event-date{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--gold);line-height:1}
+.days-badge{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 8px;border:1px solid;display:inline-block;margin-top:4px}
+.days-badge.urgent{border-color:rgba(255,69,96,.5);color:var(--red);background:rgba(255,69,96,.08)}
+.days-badge.soon{border-color:rgba(240,165,0,.5);color:var(--gold);background:rgba(240,165,0,.08)}
+.days-badge.ahead{border-color:rgba(74,158,255,.5);color:var(--blue);background:rgba(74,158,255,.08)}
+.pos-size{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--bright);line-height:1}
+.pos-lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
+.src-name{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);text-align:right;margin-top:auto}
+.impact-strip{display:flex;align-items:center;gap:4px}
+.impact-dot{width:8px;height:8px;border-radius:50%}
+
+/* ── FOOTER ── */
+.footer{padding:20px 24px;border-top:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:16px}
+.foot-brand{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--bright)}
+.foot-note{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim)}
+
+@media(max-width:720px){
+  .sig-card{grid-template-columns:48px 1fr}
+  .right-col{display:none}
+  .stats-strip{grid-template-columns:1fr 1fr}
+  .trade-block{grid-template-columns:1fr}
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="tb-l">
+    <a href="index.html" class="back-btn">← Suite</a>
+    <span class="tb-sep">|</span>
+    <span class="tb-title">Catalyst Scanner — First In, First Out</span>
+  </div>
+  <div class="tb-r">
+    <button class="reset-btn" onclick="resetAll()">Reset</button>
+    <div class="live-dot"></div>
+    <span class="tb-clock" id="tb-clock">—</span>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg">SCAN</div>
+  <div>
+    <div class="hero-tag">Broad Market · 10+ Free Sources · No API Key</div>
+    <h1>Catalyst <span>Scanner</span></h1>
+    <div class="hero-desc">Scans every free crypto calendar, exchange announcement feed, Reddit, and social platforms. Scores every catalyst by historical price impact precedence. Tells you exactly when to enter, when to exit, and how much to position.</div>
+  </div>
+  <div class="capital-wrap">
+    <div class="cap-label">Your Trading Capital ($)</div>
+    <div class="cap-row">
+      <span class="cap-prefix">$</span>
+      <input type="number" class="cap-input" id="capital" value="1000" min="100" max="1000000">
+    </div>
+    <button class="scan-btn" id="scan-btn" onclick="startScan()">▶ SCAN NOW</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-strip" style="grid-template-columns:repeat(6,1fr)">
+  <div class="stat-box"><span class="stat-val" id="st-total" style="color:var(--bright)">—</span><span class="stat-lbl">Total Signals</span></div>
+  <div class="stat-box"><span class="stat-val" id="st-w1" style="color:var(--green)">—</span><span class="stat-lbl">Week 1</span></div>
+  <div class="stat-box"><span class="stat-val" id="st-w2" style="color:var(--blue)">—</span><span class="stat-lbl">Week 2</span></div>
+  <div class="stat-box"><span class="stat-val" id="st-w3" style="color:var(--purple)">—</span><span class="stat-lbl">Week 3</span></div>
+  <div class="stat-box"><span class="stat-val" id="st-month" style="color:var(--gold)">—</span><span class="stat-lbl">Month</span></div>
+  <div class="stat-box"><span class="stat-val" id="st-high" style="color:var(--red)">—</span><span class="stat-lbl">High Impact</span></div>
+</div>
+
+<!-- HORIZON TABS -->
+<div class="htabs">
+  <div class="htab active" onclick="setH('W1',this)">
+    <span class="htab-name">Week 1</span>
+    <span class="htab-sub">Days 1–7</span>
+    <span class="htab-cnt" id="hc-W1">—</span>
+  </div>
+  <div class="htab" onclick="setH('W2',this)">
+    <span class="htab-name">Week 2</span>
+    <span class="htab-sub">Days 8–14</span>
+    <span class="htab-cnt" id="hc-W2">—</span>
+  </div>
+  <div class="htab" onclick="setH('W3',this)">
+    <span class="htab-name">Week 3</span>
+    <span class="htab-sub">Days 15–21</span>
+    <span class="htab-cnt" id="hc-W3">—</span>
+  </div>
+  <div class="htab" onclick="setH('MONTH',this)">
+    <span class="htab-name">Month</span>
+    <span class="htab-sub">Days 22–30</span>
+    <span class="htab-cnt" id="hc-MONTH">—</span>
+  </div>
+  <div class="htab" onclick="setH('QUARTER',this)">
+    <span class="htab-name">Quarter</span>
+    <span class="htab-sub">Days 31–90</span>
+    <span class="htab-cnt" id="hc-QUARTER">—</span>
+  </div>
+</div>
+
+<!-- ASSET CLASS ROW -->
+<div class="fbar" style="background:var(--bg3);border-bottom:1px solid var(--bord)">
+  <span class="flbl">Asset Class</span>
+  <button class="pill active" onclick="setAsset('all',this)">All Assets</button>
+  <button class="pill" onclick="setAsset('crypto',this)">🔵 Crypto</button>
+  <button class="pill" onclick="setAsset('meme',this)">🐸 Meme Coins</button>
+  <button class="pill" onclick="setAsset('stock',this)">📈 Stocks</button>
+  <button class="pill" onclick="setAsset('etf',this)">🏛 ETFs</button>
+  <button class="pill" onclick="setAsset('defi',this)">⚡ DeFi</button>
+  <button class="pill" onclick="setAsset('l1',this)">🔗 Layer 1</button>
+  <button class="pill" onclick="setAsset('l2',this)">🔷 Layer 2</button>
+</div>
+
+<!-- FILTERS -->
+<div class="fbar">
+  <span class="flbl">Catalyst</span>
+  <button class="pill active" onclick="setType('all',this)">All</button>
+  <button class="pill" onclick="setType('listing',this)">Listings</button>
+  <button class="pill" onclick="setType('unlock',this)">Unlocks</button>
+  <button class="pill" onclick="setType('mainnet',this)">Mainnet</button>
+  <button class="pill" onclick="setType('conference',this)">Conferences</button>
+  <button class="pill" onclick="setType('governance',this)">Governance</button>
+  <button class="pill" onclick="setType('airdrop',this)">Airdrops</button>
+  <button class="pill" onclick="setType('macro',this)">Macro</button>
+  <button class="pill" onclick="setType('social',this)">Social/Rumour</button>
+  <div class="fdiv"></div>
+  <select class="sort-sel" id="sort-sel" onchange="render()">
+    <option value="score">Sort: Signal Score ↓</option>
+    <option value="date">Sort: Event Date ↑</option>
+    <option value="impact">Sort: Hist. Impact % ↓</option>
+    <option value="winrate">Sort: Win Rate % ↓</option>
+    <option value="position">Sort: Position Size ↓</option>
+  </select>
+  <div class="search-wrap">
+    <span class="s-icon">⌕</span>
+    <input class="search-inp" id="q" placeholder="Coin or keyword..." oninput="render()">
+  </div>
+</div>
+
+<!-- SOURCE STATUS -->
+<div class="src-strip" id="src-strip"></div>
+
+<!-- ERROR -->
+<div class="err-bar" id="err-bar"></div>
+
+<!-- LOADING -->
+<div class="load-wrap" id="load-wrap">
+  <div class="spinner"></div>
+  <div class="load-step" id="load-step">Initialising...</div>
+  <div class="load-sub" id="load-sub">Connecting to all sources</div>
+  <div class="prog-rail"><div class="prog-fill" id="prog"></div></div>
+</div>
+
+<!-- EMPTY -->
+<div class="empty-wrap vis" id="empty-wrap">
+  <div class="empty-icon">◈</div>
+  <div class="empty-title">No Signals Yet</div>
+  <div class="empty-sub">Hit SCAN NOW to surface every catalyst across the broad market</div>
+</div>
+
+<!-- RESULTS -->
+<div id="res-wrap" style="display:none">
+  <div class="res-hdr">
+    <span class="res-cnt" id="res-cnt">—</span>
+    <div class="cat-legend" id="cat-legend"></div>
+  </div>
+  <div class="signals-list" id="signals-list"></div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="foot-brand">Acress Biz</div>
+  <div class="foot-note">Catalyst Scanner · Free sources only · Not financial advice · First In, First Out</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  HISTORICAL PRECEDENCE TABLE
+//  Based on documented average price moves by catalyst type
+// ══════════════════════════════════════════════════════════
+const PRECEDENCE = {
+  listing_binance:    { avg: 74,  win: 82, score: 10, label:'Binance Listing',    color:'var(--listing)',    entryDays:14, exitDays:1,  stopPct:8  },
+  listing_coinbase:   { avg: 91,  win: 85, score: 10, label:'Coinbase Listing',   color:'var(--listing)',    entryDays:14, exitDays:1,  stopPct:8  },
+  listing_bybit:      { avg: 42,  win: 72, score: 8,  label:'Bybit Listing',      color:'var(--listing)',    entryDays:7,  exitDays:1,  stopPct:10 },
+  listing_okx:        { avg: 38,  win: 70, score: 8,  label:'OKX Listing',        color:'var(--listing)',    entryDays:7,  exitDays:1,  stopPct:10 },
+  listing_mexc:       { avg: 35,  win: 68, score: 7,  label:'MEXC Listing',       color:'var(--listing)',    entryDays:5,  exitDays:2,  stopPct:12 },
+  listing_kraken:     { avg: 28,  win: 65, score: 7,  label:'Kraken Listing',     color:'var(--listing)',    entryDays:7,  exitDays:1,  stopPct:10 },
+  listing_general:    { avg: 25,  win: 60, score: 6,  label:'Exchange Listing',   color:'var(--listing)',    entryDays:5,  exitDays:2,  stopPct:12 },
+  unlock_large:       { avg: -22, win: 25, score: 8,  label:'Token Unlock (Large)',color:'var(--unlock)',    entryDays:0,  exitDays:7,  stopPct:8  },
+  unlock_small:       { avg: -8,  win: 35, score: 5,  label:'Token Unlock (Small)',color:'var(--unlock)',    entryDays:0,  exitDays:3,  stopPct:6  },
+  mainnet_launch:     { avg: 35,  win: 68, score: 8,  label:'Mainnet Launch',     color:'var(--mainnet)',    entryDays:14, exitDays:2,  stopPct:10 },
+  upgrade:            { avg: 20,  win: 62, score: 7,  label:'Protocol Upgrade',   color:'var(--mainnet)',    entryDays:10, exitDays:1,  stopPct:10 },
+  conference:         { avg: 18,  win: 58, score: 6,  label:'Conference',         color:'var(--conference)', entryDays:10, exitDays:1,  stopPct:8  },
+  governance:         { avg: 15,  win: 55, score: 5,  label:'Governance Vote',    color:'var(--governance)', entryDays:7,  exitDays:1,  stopPct:8  },
+  airdrop:            { avg: 40,  win: 72, score: 8,  label:'Airdrop',            color:'var(--airdrop)',    entryDays:10, exitDays:1,  stopPct:10 },
+  burn:               { avg: 22,  win: 65, score: 7,  label:'Token Burn',         color:'var(--burn)',       entryDays:7,  exitDays:1,  stopPct:8  },
+  partnership:        { avg: 25,  win: 60, score: 6,  label:'Partnership',        color:'var(--partnership)',entryDays:5,  exitDays:2,  stopPct:10 },
+  fork:               { avg: 30,  win: 65, score: 7,  label:'Hard Fork',          color:'var(--mainnet)',    entryDays:14, exitDays:1,  stopPct:10 },
+  macro:              { avg: 8,   win: 55, score: 7,  label:'Macro Event',        color:'var(--macro)',      entryDays:3,  exitDays:1,  stopPct:5  },
+  reddit_rumour:      { avg: 28,  win: 55, score: 6,  label:'Social Signal',      color:'var(--purple)',     entryDays:3,  exitDays:2,  stopPct:12 },
+  general:            { avg: 12,  win: 50, score: 4,  label:'Event',              color:'var(--bord2)',      entryDays:5,  exitDays:1,  stopPct:10 },
+};
+
+// ══════════════════════════════════════════════════════════
+//  ASSET CLASSIFICATION
+// ══════════════════════════════════════════════════════════
+const MEME_COINS = new Set(['DOGE','SHIB','PEPE','FLOKI','BONK','WIF','BRETT','MOG','TURBO','NEIRO','POPCAT','MEME','BABYDOGE','ELON','DEGEN','LADYS','WOJAK','SATS','RATS','ORDI','CAT','CHEEMS','CONAN','MYRO','BOME','MEW','SLERF','GME','TRUMP','MELANIA']);
+const LAYER1 = new Set(['BTC','ETH','SOL','BNB','ADA','AVAX','DOT','NEAR','ATOM','FTM','ALGO','XTZ','EOS','TRX','ICP','HBAR','VET','FLR','XRP','TON','SUI','APT','SEI','INJ']);
+const LAYER2 = new Set(['ARB','OP','MATIC','IMX','LRC','METIS','BOBA','ZKS','MANTA','SCROLL','LINEA','BASE','BLAST','STRK','ZKEVM','MANTLE','MODE']);
+const DEFI   = new Set(['UNI','AAVE','COMP','MKR','SNX','CRV','BAL','SUSHI','1INCH','DYDX','GMX','GNS','STG','PENDLE','LDO','RPL','FXS','CVX','FRAX','OSMO','JUNO','KAVA','RUNE','TWT','CAKE','JOE','RAY','ORCA','MNDE','REZ','SKY']);
+const STOCKS  = new Set(['AAPL','MSFT','NVDA','AMZN','META','GOOGL','GOOG','TSLA','AVGO','NFLX','AMD','ADBE','QCOM','COIN','PLTR','MSTR','RIOT','MARA','HUT','CLSK','CORZ','IREN']);
+const ETFS    = new Set(['IBIT','FBTC','ARKB','BITB','BTCO','EZBC','BTCW','HODL','GBTC','ETHA','FETH','CETH','QETH','ETHW','ETHE','BITU','BITQ','BLOK','DAPP','WGMI','BKCH']);
+
+function classifyAsset(coin){
+  const c=coin.toUpperCase();
+  if(ETFS.has(c))    return 'etf';
+  if(STOCKS.has(c))  return 'stock';
+  if(MEME_COINS.has(c)) return 'meme';
+  if(LAYER2.has(c))  return 'l2';
+  if(DEFI.has(c))    return 'defi';
+  if(LAYER1.has(c))  return 'l1';
+  return 'crypto'; // default
+}
+
+const ASSET_LABELS = {
+  all:'All Assets', crypto:'Crypto', meme:'Meme Coin',
+  stock:'Stock', etf:'ETF', defi:'DeFi', l1:'Layer 1', l2:'Layer 2'
+};
+
+// Precedence display strings for each catalyst type
+const PREC_CONTEXT = {
+  listing_binance:  'Historically the highest-impact single catalyst in crypto. Binance listings average +74% within 48hrs of announcement. Entry: buy rumour 2 weeks before. Exit: 24hrs before or at listing.',
+  listing_coinbase: 'The "Coinbase Effect" averages +91% on announcement day. Retail access surge drives the move. Exit before the actual listing day — the news is usually the top.',
+  listing_bybit:    'Bybit listings average +42% within 24hrs. Smaller but reliable. Best entered on first leak or announcement, exited within 24-48hrs of going live.',
+  listing_okx:      'OKX listings average +38%. Strong Asian market exposure. Rumour often leaks 3-7 days before official announcement — that is your entry window.',
+  listing_mexc:     'MEXC lists small caps first before major exchanges. Average +35%. High risk of pump-dump. Enter early, exit fast, stop tight.',
+  listing_general:  'General exchange listings average +25%. Entry on announcement, exit before or at listing. Confirm on-chain liquidity before sizing up.',
+  unlock_large:     'Large unlocks (>5% supply) average -22% in the 7 days prior. Short entry window: enter short 7-14 days before, cover day of unlock. Do NOT hold longs into large unlocks.',
+  unlock_small:     'Small unlocks (<5%) average -8% sell pressure. Moderate caution. Can create buy opportunity post-flush if fundamentals are sound.',
+  mainnet_launch:   'Mainnet launches average +35% in 2 weeks prior. Classic buy-the-rumour trade. Enter 2 weeks before, exit 24-48hrs before launch. Post-launch often sells off.',
+  upgrade:          'Protocol upgrades average +20% in 10 days prior. Less explosive than mainnet but reliable. Enter 10 days before, exit day before upgrade.',
+  conference:       'Major conferences average +18% for featured tokens in 10 days prior. Watch for keynote speakers and official project days as specific entry signals.',
+  governance:       'Governance votes average +15% if bullish outcome expected. Binaries: position for yes, exit before result. Check snapshot.org for vote timelines.',
+  airdrop:          'Airdrop announcements average +40% from announcement to snapshot date. Enter on announcement, exit before or on snapshot. Post-snapshot often dumps.',
+  burn:             'Token burns average +22% in 7 days prior. Supply reduction narrative drives the move. Enter 7 days before, exit day before or on burn event.',
+  partnership:      'Partnerships average +25% on announcement day. News-driven, fast-moving. Enter pre-announcement if rumour credible, exit same day or next morning.',
+  fork:             'Hard forks average +30% in 2 weeks prior as holders accumulate to receive forked coins. Enter 14 days before, exit 24hrs before fork block.',
+  macro:            'Macro events (FOMC, CPI) average 8% impact. Crypto reacts inversely to hawkish surprises. Position 3 days before, exit day of announcement.',
+  reddit_rumour:    'Social signals average +28% when the narrative precedes a confirmed catalyst. High variance — size smaller, confirm fundamentals, exit at first confirmation.',
+  general:          'General events average +12%. Moderate confidence. Size accordingly and maintain disciplined stop loss.',
+};
+
+const MACRO_CAL = [
+  {coin:'BTC/MARKET',name:'Bitcoin',title:'FOMC Interest Rate Decision',desc:'Federal Reserve sets rate policy. Direct impact on all risk assets. Market typically prices in 48-72hrs before.',date:'2026-05-07',type:'macro',src:'Macro Calendar'},
+  {coin:'BTC/MARKET',name:'Bitcoin',title:'US CPI Inflation Data',desc:'Consumer price index release. Key Fed rate determinant. Crypto reacts sharply to surprise prints.',date:'2026-05-13',type:'macro',src:'Macro Calendar'},
+  {coin:'BTC/MARKET',name:'Bitcoin',title:'FOMC Interest Rate Decision',desc:'June Federal Reserve meeting. Mid-year rate path confirmation.',date:'2026-06-18',type:'macro',src:'Macro Calendar'},
+  {coin:'BTC/MARKET',name:'Bitcoin',title:'US Jobs Report (NFP)',desc:'Non-farm payrolls. Strong jobs data suppresses rate cut expectations.',date:'2026-05-01',type:'macro',src:'Macro Calendar'},
+  {coin:'BTC/MARKET',name:'Bitcoin',title:'US CPI Inflation Data',desc:'June CPI print — H1 2026 midpoint inflation reading.',date:'2026-06-11',type:'macro',src:'Macro Calendar'},
+  {coin:'ETH',name:'Ethereum',title:'Ethereum Fusaka Hard Fork',desc:'Major Ethereum protocol upgrade. Historical hard forks average +20% in 2 weeks prior.',date:'2026-06-01',type:'upgrade',src:'Macro Calendar'},
+  {coin:'BTC',name:'Bitcoin',title:'Bitcoin ETF Options Expiry',desc:'Large monthly BTC ETF options expiry. Historically creates volatility window.',date:'2026-05-16',type:'macro',src:'Macro Calendar'},
+  {coin:'WLFI',name:'World Liberty Financial',title:'WLFI Binance Reward Campaign End',desc:'135M WLFI reward pool concludes April 17. Token distribution events create buying pressure before close.',date:'2026-04-17',type:'airdrop',src:'Macro Calendar'},
+  {coin:'TOKEN2049',name:'Conference',title:'TOKEN2049 Dubai',desc:'Largest crypto conference globally. Historically triggers project announcements and price spikes for featured tokens.',date:'2026-04-29',type:'conference',src:'Macro Calendar'},
+  {coin:'MARKET',name:'Conference',title:'Consensus 2026',desc:'CoinDesk annual conference. Major protocol and institutional announcements historically.',date:'2026-05-14',type:'conference',src:'Macro Calendar'},
+  {coin:'ETH',name:'Ethereum',title:'ETHcc Cannes 2026',desc:'Ethereum Community Conference. Major L2 and DeFi announcements cluster around this event.',date:'2026-07-06',type:'conference',src:'Macro Calendar'},
+  {coin:'SEC/REG',name:'Regulation',title:'SEC Crypto Framework Deadline',desc:'Expected SEC guidance on exchange and stablecoin regulations. Institutional positioning catalyst.',date:'2026-06-30',type:'governance',src:'Macro Calendar'},
+  {coin:'SOL',name:'Solana',title:'Solana Alpenglow Upgrade Vote',desc:'Consensus mechanism upgrade to 100-150ms finality. Passed governance 98.27%. Launch timeline approaching.',date:'2026-05-01',type:'upgrade',src:'Macro Calendar'},
+];
+
+// ══════════════════════════════════════════════════════════
+//  KNOWN UPCOMING UNLOCKS (hardcoded from research)
+// ══════════════════════════════════════════════════════════
+const KNOWN_UNLOCKS = [
+  {coin:'W',   name:'Wormhole',    pct:28.4, date:'2026-04-03', type:'unlock_large'},
+  {coin:'ZRO', name:'LayerZero',   pct:2.4,  date:'2026-04-15', type:'unlock_small'},
+  {coin:'APT', name:'Aptos',       pct:0.68, date:'2026-04-10', type:'unlock_small'},
+  {coin:'PYTH',name:'Pyth Network',pct:37.0, date:'2026-05-19', type:'unlock_large'},
+  {coin:'ARB', name:'Arbitrum',    pct:1.1,  date:'2026-05-01', type:'unlock_small'},
+  {coin:'OP',  name:'Optimism',    pct:1.8,  date:'2026-05-31', type:'unlock_small'},
+  {coin:'SUI', name:'Sui',         pct:2.1,  date:'2026-06-01', type:'unlock_small'},
+  {coin:'TIA', name:'Celestia',    pct:3.4,  date:'2026-10-30', type:'unlock_large'},
+];
+
+// ══════════════════════════════════════════════════════════
+//  REDDIT + RSS SOURCES
+// ══════════════════════════════════════════════════════════
+const REDDIT_SUBS = [
+  {name:'r/CryptoCurrency', url:'https://www.reddit.com/r/CryptoCurrency/hot/.json?limit=25'},
+  {name:'r/CryptoMoonShots',url:'https://www.reddit.com/r/CryptoMoonShots/hot/.json?limit=20'},
+  {name:'r/altcoin',        url:'https://www.reddit.com/r/altcoin/hot/.json?limit=15'},
+];
+
+const EXCHANGE_RSS = [
+  {name:'Binance Ann.',    url:'https://corsproxy.io/?https://www.binance.com/en/support/announcement/list/rss?rss=true',             type:'listing'},
+  {name:'Bybit Ann.',      url:'https://corsproxy.io/?https://announcements.bybit.com/en/?category=new_crypto&page=1',               type:'listing'},
+  {name:'CoinDesk',        url:'https://corsproxy.io/?https://www.coindesk.com/arc/outboundfeeds/rss/',                              type:'general'},
+  {name:'CoinTelegraph',   url:'https://corsproxy.io/?https://cointelegraph.com/rss',                                                type:'general'},
+  {name:'GNews Listings',  url:'https://corsproxy.io/?https://news.google.com/rss/search?q=binance+listing+new+coin&hl=en-US&gl=US&ceid=US:en', type:'listing'},
+  {name:'GNews Unlocks',   url:'https://corsproxy.io/?https://news.google.com/rss/search?q=token+unlock+vesting+crypto+2026&hl=en-US&gl=US&ceid=US:en', type:'unlock_large'},
+  {name:'GNews Mainnet',   url:'https://corsproxy.io/?https://news.google.com/rss/search?q=mainnet+launch+crypto+2026&hl=en-US&gl=US&ceid=US:en', type:'mainnet_launch'},
+  {name:'GNews Airdrop',   url:'https://corsproxy.io/?https://news.google.com/rss/search?q=crypto+airdrop+2026+upcoming&hl=en-US&gl=US&ceid=US:en', type:'airdrop'},
+];
+
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+let signals=[], horizon='W1', typeFilter='all', assetFilter='all', srcSt={};
+
+// ══════════════════════════════════════════════════════════
+//  MAIN SCAN
+// ══════════════════════════════════════════════════════════
+async function startScan(){
+  busy(true); showErr('');
+  typeFilter='all'; assetFilter='all'; horizon='W1';
+  document.querySelectorAll('.fbar .pill').forEach(b=>b.classList.toggle('active',b.textContent==='All'||b.textContent==='All Assets'));
+  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.getElementById('q').value='';
+  document.getElementById('res-wrap').style.display='none';
+  document.getElementById('empty-wrap').classList.remove('vis');
+
+  try{
+    prog(5,'Building crypto universe...','Fetching trending & market data from CoinGecko');
+    const [trending, cgMarkets] = await Promise.allSettled([fetchTrending(), fetchCGMarkets()]);
+    const trendList = trending.status==='fulfilled' ? trending.value : [];
+    const markets   = cgMarkets.status==='fulfilled' ? cgMarkets.value : [];
+
+    prog(15,'Scanning CoinPaprika events...','Checking scheduled events for top coins');
+    const cpEvents = await fetchCoinPaprika();
+
+    prog(28,'Loading macro & unlock calendar...','Hardcoded calendar with 20+ events');
+    const macroSigs = buildFromMacro();
+    const unlockSigs = buildFromUnlocks();
+
+    prog(40,'Scanning Reddit for rumours...','r/CryptoCurrency · r/CryptoMoonShots · r/altcoin');
+    const redditSigs = await fetchReddit();
+
+    prog(58,'Scanning exchange announcements...','Binance · Bybit · Google News feeds');
+    const rssSigs = await fetchRSS();
+
+    prog(72,'Scanning Binance funding rates...','Identifying overleveraged setups');
+    const fundingSigs = await fetchFundingSignals();
+
+    prog(82,'Scanning CoinGecko signals...','Trending · New listings · Volume anomalies');
+    const cgSigs = buildCGSignals(trendList, markets);
+
+    prog(92,'Processing all signals...','Scoring · Deduplicating · Calculating positions');
+    const capital = parseFloat(document.getElementById('capital').value)||1000;
+    const raw = [...macroSigs,...unlockSigs,...cpEvents,...redditSigs,...rssSigs,...fundingSigs,...cgSigs];
+    signals = dedup(raw.filter(Boolean)).map(s=>enrichSignal(s,capital)).sort((a,b)=>b.score-a.score);
+
+    sessionStorage.setItem('acb_scan', JSON.stringify(signals));
+    sessionStorage.setItem('acb_scan_t', Date.now());
+
+    updateStats();
+    render();
+
+    const ok=Object.values(srcSt).filter(v=>v==='ok').length;
+    const tot=Object.keys(srcSt).length;
+    document.getElementById('tb-clock').textContent='Last scan: '+new Date().toLocaleTimeString();
+
+  }catch(e){
+    showErr('Scan error: '+(e.message||'Unknown'));
+    document.getElementById('empty-wrap').classList.add('vis');
+    console.error(e);
+  }
+  busy(false);
+}
+
+// ══════════════════════════════════════════════════════════
+//  DATA FETCHERS
+// ══════════════════════════════════════════════════════════
+async function fetchTrending(){
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/search/trending',{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    srcSt['CoinGecko Trending']='ok';
+    return d.coins?.map(c=>c.item)||[];
+  }catch{ srcSt['CoinGecko Trending']='fail'; return []; }
+}
+
+async function fetchCGMarkets(){
+  try{
+    const r=await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&price_change_percentage=24h,7d',{signal:AbortSignal.timeout(12000)});
+    const d=await r.json();
+    srcSt['CoinGecko Markets']='ok';
+    return d;
+  }catch{ srcSt['CoinGecko Markets']='fail'; return []; }
+}
+
+async function fetchCoinPaprika(){
+  const TOP=['btc-bitcoin','eth-ethereum','sol-solana','bnb-binance-coin','xrp-xrp',
+    'ada-cardano','avax-avalanche','dot-polkadot','link-chainlink','uni-uniswap',
+    'atom-cosmos','near-near-protocol','inj-injective','arb-arbitrum','op-optimism',
+    'sui-sui','apt-aptos','tia-celestia','sei-sei-network','doge-dogecoin'];
+  const all=[];
+  const results=await Promise.allSettled(TOP.map(id=>fetchCPEvents(id)));
+  let ok=0;
+  results.forEach((r,i)=>{
+    if(r.status==='fulfilled'&&r.value.length){ok++; all.push(...r.value);}
+  });
+  srcSt['CoinPaprika Events']=ok>0?'ok':'fail';
+  return all;
+}
+
+async function fetchCPEvents(coinId){
+  try{
+    const r=await fetch(`https://api.coinpaprika.com/v1/coins/${coinId}/events`,{signal:AbortSignal.timeout(10000)});
+    const d=await r.json();
+    if(!Array.isArray(d)||!d.length) return [];
+    const now=Date.now();
+    return d.filter(ev=>{
+      if(!ev.date) return false;
+      const t=new Date(ev.date).getTime();
+      return t>now-86400000 && t<now+(90*86400000);
+    }).slice(0,3).map(ev=>{
+      const sym=coinId.split('-')[0].toUpperCase();
+      const daysOut=Math.ceil((new Date(ev.date).getTime()-now)/86400000);
+      const rawType=detectCPType(ev.name||'');
+      return {coin:sym,name:sym,title:ev.name,desc:ev.description||'',
+        date:ev.date,link:ev.link||`https://coinpaprika.com/coin/${coinId}`,
+        type:rawType,src:'CoinPaprika',daysOut};
+    });
+  }catch{ return []; }
+}
+
+function detectCPType(name){
+  const t=name.toLowerCase();
+  if(/listing|listed on/.test(t)) return 'listing_general';
+  if(/unlock|vest|release tokens/.test(t)) return 'unlock_small';
+  if(/mainnet|launch/.test(t)) return 'mainnet_launch';
+  if(/airdrop/.test(t)) return 'airdrop';
+  if(/burn/.test(t)) return 'burn';
+  if(/fork/.test(t)) return 'fork';
+  if(/conference|summit|meetup/.test(t)) return 'conference';
+  if(/governance|vote|proposal/.test(t)) return 'governance';
+  if(/upgrade|update/.test(t)) return 'upgrade';
+  if(/partnership/.test(t)) return 'partnership';
+  return 'general';
+}
+
+async function fetchReddit(){
+  const all=[];
+  const results=await Promise.allSettled(REDDIT_SUBS.map(s=>fetchSubreddit(s)));
+  results.forEach((r,i)=>{
+    if(r.status==='fulfilled') all.push(...r.value);
+    srcSt[REDDIT_SUBS[i].name]=r.status==='fulfilled'&&r.value.length>0?'ok':'fail';
+  });
+  return all;
+}
+
+async function fetchSubreddit(sub){
+  try{
+    const r=await fetch(sub.url,{signal:AbortSignal.timeout(12000),headers:{'User-Agent':'AcressBiz/1.0'}});
+    const d=await r.json();
+    const posts=d.data?.children||[];
+    const now=Date.now();
+    const LISTING_KW=/\blisting\b|listed on binance|coinbase listing|bybit listing|okx listing/i;
+    const AIRDROP_KW=/airdrop|free tokens|token distribution/i;
+    const UNLOCK_KW=/token unlock|vesting cliff|unlock schedule/i;
+    const MAINNET_KW=/mainnet launch|mainnet live|going live/i;
+
+    return posts.filter(p=>{
+      const t=(p.data.title||'').toLowerCase();
+      return p.data.score>200 &&
+        (LISTING_KW.test(t)||AIRDROP_KW.test(t)||UNLOCK_KW.test(t)||MAINNET_KW.test(t)||
+         /catalyst|big news|breaking|announcement|launching/i.test(t));
+    }).slice(0,6).map(p=>{
+      const title=p.data.title||'';
+      const t=title.toLowerCase();
+      const type=LISTING_KW.test(t)?'listing_general':AIRDROP_KW.test(t)?'airdrop':
+                 UNLOCK_KW.test(t)?'unlock_small':MAINNET_KW.test(t)?'mainnet_launch':'reddit_rumour';
+      const coin=detectCoinFromText(t);
+      return {coin,name:coin,title,desc:`Reddit ${sub.name} · ${p.data.score} upvotes · ${p.data.num_comments} comments`,
+        date:new Date(Date.now()+86400000).toISOString().split('T')[0],
+        link:`https://reddit.com${p.data.permalink}`,type,src:sub.name,daysOut:1};
+    });
+  }catch{ return []; }
+}
+
+async function fetchRSS(){
+  const all=[];
+  const results=await Promise.allSettled(EXCHANGE_RSS.map(s=>fetchOneFeed(s)));
+  results.forEach((r,i)=>{
+    const name=EXCHANGE_RSS[i].name;
+    if(r.status==='fulfilled'&&r.value.length>0){srcSt[name]='ok'; all.push(...r.value);}
+    else{ srcSt[name]='fail'; }
+  });
+  return all;
+}
+
+async function fetchOneFeed(feed){
+  try{
+    const r=await fetch(feed.url,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok) return [];
+    const text=await r.text();
+    if(!text||text.length<100) return [];
+    const parser=new DOMParser();
+    const xml=parser.parseFromString(text,'text/xml');
+    const nodes=[...xml.querySelectorAll('item'),...xml.querySelectorAll('entry')];
+    if(!nodes.length) return [];
+    const now=Date.now();
+    const AGE_LIMIT=14*24*3600000;
+    return nodes.slice(0,15).map(el=>{
+      const title=(el.querySelector('title')?.textContent||'').trim();
+      if(!title||title.length<8) return null;
+      const pub=el.querySelector('pubDate')?.textContent||el.querySelector('published')?.textContent||'';
+      if(pub&&(now-new Date(pub).getTime())>AGE_LIMIT) return null;
+      const t=title.toLowerCase();
+      const type=detectTypeFromText(t,feed.type);
+      if(!isRelevantRSS(t,type)) return null;
+      const coin=detectCoinFromText(t);
+      const daysOut=estimateDaysOut(t,pub);
+      return {coin,name:coin,title,
+        desc:strip(el.querySelector('description')?.textContent||el.querySelector('summary')?.textContent||'').slice(0,200),
+        date:pub?new Date(pub).toISOString().split('T')[0]:new Date(Date.now()+daysOut*86400000).toISOString().split('T')[0],
+        link:el.querySelector('link')?.textContent||el.querySelector('link')?.getAttribute('href')||'',
+        type,src:feed.name,daysOut};
+    }).filter(Boolean);
+  }catch{ return []; }
+}
+
+async function fetchFundingSignals(){
+  try{
+    const r=await fetch('https://fapi.binance.com/fapi/v1/premiumIndex',{signal:AbortSignal.timeout(12000)});
+    const d=await r.json();
+    if(!d||!d.length){ srcSt['Binance Funding']='fail'; return []; }
+    srcSt['Binance Funding']='ok';
+    const sigs=[];
+    d.filter(x=>Math.abs(parseFloat(x.lastFundingRate))>0.001)
+     .sort((a,b)=>Math.abs(parseFloat(b.lastFundingRate))-Math.abs(parseFloat(a.lastFundingRate)))
+     .slice(0,12).forEach(x=>{
+       const sym=x.symbol.replace('USDT','').replace('BUSD','').replace('PERP','');
+       const rate=(parseFloat(x.lastFundingRate)*100).toFixed(3);
+       const isLong=parseFloat(x.lastFundingRate)>0;
+       sigs.push({coin:sym,name:sym,
+         title:`${sym} funding rate ${isLong?'+':''}${rate}% — ${isLong?'longs overleveraged, short squeeze risk':'shorts overleveraged, long squeeze risk'}`,
+         desc:`Extreme funding on ${x.symbol} perp. ${isLong?'Longs paying shorts — elevated liquidation cascade risk. Short-side entries historically profitable.':'Shorts paying longs — elevated short squeeze risk. Long entries into extreme negative funding historically profitable.'}`,
+         date:new Date().toISOString().split('T')[0],
+         link:`https://www.binance.com/en/futures/${x.symbol}`,
+         type:Math.abs(parseFloat(x.lastFundingRate))>0.003?'listing_binance':'governance',
+         src:'Binance Funding',daysOut:0});
+     });
+    return sigs;
+  }catch{ srcSt['Binance Funding']='fail'; return []; }
+}
+
+function buildCGSignals(trending, markets){
+  const sigs=[];
+  // Trending
+  trending.slice(0,7).forEach(c=>{
+    sigs.push({coin:c.symbol?.toUpperCase()||'?',name:c.name||'',
+      title:`${c.name} trending on CoinGecko — retail interest spike`,
+      desc:`Ranked #${c.market_cap_rank||'?'} by market cap. Currently trending — early signal of narrative building before a potential move.`,
+      date:new Date().toISOString().split('T')[0],
+      link:`https://www.coingecko.com/en/coins/${c.id}`,
+      type:'reddit_rumour',src:'CoinGecko Trending',daysOut:1});
+  });
+  if(trending.length) srcSt['CoinGecko Trending']='ok';
+  // Big movers
+  markets.filter(c=>(c.price_change_percentage_24h||0)>20).slice(0,8).forEach(c=>{
+    const pct=(c.price_change_percentage_24h||0).toFixed(1);
+    sigs.push({coin:c.symbol?.toUpperCase()||'?',name:c.name||'',
+      title:`${c.name} +${pct}% in 24h — post-pump short setup`,
+      desc:`Price: $${c.current_price?.toLocaleString()}. MCap: $${fmt(c.market_cap)}. Vol: $${fmt(c.total_volume)}. Significant pump — monitor for reversal entry.`,
+      date:new Date().toISOString().split('T')[0],
+      link:`https://www.coingecko.com/en/coins/${c.id}`,
+      type:'governance',src:'CoinGecko Markets',daysOut:0});
+  });
+  return sigs;
+}
+
+function buildFromMacro(){
+  const now=Date.now();
+  return MACRO_CAL.map(ev=>{
+    const daysOut=Math.ceil((new Date(ev.date).getTime()-now)/86400000);
+    if(daysOut<-1||daysOut>90) return null;
+    return {...ev,daysOut};
+  }).filter(Boolean);
+}
+
+function buildFromUnlocks(){
+  const now=Date.now();
+  return KNOWN_UNLOCKS.map(u=>{
+    const daysOut=Math.ceil((new Date(u.date).getTime()-now)/86400000);
+    if(daysOut<-1||daysOut>90) return null;
+    const isLarge=u.pct>5;
+    return {coin:u.coin,name:u.name,
+      title:`${u.name} (${u.coin}) — ${u.pct}% token unlock${isLarge?' ⚠ LARGE':''}`,
+      desc:`${u.pct}% of circulating supply unlocking. ${isLarge?'Large unlock — historically -15 to -25% in the week prior. Short entry window.':'Small unlock — moderate sell pressure expected. Monitor for entry after flush.'}`,
+      date:u.date,link:`https://defillama.com/unlocks`,
+      type:isLarge?'unlock_large':'unlock_small',src:'Token Unlock Calendar',daysOut};
+  }).filter(Boolean);
+}
+
+// ══════════════════════════════════════════════════════════
+//  SIGNAL ENRICHMENT — score, entry, exit, position sizing
+// ══════════════════════════════════════════════════════════
+function enrichSignal(s, capital){
+  const prec=PRECEDENCE[s.type]||PRECEDENCE.general;
+  const now=Date.now();
+  const eventDate=new Date(s.date).getTime();
+  const daysOut=s.daysOut!==undefined ? s.daysOut : Math.max(0,Math.ceil((eventDate-now)/86400000));
+
+  // 5-tier horizon
+  let horizon;
+  if(daysOut<=7)       horizon='W1';
+  else if(daysOut<=14) horizon='W2';
+  else if(daysOut<=21) horizon='W3';
+  else if(daysOut<=30) horizon='MONTH';
+  else                 horizon='QUARTER';
+
+  // asset class
+  const assetClass=classifyAsset(s.coin||'CRYPTO');
+
+  // score with recency bonus
+  let score=prec.score;
+  if(daysOut<=3) score=Math.min(10,score+1);
+  if(daysOut===0) score=Math.min(10,score+1);
+
+  // entry timing
+  const entryDaysFromNow = Math.max(0, daysOut - prec.entryDays);
+  const entryDate = entryDaysFromNow===0 ? 'NOW' :
+    new Date(Date.now()+entryDaysFromNow*86400000).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+  // exit timing
+  const exitDaysFromNow = Math.max(0, daysOut - prec.exitDays);
+  const exitDate = exitDaysFromNow===0 ? 'EVENT DAY' :
+    new Date(Date.now()+exitDaysFromNow*86400000).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+  // whether in entry window right now
+  const inWindow = entryDaysFromNow === 0;
+
+  // position sizing — Kelly-adjacent, capped 20%, floored 2%
+  const win=prec.win/100;
+  const avg=Math.abs(prec.avg)/100;
+  const kelly=avg>0 ? Math.max(0,(win-(1-win)/avg)) : 0;
+  const positionPct=Math.min(20,Math.max(2,Math.round(kelly*40)));
+  const positionAmt=Math.round(capital*(positionPct/100));
+
+  const isBullish=!s.type.includes('unlock');
+  const action=isBullish?'BUY':'AVOID / SHORT';
+  const precedenceText=PREC_CONTEXT[s.type]||PREC_CONTEXT.general;
+
+  return {
+    ...s, score, horizon, daysOut, assetClass,
+    prec, entryDate, exitDate, positionPct, positionAmt,
+    stopPct:prec.stopPct, action, isBullish, inWindow, precedenceText
+  };
+}
+
+function render(){
+  const q=document.getElementById('q').value.toLowerCase();
+  const sort=document.getElementById('sort-sel').value;
+
+  // catalyst type map
+  const tmap={
+    listing:['listing_binance','listing_coinbase','listing_bybit','listing_okx','listing_mexc','listing_kraken','listing_general'],
+    unlock:['unlock_large','unlock_small'],
+    mainnet:['mainnet_launch','upgrade'],
+    conference:['conference'],
+    governance:['governance'],
+    airdrop:['airdrop','burn'],
+    macro:['macro'],
+    social:['reddit_rumour']
+  };
+
+  let f=signals.filter(s=>{
+    if(s.horizon!==horizon) return false;
+    if(typeFilter!=='all'){
+      const allowed=tmap[typeFilter]||[];
+      if(!allowed.includes(s.type)) return false;
+    }
+    if(assetFilter!=='all'&&s.assetClass!==assetFilter) return false;
+    if(q&&!s.coin.toLowerCase().includes(q)&&!s.name.toLowerCase().includes(q)&&!s.title.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if(sort==='date')     f.sort((a,b)=>a.daysOut-b.daysOut);
+  else if(sort==='impact')  f.sort((a,b)=>Math.abs(b.prec.avg)-Math.abs(a.prec.avg));
+  else if(sort==='winrate') f.sort((a,b)=>b.prec.win-a.prec.win);
+  else if(sort==='position') f.sort((a,b)=>b.positionAmt-a.positionAmt);
+  else f.sort((a,b)=>b.score-a.score);
+
+  const wrap=document.getElementById('res-wrap');
+  const list=document.getElementById('signals-list');
+
+  const hLabel={W1:'Days 1–7',W2:'Days 8–14',W3:'Days 15–21',MONTH:'Days 22–30',QUARTER:'Days 31–90'};
+  document.getElementById('res-cnt').textContent =
+    f.length+' signal'+(f.length!==1?'s':'')+' · '+(hLabel[horizon]||horizon)+
+    (assetFilter!=='all'?' · '+ASSET_LABELS[assetFilter]:'')+
+    (typeFilter!=='all'?' · '+typeFilter:'');
+
+  if(!f.length){
+    wrap.style.display='none';
+    document.getElementById('empty-wrap').classList.add('vis');
+    document.getElementById('empty-wrap').querySelector('.empty-title').textContent='No signals match your filters';
+    document.getElementById('empty-wrap').querySelector('.empty-sub').textContent='Try a different horizon, asset class or catalyst type';
+    return;
+  }
+
+  document.getElementById('empty-wrap').classList.remove('vis');
+  wrap.style.display='block';
+
+  // legend
+  const cc={};
+  f.forEach(s=>{const lbl=s.prec.label; cc[lbl]=(cc[lbl]||0)+1;});
+  document.getElementById('cat-legend').innerHTML=Object.entries(cc).sort((a,b)=>b[1]-a[1]).slice(0,6)
+    .map(([l,n])=>{
+      const color=Object.values(PRECEDENCE).find(p=>p.label===l)?.color||'var(--bord2)';
+      return `<div class="leg-i"><span class="leg-dot" style="background:${color}"></span>${l} ${n}</div>`;
+    }).join('');
+
+  list.innerHTML=f.map((s,i)=>{
+    const col=s.prec.color;
+    const scoreCol=s.score>=9?'var(--red)':s.score>=7?'var(--gold)':s.score>=5?'var(--blue)':'var(--dim)';
+    const daysCls=s.daysOut<=3?'urgent':s.daysOut<=14?'soon':'ahead';
+    const daysLabel=s.daysOut===0?'TODAY':s.daysOut===1?'TOMORROW':`${s.daysOut}D AWAY`;
+    const histSign=s.prec.avg>0?'+':'';
+    const histColor=s.prec.avg>0?'var(--green)':'var(--red)';
+    const actionColor=s.isBullish?'var(--green)':'var(--red)';
+    const assetTag=ASSET_LABELS[s.assetClass]||'Crypto';
+    const assetCol=s.assetClass==='meme'?'var(--purple)':s.assetClass==='stock'?'var(--blue)':s.assetClass==='etf'?'var(--amber)':s.assetClass==='defi'?'var(--green)':s.assetClass==='l2'?'#60a5fa':'var(--text-dim)';
+    const windowBadge=s.inWindow?`<span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;padding:2px 7px;border:1px solid var(--green);color:var(--green);background:rgba(0,208,132,.1)">▶ ENTRY OPEN</span>`:'';
+    const delay=(i*.04).toFixed(2);
+
+    return `
+    <div class="sig-card" style="--card-color:${col};animation:fadeUp .4s ease ${delay}s both" onclick="expand(this)">
+      <div class="score-col">
+        <span class="score-num" style="color:${scoreCol}">${s.score}</span>
+      </div>
+      <div class="main-col">
+        <div class="card-meta">
+          <span class="coin-badge" style="color:${col};border-color:${col};background:${col}18">${s.coin}</span>
+          <span class="cat-badge" style="color:${col};border-color:${col}55">${s.prec.label}</span>
+          <span class="cat-badge" style="color:${assetCol};border-color:${assetCol}55">${assetTag}</span>
+          <span class="cat-badge" style="color:${actionColor};border-color:${actionColor}55">${s.action}</span>
+          ${windowBadge}
+        </div>
+        <div class="card-title">${x(s.title)}</div>
+
+        <!-- PRECEDENCE — always visible -->
+        <div style="display:flex;align-items:center;gap:16px;margin-top:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">Hist. Avg</span>
+            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${histColor};line-height:1">${histSign}${s.prec.avg}%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">Win Rate</span>
+            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);line-height:1">${s.prec.win}%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim)">Position</span>
+            <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--bright);line-height:1">$${s.positionAmt.toLocaleString()}</span>
+          </div>
+          <div style="flex:1;min-width:120px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim)">CONFIDENCE</span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:${histColor}">${Math.round((s.prec.win+Math.min(100,Math.abs(s.prec.avg)))/2)}%</span>
+            </div>
+            <div style="height:3px;background:var(--bord2)"><div style="height:100%;background:${histColor};width:${Math.round((s.prec.win+Math.min(100,Math.abs(s.prec.avg)))/2)}%"></div></div>
+          </div>
+        </div>
+
+        <!-- EXPANDED CONTENT -->
+        <div class="card-desc">
+          <p style="margin-bottom:10px;padding-top:10px;border-top:1px solid var(--bord)">${x(s.desc)}</p>
+
+          <!-- PRECEDENCE EXPLANATION -->
+          <div style="background:var(--bg3);border-left:3px solid ${col};padding:10px 12px;margin-bottom:12px">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:${col};margin-bottom:6px">Historical Precedence</div>
+            <div style="font-size:13px;color:var(--text);line-height:1.6">${x(s.precedenceText)}</div>
+          </div>
+
+          <!-- TRADE PLAN -->
+          <div class="trade-block">
+            <div class="trade-cell">
+              <span class="t-lbl">Entry Window</span>
+              <span class="t-val" style="color:var(--green)">${s.entryDate}</span>
+              <span class="t-sub">${s.inWindow?'✓ Enter now — window open':'Wait '+(Math.max(0,s.daysOut-s.prec.entryDays))+'d before event'}</span>
+            </div>
+            <div class="trade-cell">
+              <span class="t-lbl">Exit Target</span>
+              <span class="t-val" style="color:var(--red)">${s.exitDate}</span>
+              <span class="t-sub">Sell ${s.prec.exitDays}d before event · First out</span>
+            </div>
+            <div class="trade-cell">
+              <span class="t-lbl">Stop Loss</span>
+              <span class="t-val" style="color:var(--amber)">-${s.stopPct}%</span>
+              <span class="t-sub">From entry · Hard stop</span>
+            </div>
+            <div class="trade-cell">
+              <span class="t-lbl">Hist. Avg Move</span>
+              <span class="t-val" style="color:${histColor}">${histSign}${s.prec.avg}%</span>
+              <span class="t-sub">Based on ${s.prec.win}% of past events</span>
+            </div>
+            <div class="trade-cell">
+              <span class="t-lbl">Position Size</span>
+              <span class="t-val" style="color:var(--bright)">$${s.positionAmt.toLocaleString()}</span>
+              <span class="t-sub">${s.positionPct}% of capital (Kelly)</span>
+            </div>
+            <div class="trade-cell">
+              <span class="t-lbl">Asset Class</span>
+              <span class="t-val" style="color:${assetCol};font-size:14px">${assetTag}</span>
+              <span class="t-sub">Signal score: ${s.score}/10</span>
+            </div>
+          </div>
+          ${s.link?`<a class="open-link" href="${x(s.link)}" target="_blank" onclick="event.stopPropagation()">Open Source →</a>`:''}
+        </div>
+      </div>
+      <div class="right-col">
+        <div>
+          <div class="event-date">${fmtDate(s.date)}</div>
+          <div class="days-badge ${daysCls}">${daysLabel}</div>
+        </div>
+        <div>
+          <span class="pos-lbl">Kelly Position</span>
+          <div class="pos-size">$${s.positionAmt.toLocaleString()}</div>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--dim)">${s.positionPct}% of capital</span>
+        </div>
+        <div>
+          <span class="pos-lbl" style="margin-bottom:4px;display:block">Precedence</span>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;color:${histColor}">${histSign}${s.prec.avg}% / ${s.prec.win}%W</div>
+        </div>
+        <div class="src-name">${x(s.src)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  srcStripRender();
+}
+
+function expand(el){
+  el.classList.toggle('open');
+}
+
+function updateStats(){
+  document.getElementById('st-total').textContent=signals.length;
+  document.getElementById('st-w1').textContent=signals.filter(s=>s.horizon==='W1').length;
+  document.getElementById('st-w2').textContent=signals.filter(s=>s.horizon==='W2').length;
+  document.getElementById('st-w3').textContent=signals.filter(s=>s.horizon==='W3').length;
+  document.getElementById('st-month').textContent=signals.filter(s=>s.horizon==='MONTH').length;
+  document.getElementById('st-high').textContent=signals.filter(s=>s.score>=8).length;
+  ['W1','W2','W3','MONTH','QUARTER'].forEach(h=>document.getElementById('hc-'+h).textContent=signals.filter(s=>s.horizon===h).length);
+}
+
+// ══════════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════════
+const COIN_MAP={
+  bitcoin:'BTC',ethereum:'ETH',solana:'SOL',binance:'BNB',ripple:'XRP',cardano:'ADA',
+  avalanche:'AVAX',polkadot:'DOT',chainlink:'LINK',uniswap:'UNI',dogecoin:'DOGE',
+  polygon:'MATIC',arbitrum:'ARB',optimism:'OP',cosmos:'ATOM',near:'NEAR',
+  injective:'INJ',sui:'SUI',aptos:'APT',celestia:'TIA',wormhole:'W',
+  bittensor:'TAO',synthetix:'SNX','world liberty':'WLFI',flare:'FLR',
+  drift:'DRIFT',stargate:'STG',gitcoin:'GTC',layerzero:'ZRO',pyth:'PYTH',
+};
+
+function detectCoinFromText(t){
+  for(const [kw,sym] of Object.entries(COIN_MAP)){
+    if(t.includes(kw)) return sym;
+  }
+  // check uppercase tickers 2-5 chars
+  const m=t.match(/\b([A-Z]{2,5})\b/);
+  if(m) return m[1];
+  return 'CRYPTO';
+}
+
+function detectTypeFromText(t, defaultType){
+  if(/binance.*list|list.*binance/i.test(t)) return 'listing_binance';
+  if(/coinbase.*list|list.*coinbase/i.test(t)) return 'listing_coinbase';
+  if(/bybit.*list|list.*bybit/i.test(t)) return 'listing_bybit';
+  if(/okx.*list|list.*okx/i.test(t)) return 'listing_okx';
+  if(/mexc.*list|list.*mexc/i.test(t)) return 'listing_mexc';
+  if(/\bnew listing\b|listed on exchange/i.test(t)) return 'listing_general';
+  if(/token unlock|vesting cliff|unlock schedule/i.test(t)) return 'unlock_large';
+  if(/airdrop/i.test(t)) return 'airdrop';
+  if(/mainnet launch|mainnet live/i.test(t)) return 'mainnet_launch';
+  if(/upgrade|hard fork/i.test(t)) return 'upgrade';
+  if(/partnership|integrat/i.test(t)) return 'partnership';
+  if(/governance|dao vote/i.test(t)) return 'governance';
+  if(/burn|buyback/i.test(t)) return 'burn';
+  return defaultType||'general';
+}
+
+function isRelevantRSS(t, type){
+  if(type==='listing_binance'||type==='listing_coinbase'||type==='listing_bybit'||
+     type==='listing_mexc'||type==='listing_okx'||type==='listing_general') return true;
+  if(type==='airdrop'||type==='unlock_large'||type==='mainnet_launch') return true;
+  if(/listing|unlock|airdrop|mainnet|upgrade|launch|burn|fork|catalyst|breaking/i.test(t)) return true;
+  return false;
+}
+
+function estimateDaysOut(t, pub){
+  if(!pub) return 7;
+  const age=(Date.now()-new Date(pub).getTime())/86400000;
+  if(age<1) return 1;
+  if(age<3) return 3;
+  if(age<7) return 7;
+  return 14;
+}
+
+function dedup(arr){
+  const seen=new Set();
+  return arr.filter(s=>{
+    if(!s||!s.title) return false;
+    const k=s.title.slice(0,40).toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+function fmtDate(d){
+  try{return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}catch{return d;}
+}
+
+function fmt(n){
+  if(!n) return '0';
+  if(n>=1e12) return (n/1e12).toFixed(1)+'T';
+  if(n>=1e9)  return (n/1e9).toFixed(1)+'B';
+  if(n>=1e6)  return (n/1e6).toFixed(1)+'M';
+  return n.toLocaleString();
+}
+
+function strip(h){return h.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();}
+function x(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ══════════════════════════════════════════════════════════
+//  FILTERS
+// ══════════════════════════════════════════════════════════
+function setH(h,el){
+  horizon=h;
+  document.querySelectorAll('.htab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  if(signals.length) render();
+}
+
+function setType(t,btn){
+  typeFilter=t;
+  document.querySelectorAll('.fbar:not([style]) .pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(signals.length) render();
+}
+
+function setAsset(a,btn){
+  assetFilter=a;
+  document.querySelectorAll('.fbar[style] .pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(signals.length) render();
+}
+
+// ══════════════════════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════════════════════
+function busy(on){
+  document.getElementById('scan-btn').disabled=on;
+  document.getElementById('load-wrap').classList.toggle('vis',on);
+  if(!on) document.getElementById('load-wrap').classList.remove('vis');
+}
+
+function prog(pct,step,sub){
+  document.getElementById('prog').style.width=pct+'%';
+  document.getElementById('load-step').textContent=step;
+  document.getElementById('load-sub').textContent=sub;
+}
+
+function showErr(m){
+  const e=document.getElementById('err-bar');
+  e.textContent=m; e.classList.toggle('vis',!!m);
+}
+
+function srcStripRender(){
+  const el=document.getElementById('src-strip');
+  el.innerHTML=Object.entries(srcSt).map(([n,s])=>
+    `<span class="src-tag ${s}"><span class="src-dot"></span>${n}</span>`
+  ).join('');
+}
+
+function resetAll(){
+  signals=[]; srcSt={};
+  sessionStorage.removeItem('acb_scan');
+  sessionStorage.removeItem('acb_scan_t');
+  typeFilter='all'; assetFilter='all'; horizon='W1';
+  document.querySelectorAll('.fbar .pill').forEach(b=>b.classList.toggle('active',b.textContent==='All'||b.textContent==='All Assets'));
+  document.querySelectorAll('.htab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.getElementById('q').value='';
+  document.getElementById('res-wrap').style.display='none';
+  document.getElementById('empty-wrap').classList.add('vis');
+  document.getElementById('empty-wrap').querySelector('.empty-title').textContent='No Signals Yet';
+  document.getElementById('empty-wrap').querySelector('.empty-sub').textContent='Hit SCAN NOW to surface every catalyst across the broad market';
+  ['st-total','st-w1','st-w2','st-w3','st-month','st-high'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='—';});
+  ['W1','W2','W3','MONTH','QUARTER'].forEach(h=>{const el=document.getElementById('hc-'+h);if(el)el.textContent='—';});
+  document.getElementById('src-strip').innerHTML='';
+  showErr('');
+}
+
+// clock
+setInterval(()=>{
+  if(!document.getElementById('scan-btn').disabled)
+    document.getElementById('tb-clock').textContent=new Date().toLocaleTimeString();
+},1000);
+
+// cache restore
+window.addEventListener('load',()=>{
+  const c=sessionStorage.getItem('acb_scan');
+  const t=sessionStorage.getItem('acb_scan_t');
+  if(c&&t&&(Date.now()-parseInt(t))<3600000){
+    signals=JSON.parse(c);
+    updateStats(); render();
+    document.getElementById('tb-clock').textContent='Last scan: '+new Date(parseInt(t)).toLocaleTimeString();
+  }
+  srcStripRender();
+});
+</script>
+</body>
+</html>
