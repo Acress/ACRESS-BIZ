@@ -246,6 +246,7 @@ const SKIP_KW = ['usd','usdt','usdc','dai','busd','tusd','frax','usde','usdp','f
 let curAsset='crypto', btcData=null, spyData=null;
 let results={crypto:[],meme:[],stocks:[],etf:[]};
 let rttList={crypto:[],meme:[],stocks:[],etf:[]};
+let inlineSelected={crypto:new Set(),meme:new Set(),stocks:new Set(),etf:new Set()};
 let rttSel={crypto:null,meme:null,stocks:null,etf:null};
 let rttCache={crypto:{},meme:{},stocks:{},etf:{}};
 let active={crypto:false,meme:false,stocks:false,etf:false};
@@ -270,14 +271,14 @@ function buildPaneHTML(asset) {
   const defDrop = {crypto:'60',meme:'70',stocks:'30',etf:'15'}[asset];
   const defVol  = {crypto:'100000',meme:'50000',stocks:'500000',etf:'50000'}[asset];
   const dropOpts = asset==='etf'
-    ? '<option value="10">10%+</option><option value="15" selected>15%+</option><option value="20">20%+</option><option value="30">30%+</option>'
+    ? '<option value="5">5%+</option><option value="10" selected>10%+</option><option value="15">15%+</option><option value="20">20%+</option><option value="30">30%+</option>'
     : asset==='stocks'
-    ? '<option value="20">20%+</option><option value="30" selected>30%+</option><option value="40">40%+</option><option value="50">50%+</option>'
+    ? '<option value="10">10%+</option><option value="15" selected>15%+</option><option value="20">20%+</option><option value="30">30%+</option><option value="40">40%+</option>'
     : asset==='meme'
     ? '<option value="60">60%+</option><option value="70" selected>70%+</option><option value="80">80%+</option><option value="90">90%+</option>'
     : '<option value="50">50%+</option><option value="60" selected>60%+</option><option value="70">70%+</option><option value="80">80%+</option>';
   const volOpts = asset==='stocks'
-    ? '<option value="100000">100K+</option><option value="500000" selected>500K+</option><option value="1000000">1M+</option>'
+    ? '<option value="50000">50K+</option><option value="100000" selected>100K+</option><option value="500000">500K+</option><option value="1000000">1M+</option>'
     : asset==='etf'
     ? '<option value="10000">10K+</option><option value="50000" selected>50K+</option><option value="100000">100K+</option>'
     : asset==='meme'
@@ -312,7 +313,10 @@ function buildPaneHTML(asset) {
             ${isCG?'<option value="wb">Webull tradable</option><option value="bn">Binance listed</option>':''}
           </select>
         </div>
-        <button class="save-test-btn" onclick="openSaveTestModal('${asset}')" id="snapbtn-${asset}">🧪 Save Test</button>
+        <button class="scan-btn" id="inline-save-btn-${asset}" onclick="saveInlineSelected('${asset}')" disabled style="background:var(--amber);color:#000;opacity:0.4;font-size:11px;padding:7px 14px">💾 Save Selected</button>
+        <button id="inline-clr-btn-${asset}" onclick="clearInlineSelection('${asset}')" style="display:none;background:none;border:1px solid var(--b2);color:var(--muted);font-family:var(--mono);font-size:10px;padding:5px 10px;border-radius:4px;cursor:pointer" title="Clear selection">✕ Clear</button>
+        <button class="scan-btn" style="background:var(--s3);border:1px solid var(--b2);color:var(--muted);font-size:10px;padding:5px 10px" onclick="selectAllBuy('${asset}')" title="Auto-select all BUY signals">☑ Select BUYs</button>
+        <button class="save-test-btn" onclick="openSaveTestModal('${asset}')" id="snapbtn-${asset}" title="Open full token selector">⋯ All tokens</button>
       </div>
       <div class="prog-wrap" id="prog-${asset}"><div class="prog-bar"><div class="prog-fill" id="pbar-${asset}" style="background:${col}"></div></div><div class="status" id="status-${asset}">Ready</div></div>
       <div class="metrics" id="metrics-${asset}"></div>
@@ -357,7 +361,7 @@ async function fetchRegime() {
   try {
     const [br, sr] = await Promise.all([
       fetch('https://api.coingecko.com/api/v3/coins/bitcoin?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false'),
-      fetch('https://query2.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=3mo').catch(()=>null)
+      fetch(`https://corsproxy.io/?${encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=3mo')}`,{signal:AbortSignal.timeout(8000)}).catch(()=>null)
     ]);
     if(br.ok){const d=await br.json();btcData={c7:d.market_data.price_change_percentage_7d||0,c30:d.market_data.price_change_percentage_30d||0};}
     if(sr&&sr.ok){const d=await sr.json();const m=d.chart?.result?.[0];if(m){const cl=m.indicators.quote[0].close.filter(Boolean);const n=cl.length;spyData={c7:n>7?(cl[n-1]-cl[n-7])/cl[n-7]*100:0,c30:n>30?(cl[n-1]-cl[n-30])/cl[n-30]*100:0,price:m.meta.regularMarketPrice};}}
@@ -424,6 +428,106 @@ function athAge(c) {
   if(days<365)return{label:Math.floor(days/30)+'mo',cls:'ta',note:'ATH within last year'};
   return{label:(days/365).toFixed(1)+'y',cls:'tg',note:'Old ATH — more likely bottomed'};
 }
+// ── ATH CATALYST INFERENCE ENGINE ──
+function inferATHCatalyst(coin) {
+  if (!coin.ath_date) return {label:'Unknown',note:'ATH date unavailable',icon:'❓',cls:'tm'};
+  const athDate = new Date(coin.ath_date);
+  const athTs = athDate.getTime();
+  const athDrop = Math.abs(coin.ath_change_percentage||0);
+  const sym = (coin.symbol||'').toUpperCase();
+  const mcap = coin.market_cap||0;
+
+  // Listing pump heuristic: > 95% drop from ATH + tiny market cap = never recovered from launch
+  if(athDrop>95&&mcap<15e6) return {label:'Listing pump',note:'Lost 95%+ from ATH with tiny market cap — almost certainly a launch pump that never recovered',icon:'🚀',cls:'tr2'};
+  if(athDrop>97) return {label:'Probable listing pump',note:'97%+ ATH drawdown — hallmark of a one-time listing pump or rug',icon:'🚀',cls:'tr2'};
+
+  // Known market-wide narrative windows [startY, startM, endY, endM, label, note, icon, cls]
+  const windows = [
+    [2017,10,2018,2,'2017–18 ICO bubble','The 2017–18 crypto mania peak. Nearly every coin ATH\'d here. Retail FOMO + ICO boom.',            '🫧','ta'],
+    [2018,2, 2018,6,'Post-ICO dead cat',  'Brief relief rally after 2018 crash. Most alts never recovered.',                                    '🐈','tr2'],
+    [2019,5, 2019,8,'2019 mini-bull',     'Mid-2019 BTC-led recovery rally. Short-lived, followed by 2020 COVID crash.',                        '📈','tb'],
+    [2020,3, 2020,5,'COVID recovery',     'Post-March-2020 COVID crash recovery. BTC and ETH led.',                                             '🦠','tb'],
+    [2020,7, 2020,9,'DeFi Summer',        'DeFi Summer 2020 — yield farming, Uniswap, Compound, YFI drove massive pumps.',                      '🌾','tg'],
+    [2020,10,2021,1,'BTC halving cycle',  'Late 2020 Bitcoin halving cycle rally. Institutional buying (MicroStrategy, PayPal). Alts followed.', '₿', 'tg'],
+    [2021,1, 2021,5,'2021 spring bull',   '2021 spring bull run. Coinbase IPO, DOGE hype, BTC $64K peak. Intense retail FOMO.',                 '🐂','tg'],
+    [2021,7, 2021,9,'NFT + alt season',   'NFT boom and alt season wave. SOL, AVAX, LUNA led massive gains.',                                   '🖼️','tg'],
+    [2021,9, 2021,12,'Nov 2021 cycle top','Bitcoin all-time high ~$69K. Market-wide top. Nearly all coins peaked within weeks of each other.',   '🔝','tr2'],
+    [2022,1, 2022,5,'Late cycle / LUNA',  'Late bull phase before May 2022 LUNA/UST collapse triggered -60% crash.',                            '⚠️','tr2'],
+    [2023,1, 2023,3,'AI narrative 2023',  'Early 2023 AI narrative — FET, AGIX, RNDR, Ocean surged on ChatGPT hype.',                          '🤖','tb'],
+    [2023,6, 2023,9,'ETF speculation',    'BlackRock BTC ETF filing sparked institutional optimism. BTC + quality alts rallied.',               '🏛️','tb'],
+    [2023,10,2024,2,'ETF approval rally', 'Spot Bitcoin ETF approval anticipation and confirmation (Jan 2024). BTC-led rally.',                 '📋','tg'],
+    [2024,2, 2024,5,'Meme supercycle',    '2024 meme supercycle — DOGE, SHIB, PEPE, WIF, BOME led. Halving narrative amplified.',              '🐸','ta'],
+    [2024,3, 2024,5,'BTC halving 2024',   'Bitcoin halving April 2024. Pre-halving alt pumps. Historically strong 6-12mo window.',             '⛏️','tg'],
+    [2024,5, 2024,7,'ETH ETF launch',     'Ethereum spot ETF approval and launch (May–Jul 2024). ETH and layer-2 tokens benefited.',           '💎','tb'],
+    [2024,10,2024,12,'Trump election rally','Post-US-election crypto rally. Pro-crypto administration drove BTC to $100K+ speculation.',       '🗳️','tg'],
+    [2025,1, 2025,2,'Inauguration rally', 'Trump inauguration crypto euphoria. BTC ~$108K. Deregulation narrative peak.',                      '🇺🇸','tg'],
+    [2025,1, 2025,3,'AI agent narrative', 'AI agent token supercycle — VIRTUAL, AI16Z, GRIFFAIN led. Short-lived but intense.',                '🤖','ta'],
+    [2025,2, 2025,5,'2025 alt season',    '2025 broad alt season. Market rotation out of BTC into alt narratives.',                            '🚀','tg'],
+  ];
+
+  for(const [sy,sm,ey,em,label,note,icon,cls] of windows){
+    const start=new Date(sy,sm-1,1).getTime();
+    const end=new Date(ey,em,0,23,59,59).getTime();
+    if(athTs>=start&&athTs<=end) return {label,note,icon,cls};
+  }
+
+  const y=athDate.getFullYear();
+  if(y>=2025) return {label:'2025 peak',note:'Recent 2025 ATH — may still be declining',icon:'📉',cls:'tr2'};
+  if(y===2024) return {label:'2024 cycle',note:'ATH in 2024 — check specific catalyst',icon:'📅',cls:'tb'};
+  if(y===2016||y===2017) return {label:'2017 ICO era',note:'Pre-DeFi ICO boom era. Very old project.',icon:'🦕',cls:'tr2'};
+  if(y<=2015) return {label:'Pre-2016',note:'Extremely old ATH — likely obsolete project',icon:'🦕',cls:'tr2'};
+  return {label:`${y} peak`,note:`ATH set in ${y} — cross-reference specific coin events`,icon:'📅',cls:'tm'};
+}
+
+// ── ATL CATALYST INFERENCE ENGINE ──
+function inferATLCatalyst(coin) {
+  if (!coin.atl_date) return {label:'Unknown',note:'ATL date unavailable',icon:'❓',cls:'tm'};
+  const atlDate = new Date(coin.atl_date);
+  const atlTs = atlDate.getTime();
+  const sym = (coin.symbol||'').toUpperCase();
+  // How far current price is above ATL
+  const atlGainPct = coin.atl_change_percentage||0; // positive = above ATL
+
+  // If ATL was the listing price (within first 90 days of existence)
+  // We can't know first_data from markets endpoint but we can infer:
+  // If ATL is extremely low AND gain from ATL is huge — likely listing dump / early price discovery
+  if(atlGainPct > 50000) return {label:'Launch price',note:`ATL was likely the initial listing price — coin has risen ${Math.round(atlGainPct).toLocaleString()}% from all-time low`,icon:'🪄',cls:'tg'};
+  if(atlGainPct > 10000) return {label:'Near launch price',note:`Coin is ${Math.round(atlGainPct).toLocaleString()}% above its all-time low — most likely set at or near listing`,icon:'🚀',cls:'tg'};
+
+  // Known crisis windows — mapped to crash events
+  const crashWindows = [
+    // [startY, startM, endY, endM, label, note, icon, cls]
+    [2014,1, 2015,2,  'Mt. Gox collapse',   'Mt. Gox exchange hack/collapse (Feb 2014) triggered the 2014–15 crypto winter. BTC fell -86%.',                  '🏦','tb'],
+    [2015,1, 2015,8,  '2015 crypto winter', 'Post-Mt.Gox capitulation bottom. Market spent months at multi-year lows before 2017 recovery.',                  '🥶','tb'],
+    [2018,8, 2019,2,  '2018 bear market',   'Post-ICO bubble collapse. BTC fell from $20K to $3.1K. Most altcoins lost 90–99% from 2017 highs.',              '🐻','tb'],
+    [2019,12,2020,4,  'Pre-COVID lows',     'Late 2019 / early 2020 bear market doldrums. Many alts at multi-year lows before COVID crash.',                   '😴','tb'],
+    [2020,3, 2020,3,  'COVID Black Thursday','March 12–13 2020 — crypto market crashed -50% in 24h. Worst single-day crypto crash in history.',               '🦠','tg'],
+    [2020,4, 2020,6,  'COVID recovery lows','Post-COVID crash consolidation. Many coins set their modern ATLs here before DeFi Summer.',                       '📉','tg'],
+    [2022,5, 2022,6,  'LUNA/UST collapse',  'May 2022 — Terra LUNA/UST implosion wiped $40B in days. Triggered systemic contagion across DeFi.',              '💥','tg'],
+    [2022,6, 2022,8,  'Three Arrows / Celsius','June 2022 — 3AC and Celsius insolvency cascade. BTC fell to $17.6K. Broad forced liquidations.',             '🏚️','tg'],
+    [2022,11,2022,12, 'FTX collapse',       'November 2022 — FTX exchange collapse. $8B shortfall. BTC to $15.5K. Deepest bear market low for most alts.',    '💀','tg'],
+    [2022,12,2023,1,  'Post-FTX bottom',    'December 2022 / January 2023 capitulation bottom. Most altcoins at multi-year ATLs. Key reversal zone.',          '🧊','tg'],
+    [2023,3, 2023,4,  'Banking crisis lows','March 2023 — SVB/Signature Bank collapse. USDC briefly depegged. Temporary crypto ATLs for some assets.',        '🏦','tb'],
+    [2024,1, 2024,2,  'Pre-ETF dip',        'Pre-spot-ETF approval volatility. Some alts set lows before the Jan 2024 ETF-driven rally.',                     '📋','tb'],
+    [2025,2, 2025,4,  'Tariff crash 2025',  'April 2025 macro panic — US tariff escalation triggered broad risk-off selloff. BTC -30%, alts -40-60%.',        '📉','tb'],
+  ];
+
+  for(const [sy,sm,ey,em,label,note,icon,cls] of crashWindows){
+    const start=new Date(sy,sm-1,1).getTime();
+    const end=new Date(ey,em,0,23,59,59).getTime();
+    if(atlTs>=start&&atlTs<=end) return {label,note,icon,cls};
+  }
+
+  const y=atlDate.getFullYear();
+  if(y>=2025) return {label:'2025 low',note:'Recent 2025 low — may not be the final ATL if macro deteriorates further',icon:'📉',cls:'ta'};
+  if(y===2024) return {label:'2024 low',note:'ATL set in 2024 — check specific catalyst',icon:'📅',cls:'tb'};
+  if(y===2023) return {label:'2023 low',note:'ATL in 2023 — likely post-FTX bear market continuation or banking crisis',icon:'🐻',cls:'tb'};
+  if(y===2017||y===2016) return {label:'2016–17 launch era',note:'Very old project — ATL from early trading days',icon:'🦕',cls:'tm'};
+  if(y<=2015) return {label:'Pre-2016 era',note:'Extremely old ATL — likely from very early trading or near-launch dump',icon:'🦕',cls:'tm'};
+  return {label:`${y} low`,note:`ATL set in ${y} — cross-reference specific coin events`,icon:'📅',cls:'tm'};
+}
+
+
 function inferSec(sym,name) {
   const s=(sym+' '+name).toLowerCase();
   if(/(btc|eth|sol|bnb|ada|dot|avax|atom|near|icp|algo|ftm|apt|sui|sei|tia|inj|trx|xrp|xlm|vet)/.test(s))return'L1/L2';
@@ -443,6 +547,9 @@ function scoreCG(coin, wb, asset) {
   const c30=coin.price_change_percentage_30d_in_currency||0;
   const liq=vol/mcap;
   const isMeme=asset==='meme';
+  // 5-day from sparkline (168 hourly prices = 7 days; 120 back = 5 days ago)
+  const _sp=coin.sparkline_in_7d?.price||[];
+  const c5d=_sp.length>=121?((_sp[_sp.length-1]-_sp[_sp.length-121])/_sp[_sp.length-121]*100):c7*(5/7);
 
   let os=0;
   if(athDrop>=60&&athDrop<=90)os+=3;else if(athDrop>=50)os+=1;else if(athDrop>90)os+=1;
@@ -488,8 +595,13 @@ function scoreCG(coin, wb, asset) {
   else if(prob>=35){action='WAIT';ac='ta';}
   else{action='AVOID';ac='tr2';}
   if(sr.score===3&&action==='BUY'){action='WAIT';ac='ta';}
-  return{os,lv,br,composite,sector,sr,di,rs,aa,prob,conf,cc,action,ac,
-    athDrop,vol,mcap,liq,c24,c7,c14,c30,asset};
+  const athCatalyst=inferATHCatalyst(coin);
+  const athPrice=coin.ath||0;
+  const atlCatalyst=inferATLCatalyst(coin);
+  const atlPrice=coin.atl||0;
+  const atlGain=coin.atl_change_percentage||0; // % above ATL
+  return{os,lv,br,composite,sector,sr,di,rs,aa,athCatalyst,athPrice,atlCatalyst,atlPrice,atlGain,prob,conf,cc,action,ac,
+    athDrop,vol,mcap,liq,c24,c5d,c7,c14,c30,asset};
 }
 
 // ── STOCK / ETF SCORING ──
@@ -536,29 +648,38 @@ function scoreYahoo(d, asset) {
 }
 
 // ── YAHOO FETCH ──
+// Yahoo Finance blocks direct browser requests (CORS) — we use a proxy chain
+const YF_PROXIES=[
+  t=>`https://corsproxy.io/?${encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/'+t+'?interval=1d&range=1y&includePrePost=false')}`,
+  t=>`https://api.allorigins.win/raw?url=${encodeURIComponent('https://query2.finance.yahoo.com/v8/finance/chart/'+t+'?interval=1d&range=1y&includePrePost=false')}`,
+  t=>`https://query1.finance.yahoo.com/v8/finance/chart/${t}?interval=1d&range=1y&includePrePost=false`,
+];
 async function fetchYahoo(ticker) {
-  try {
-    const r=await fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1y&includePrePost=false`);
-    if(!r.ok)return null;
-    const d=await r.json();
-    const res=d.chart?.result?.[0];if(!res)return null;
-    const m=res.meta;
-    const cl=(res.indicators?.quote?.[0]?.close||[]).filter(v=>v!=null);
-    const vo=(res.indicators?.quote?.[0]?.volume||[]).filter(v=>v!=null);
-    const n=cl.length;if(n<5)return null;
-    const price=m.regularMarketPrice||cl[n-1];
-    const avgVol=vo.length>20?vo.slice(-20).reduce((a,b)=>a+b,0)/20:(vo[vo.length-1]||0);
-    return{ticker,name:m.shortName||ticker,price,
-      hi52:m.fiftyTwoWeekHigh||Math.max(...cl),
-      lo52:m.fiftyTwoWeekLow||Math.min(...cl),
-      vol:m.regularMarketVolume||vo[vo.length-1]||0,
-      avgVol,mcap:m.marketCap||0,
-      c1d:m.regularMarketChangePercent||0,
-      c5d:n>5?(cl[n-1]-cl[n-5])/cl[n-5]*100:0,
-      c1mo:n>22?(cl[n-1]-cl[n-22])/cl[n-22]*100:0,
-      c3mo:n>66?(cl[n-1]-cl[n-66])/cl[n-66]*100:0,
-      sector:m.sector||''};
-  }catch(e){return null;}
+  for(const makeUrl of YF_PROXIES){
+    try{
+      const r=await fetch(makeUrl(ticker),{signal:AbortSignal.timeout(12000)});
+      if(!r.ok)continue;
+      const d=await r.json();
+      const res=d.chart?.result?.[0];if(!res)continue;
+      const m=res.meta;
+      const cl=(res.indicators?.quote?.[0]?.close||[]).filter(v=>v!=null);
+      const vo=(res.indicators?.quote?.[0]?.volume||[]).filter(v=>v!=null);
+      const n=cl.length;if(n<5)continue;
+      const price=m.regularMarketPrice||cl[n-1];
+      const avgVol=vo.length>20?vo.slice(-20).reduce((a,b)=>a+b,0)/20:(vo[vo.length-1]||0);
+      return{ticker,name:m.shortName||ticker,price,
+        hi52:m.fiftyTwoWeekHigh||Math.max(...cl),
+        lo52:m.fiftyTwoWeekLow||Math.min(...cl),
+        vol:m.regularMarketVolume||vo[vo.length-1]||0,
+        avgVol,mcap:m.marketCap||0,
+        c1d:m.regularMarketChangePercent||0,
+        c5d:n>5?(cl[n-1]-cl[n-5])/cl[n-5]*100:0,
+        c1mo:n>22?(cl[n-1]-cl[n-22])/cl[n-22]*100:0,
+        c3mo:n>66?(cl[n-1]-cl[n-66])/cl[n-66]*100:0,
+        sector:m.sector||''};
+    }catch(e){continue;}
+  }
+  return null;
 }
 
 // ── SCAN ENGINES ──
@@ -601,7 +722,7 @@ async function scanCG(asset) {
     if(aborted[asset])break;
     setS(asset,`Page ${p}/${maxP} — ${found} qualified...`,((p-1)/maxP)*90);
     try{
-      let url=`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${p}&sparkline=false&price_change_percentage=7d,14d,30d`;
+      let url=`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=${p}&sparkline=true&price_change_percentage=7d,14d,30d`;
       if(isMeme)url+='&category=meme-token';
       const r=await fetch(url);
       if(!r.ok){if(r.status===429){setS(asset,'Rate limited — waiting 65s...',0);await sleep(66000);p--;continue;}break;}
@@ -627,8 +748,19 @@ async function scanYF(asset) {
   const tickers=asset==='stocks'?SP500_TICKERS:ETF_TICKERS;
   const minDrop=parseInt(document.getElementById('f-ath-'+asset).value);
   const minVol=parseInt(document.getElementById('f-vol-'+asset).value);
-  const total=tickers.length;const BS=15;
+  const total=tickers.length;const BS=8; // smaller batches — proxy needs breathing room
   let done=0;
+  // Test connection first so user gets clear feedback if proxy is down
+  setS(asset,'Testing Yahoo Finance connection via CORS proxy...',2);
+  const testResult=await fetchYahoo('SPY');
+  if(!testResult){
+    setS(asset,'⚠ Yahoo Finance unavailable via proxy. corsproxy.io may be overloaded — wait 30s and try again, or try a different network.',0);
+    document.getElementById('scanbtn-'+asset).disabled=false;
+    active[asset]=false;
+    document.getElementById('stopbtn-'+asset).style.display='none';
+    return;
+  }
+  setS(asset,`Connection OK (${asset==='stocks'?total+' S&P/Nasdaq stocks':total+' ETFs'} to scan) — starting...`,5);
   for(let i=0;i<total;i+=BS){
     if(aborted[asset])break;
     setS(asset,`Scanning ${i}/${total} — ${results[asset].length} qualified...`,i/total*90);
@@ -642,7 +774,7 @@ async function scanYF(asset) {
     }
     done+=batch.length;
     renderTable(asset);renderMetrics(asset);
-    if(i+BS<total&&!aborted[asset])await sleep(150);
+    if(i+BS<total&&!aborted[asset])await sleep(600); // proxy breathing room
   }
   setS(asset,`Done — ${results[asset].length} found from ${done} tickers.`,100);
 }
@@ -700,9 +832,9 @@ async function quickSearch(asset) {
 // ── RENDER TABLE ──
 function getCols(asset) {
   const isCG=asset==='crypto'||asset==='meme';
-  const base=[['','rtt'],['Ticker','sym'],['Name','name'],['Sector','sector'],['Price','price'],
-    ['1d%','c24'],['7d%','c7'],['From peak','ath']];
-  if(isCG)return[...base,['ATH age','age'],['Vol','vol'],['Supply','sr'],['DInt','di'],['Live','lv'],['Score','composite'],['Prob','prob'],['Conf','conf'],['Venue','exch'],['Action','action']];
+  const base=[['☑','chk'],['Ticker','sym'],['Name','name'],['Sector','sector'],['Price','price'],
+    ['1d%','c24'],['5d%','c5d'],['7d%','c7'],['From peak','ath']];
+  if(isCG)return[...base,['ATH $','athprice'],['ATH Catalyst','athcat'],['ATH age','age'],['ATL $','atlprice'],['ATL Catalyst','atlcat'],['↑ from ATL','atlgain'],['Vol','vol'],['Supply','sr'],['DInt','di'],['Live','lv'],['Score','composite'],['Prob','prob'],['Conf','conf'],['Venue','exch'],['Action','action']];
   return[...base,['Avg vol','avgvol'],['Mkt cap','mcap'],['Live','lv'],['Score','composite'],['Prob','prob'],['Conf','conf'],['Action','action']];
 }
 
@@ -724,9 +856,15 @@ function renderTable(asset) {
     if(k==='sector')return d*((a.sector||'').localeCompare(b.sector||''));
     if(k==='price')return d*(gPrice(b)-gPrice(a));
     if(k==='c24')return d*((b.c24||b.c1d||0)-(a.c24||a.c1d||0));
+    if(k==='c5d')return d*((b.c5d||0)-(a.c5d||0));
     if(k==='c7')return d*((b.c7||b.c5d||0)-(a.c7||a.c5d||0));
+    if(k==='athprice')return d*((b.athPrice||0)-(a.athPrice||0));
+    if(k==='athcat')return d*((a.athCatalyst?.label||'').localeCompare(b.athCatalyst?.label||''));
     if(k==='ath')return d*((b.athDrop||b.drop52||0)-(a.athDrop||a.drop52||0));
     if(k==='age'){const ga=a.aa,gb=b.aa;if(!ga&&!gb)return 0;if(!ga)return d;if(!gb)return-d;return d*((ga.cls==='tg'?1:ga.cls==='ta'?0:-1)-(gb.cls==='tg'?1:gb.cls==='ta'?0:-1));}
+    if(k==='atlprice')return d*((a.atlPrice||0)-(b.atlPrice||0));
+    if(k==='atlcat')return d*((a.atlCatalyst?.label||'').localeCompare(b.atlCatalyst?.label||''));
+    if(k==='atlgain')return d*((b.atlGain||0)-(a.atlGain||0));
     if(k==='vol')return d*((b.vol||0)-(a.vol||0));
     if(k==='avgvol')return d*((b.avgVol||0)-(a.avgVol||0));
     if(k==='mcap')return d*((b.mcap||0)-(a.mcap||0));
@@ -756,8 +894,14 @@ function renderTable(asset) {
 
     let xCols='';
     if(isCG){
+      const ac=r.athCatalyst||{};
       xCols=`
+        <td style="font-size:10px;font-weight:500;color:var(--amber)" title="All-time high price">${fmtP(r.athPrice||0)}</td>
+        <td><span class="tag ${ac.cls||'tm'}" style="font-size:8px;white-space:nowrap" title="${ac.note||''}">${ac.icon||''} ${ac.label||'—'}</span></td>
         <td>${r.aa?`<span class="tag ${r.aa.cls}" style="font-size:8px" title="${r.aa.note}">${r.aa.label}</span>`:'<span class="mu">—</span>'}</td>
+        <td style="font-size:10px;font-weight:500;color:var(--blue)" title="All-time low price">${fmtP(r.atlPrice||0)}</td>
+        <td>${(()=>{const ac=r.atlCatalyst||{};return`<span class="tag ${ac.cls||'tm'}" style="font-size:8px;white-space:nowrap" title="${ac.note||''}">${ac.icon||''} ${ac.label||'—'}</span>`;})()}</td>
+        <td style="font-size:10px;color:var(--green);font-weight:500" title="% above all-time low">+${Math.round(r.atlGain||0).toLocaleString()}%</td>
         <td>${fmtV(r.vol||0)}</td>
         <td><span class="tag ${r.sr?.cls||'tm'}" title="${r.sr?.note||''}">${r.sr?.label||'—'}</span></td>
         <td>${sBadge(r.di?.score||0,r.di?.cls||'tm')}</td>
@@ -779,14 +923,20 @@ function renderTable(asset) {
     }
 
     const rsTag=r.rs?`<span class="tag ${r.rs.cls}" style="font-size:8px;margin-left:2px" title="${r.rs.note}">${r.rs.label}</span>`:'';
+    const inlineSel=inlineSelected[asset]||new Set();
+    const isChecked=inlineSel.has(sym);
 
     html+=`<tr onclick="openModal(results['${asset}'].find(x=>gSym(x)==='${sym}'),'${asset}')">
-      <td onclick="event.stopPropagation()"><button class="add-btn ${inRTT?'added':''}" onclick="toggleRTT('${asset}','${sym}',this)">${inRTT?'✓':'＋'}</button></td>
+      <td onclick="event.stopPropagation()" style="padding:3px 6px">
+        <input type="checkbox" ${isChecked?'checked':''} style="width:13px;height:13px;accent-color:var(--green);cursor:pointer"
+          onclick="event.stopPropagation();toggleInline('${asset}','${sym}',this)">
+      </td>
       <td style="font-weight:600;color:${COLORS[asset]}">${sym}<button class="copy-btn" onclick="event.stopPropagation();cp('${sym}',this)">⧉</button></td>
       <td>${trunc(name,14)}</td>
       <td><span class="tag tm" style="font-size:9px">${r.sector||'—'}</span></td>
       <td>${fmtP(price)}<button class="copy-btn" onclick="event.stopPropagation();cp('${price}',this)">⧉</button></td>
       <td class="${c24>=0?'pos':'neg'}">${c24>=0?'+':''}${c24.toFixed(1)}%</td>
+      <td class="${(r.c5d||0)>=0?'pos':'neg'}">${(r.c5d||0)>=0?'+':''}${(r.c5d||0).toFixed(1)}%</td>
       <td><span class="${c7>=0?'pos':'neg'}">${c7>=0?'+':''}${c7.toFixed(1)}%</span>${rsTag}</td>
       <td class="neg">-${drop.toFixed(0)}%</td>
       ${xCols}
@@ -848,10 +998,31 @@ function openModal(r, asset) {
     </div>
     <div class="mgrid">
       <div class="mstat"><div class="mstat-v">${fmtP(price)} <button class="copy-btn" onclick="cp('${price}',this)">⧉</button></div><div class="mstat-l">${isCG?'Mark price':'Price'}</div></div>
-      <div class="mstat"><div class="mstat-v neg">-${drop.toFixed(1)}%</div><div class="mstat-l">From ${isCG?'ATH':'52w high'}</div></div>
+      <div class="mstat"><div class="mstat-v neg">-${drop.toFixed(1)}%</div><div class="mstat-l">From ${isCG?'ATH ($'+fmtP(r.athPrice||0)+')':'52w high'}</div></div>
       <div class="mstat"><div class="mstat-v ${c24>=0?'pos':'neg'}">${c24>=0?'+':''}${c24.toFixed(2)}%</div><div class="mstat-l">1d change</div></div>
+      ${isCG&&r.c5d!==undefined?`<div class="mstat"><div class="mstat-v ${r.c5d>=0?'pos':'neg'}">${r.c5d>=0?'+':''}${r.c5d.toFixed(2)}%</div><div class="mstat-l">5d change</div></div>`:''}
       <div class="mstat"><div class="mstat-v ${c7>=0?'pos':'neg'}">${c7>=0?'+':''}${c7.toFixed(2)}%</div><div class="mstat-l">${isCG?'7d':'5d'} change</div></div>
     </div>
+    ${isCG&&r.athPrice?`<div style="background:var(--s3);border-radius:5px;padding:10px 14px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--amber)">${fmtP(r.athPrice)}</div>
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">All-time high price · ${r.aa?r.aa.label+' ago':'?'}</div>
+      </div>
+      <div>
+        ${r.athCatalyst?`<div style="font-size:11px;margin-bottom:3px"><span class="tag ${r.athCatalyst.cls}" style="font-size:10px">${r.athCatalyst.icon} ${r.athCatalyst.label}</span></div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.4">${r.athCatalyst.note}</div>`:''}
+      </div>
+    </div>`:''}
+    ${isCG&&r.atlCatalyst?`<div style="background:var(--s3);border-radius:5px;padding:10px 14px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--blue)">${fmtP(r.atlPrice||0)}</div>
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px">All-time low · +${Math.round(r.atlGain||0).toLocaleString()}% above ATL</div>
+      </div>
+      <div style="grid-column:span 2">
+        <div style="font-size:11px;margin-bottom:3px"><span class="tag ${r.atlCatalyst.cls}" style="font-size:10px">${r.atlCatalyst.icon} ${r.atlCatalyst.label}</span></div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.4">${r.atlCatalyst.note}</div>
+      </div>
+    </div>`:''}
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
       ${[['Oversold',r.os],['Liveness',r.lv],['Bounce ready',r.br],['Composite',r.composite]].map(([l,v])=>`<div class="mstat"><div class="mstat-v" style="color:${v>=7?'var(--green)':v>=5?'var(--blue)':v>=3?'var(--amber)':'var(--muted)'}">${v}/10</div><div class="mstat-l">${l}</div></div>`).join('')}
     </div>
@@ -953,6 +1124,73 @@ async function fetchNews(sym,cgId){
 }
 
 function closeM(){document.getElementById('moverlay').classList.remove('show')}
+
+
+// ── INLINE CHECKBOX SELECTION ──
+function toggleInline(asset, sym, chkEl) {
+  if(!inlineSelected[asset]) inlineSelected[asset] = new Set();
+  if(chkEl.checked) inlineSelected[asset].add(sym);
+  else inlineSelected[asset].delete(sym);
+  updateInlineSaveBtn(asset);
+}
+
+function selectAllBuy(asset) {
+  if(!inlineSelected[asset]) inlineSelected[asset] = new Set();
+  results[asset].filter(r=>r.action==='BUY').forEach(r=>inlineSelected[asset].add(gSym(r)));
+  renderTable(asset);
+  updateInlineSaveBtn(asset);
+}
+
+function clearInlineSelection(asset) {
+  inlineSelected[asset] = new Set();
+  renderTable(asset);
+  updateInlineSaveBtn(asset);
+}
+
+function updateInlineSaveBtn(asset) {
+  const n = inlineSelected[asset]?.size||0;
+  const btn = document.getElementById('inline-save-btn-'+asset);
+  const clr = document.getElementById('inline-clr-btn-'+asset);
+  if(btn) {
+    btn.textContent = n>0 ? `💾 Save ${n} Selected` : '💾 Save Selected';
+    btn.style.opacity = n>0 ? '1' : '0.4';
+    btn.disabled = n===0;
+  }
+  if(clr) clr.style.display = n>0 ? 'inline-block' : 'none';
+}
+
+function saveInlineSelected(asset) {
+  const sel = inlineSelected[asset];
+  if(!sel||!sel.size) { alert('Tick at least one checkbox first.'); return; }
+  const today = new Date().toISOString().split('T')[0];
+  const selected = results[asset].filter(r=>sel.has(gSym(r))).map(r=>({
+    sym:    gSym(r),
+    name:   gName(r),
+    sector: r.sector||'—',
+    action: r.action,
+    prob:   r.prob,
+    lv:     r.lv,
+    cgId:   r.coin?.id||null,
+    updates:[{date:today, price:gPrice(r), label:'Entry'}]
+  }));
+  const test = {
+    id:      Date.now(),
+    name:    `${LABELS[asset]} · ${today}`,
+    asset,
+    created: today,
+    regime:  document.getElementById('reg-label')?.textContent||'—',
+    tokens:  selected
+  };
+  const tests = loadTests();
+  tests.unshift(test);
+  saveTests(tests);
+  updateSnapBadge(asset);
+  inlineSelected[asset] = new Set();
+  renderTable(asset);
+  updateInlineSaveBtn(asset);
+  switchPane(asset,'snap');
+  alert(`✅ ${selected.length} tokens saved to Test Tracker.\n\nCome back any day → open Test Tracker → click "Update Prices" to add today's prices.\nUse "Export Excel" to download the full history.`);
+}
 
 // ── RTT SYSTEM ──
 function toggleRTT(asset,sym,btn){
