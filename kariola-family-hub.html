@@ -282,78 +282,131 @@ function parseCSV(text,bank){
 
 
 // ═══════════════════════════════ PDF PARSER ══════════════════════════════════
+// Uses position-based row reconstruction — groups text items by Y coordinate
+// so each visual line in the PDF stays together, regardless of column layout.
+
 async function parsePDF(file) {
   try {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items.map(item => item.str).join(' ');
-      fullText += pageText + '\n';
+    const bank = file.name.replace(/\.pdf$/i,'');
+    const allTxns = [];
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const textContent = await page.getTextContent();
+      const rows = buildRows(textContent.items);
+      const txns = parseRows(rows, bank);
+      allTxns.push(...txns);
     }
-    return parsePDFText(fullText, file.name.replace('.pdf',''));
+
+    // Deduplicate by date+amount+desc
+    const seen = new Set();
+    return allTxns.filter(t => {
+      const key = t.date + t.amount + t.desc.slice(0,15);
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
   } catch(e) {
     console.error('PDF parse error:', e);
+    alert('Could not read PDF: ' + e.message + '. Try downloading a CSV from your bank instead — it works more reliably.');
     return [];
   }
 }
 
-function parsePDFText(text, bank) {
-  const txns = [];
-  const lines = text.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 3);
-  // Regex patterns for common bank statement formats
-  const datePattern = /(\d{1,2}\/\d{1,2}\/\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4})/i;
-  const amountPattern = /\$?([\d,]+\.\d{2})/g;
-  
-  lines.forEach((line, i) => {
-    const dateMatch = line.match(datePattern);
-    if (!dateMatch) return;
-    
-    // Parse date
-    let dateStr = dateMatch[1];
-    let date = '';
-    if (/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(dateStr)) {
-      const p = dateStr.split('/');
-      date = `${p[2].length===2?'20'+p[2]:p[2]}-${p[0].padStart(2,'0')}-${p[1].padStart(2,'0')}`;
-    } else if (/\d{4}-\d{2}-\d{2}/.test(dateStr)) {
-      date = dateStr;
+// Group PDF text items into visual rows by Y position (within 3px tolerance)
+function buildRows(items) {
+  const rows = [];
+  items.forEach(item => {
+    if (!item.str.trim()) return;
+    const y = Math.round(item.transform[5]);
+    const x = item.transform[4];
+    const existing = rows.find(r => Math.abs(r.y - y) <= 3);
+    if (existing) {
+      existing.items.push({x, text: item.str.trim()});
     } else {
-      try { const d = new Date(dateStr); date = d.toISOString().slice(0,10); } catch(e) { return; }
+      rows.push({y, items: [{x, text: item.str.trim()}]});
     }
-    
-    // Find amounts in line
+  });
+  // Sort rows top-to-bottom, items left-to-right within each row
+  rows.sort((a,b) => b.y - a.y);
+  rows.forEach(r => r.items.sort((a,b) => a.x - b.x));
+  // Convert to plain text lines
+  return rows.map(r => r.items.map(i => i.text).join(' '));
+}
+
+// Parse reconstructed rows into transactions
+function parseRows(lines, bank) {
+  const txns = [];
+  const DATE_RE = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s*\d{1,2},?\s*\d{4})/i;
+  const AMT_RE  = /\$?([\d,]{1,10}\.\d{2})/g;
+
+  lines.forEach((line, idx) => {
+    // Must contain a date
+    const dm = line.match(DATE_RE);
+    if (!dm) return;
+
+    // Parse the date
+    let date = '';
+    const ds = dm[1];
+    if (/\d{4}-\d{2}-\d{2}/.test(ds)) {
+      date = ds;
+    } else if (/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(ds)) {
+      const sep = ds.includes('/') ? '/' : '-';
+      const [mo,dy,yr] = ds.split(sep);
+      date = `${yr.length===2?'20'+yr:yr}-${mo.padStart(2,'0')}-${dy.padStart(2,'0')}`;
+    } else {
+      try { const d = new Date(ds); if(!isNaN(d)) date = d.toISOString().slice(0,10); } catch(e){}
+    }
+    if (!date) return;
+
+    // Collect all dollar amounts in this line
     const amounts = [];
     let m;
-    const ap = /\$?([\d,]+\.\d{2})/g;
-    while ((m = ap.exec(line)) !== null) {
+    const ar = /\$?([\d,]{1,10}\.\d{2})/g;
+    while ((m = ar.exec(line)) !== null) {
       const v = parseFloat(m[1].replace(/,/g,''));
-      if (v > 0 && v < 50000) amounts.push(v);
+      if (v > 0.01 && v < 50000) amounts.push(v);
     }
     if (amounts.length === 0) return;
+
+    // Use the last amount (usually the transaction amount in bank statements)
     const amount = amounts[amounts.length - 1];
-    
-    // Description: text between date and amount, cleaned up
-    let desc = line.replace(dateMatch[0], '').replace(/\$?[\d,]+\.\d{2}/g, '').replace(/\s+/g,' ').trim();
-    desc = desc.replace(/^[-\s*]+|[-\s*]+$/g,'').trim();
-    if (desc.length < 2) {
-      // Try next line for description
-      desc = lines[i+1] ? lines[i+1].replace(/\$?[\d,]+\.\d{2}/g,'').trim() : 'Unknown';
+
+    // Description = line minus date and all dollar values, cleaned
+    let desc = line
+      .replace(dm[0], '')
+      .replace(/\$?[\d,]{1,10}\.\d{2}/g, '')
+      .replace(/\b(debit|credit|purchase|payment|pos|ach|withdrawal|deposit|transfer)\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // If description is too short, peek at next line
+    if (desc.length < 4 && lines[idx+1]) {
+      const next = lines[idx+1];
+      if (!DATE_RE.test(next) && !/\$?[\d,]+\.\d{2}/.test(next)) {
+        desc = next.trim().substring(0, 60);
+      }
     }
-    desc = desc.substring(0, 60);
-    
-    if (amount && desc && desc.length > 1) {
-      const q = quickCat(desc);
-      txns.push({
-        id: Date.now()+Math.random(),
-        date, desc, amount,
-        type: q.group==='Income'?'income':'expense',
-        cat: q.cat, group: q.group,
-        bank: bank+'(PDF)', isNew: q.group==='Uncategorized', flag: q.flag||null
-      });
-    }
+
+    desc = desc.replace(/^[\s\-\*\.]+|[\s\-\*\.]+$/g, '').substring(0, 60);
+    if (desc.length < 2) return;
+
+    // Skip lines that look like running balances or totals
+    const lower = line.toLowerCase();
+    if (/\b(balance|total|subtotal|opening|closing|brought forward|carried forward)\b/.test(lower)) return;
+
+    const q = quickCat(desc);
+    txns.push({
+      id: Date.now() + Math.random(),
+      date, desc, amount,
+      type: q.group === 'Income' ? 'income' : 'expense',
+      cat: q.cat, group: q.group,
+      bank: bank + ' (PDF)',
+      isNew: q.group === 'Uncategorized',
+      flag: q.flag || null,
+    });
   });
   return txns;
 }
