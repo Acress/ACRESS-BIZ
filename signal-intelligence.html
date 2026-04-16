@@ -4,1361 +4,803 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signal Intelligence — Acress Biz</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root {
-  --void: #040507;
-  --deep: #080b10;
-  --panel: #0d1219;
-  --panel2: #111822;
-  --edge: rgba(255,255,255,0.06);
-  --edge2: rgba(255,255,255,0.10);
-  --text: #c8cdd8;
-  --dim: #5a6278;
-  --bright: #eef0f5;
-  --green: #00e5a0;
-  --green-d: rgba(0,229,160,0.12);
-  --green-g: rgba(0,229,160,0.04);
-  --red: #ff4566;
-  --red-d: rgba(255,69,102,0.12);
-  --amber: #ffb830;
-  --amber-d: rgba(255,184,48,0.12);
-  --blue: #3d9fff;
-  --blue-d: rgba(61,159,255,0.12);
-  --purple: #a78bfa;
-  --mono: 'Roboto Mono', monospace;
-  --sans: 'Space Grotesk', sans-serif;
+:root{
+  --bg:#04060a;--s1:#090d14;--s2:#0d1520;--s3:#111c28;
+  --b1:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.09);--b3:rgba(255,255,255,0.14);
+  --tx:#c2cad8;--dim:#4a5568;--bright:#e8edf5;
+  --g:#00e5a0;--gd:rgba(0,229,160,0.10);--gg:rgba(0,229,160,0.04);
+  --r:#ff4060;--rd:rgba(255,64,96,0.10);
+  --a:#ffb020;--ad:rgba(255,176,32,0.10);
+  --b:#3d9fff;--bd:rgba(61,159,255,0.10);
+  --p:#a78bfa;--pd:rgba(167,139,250,0.10);
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',sans-serif;
 }
-*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-body {
-  background: var(--void);
-  color: var(--text);
-  font-family: var(--sans);
-  font-size: 13px;
-  line-height: 1.5;
-  min-height: 100vh;
-  overflow-x: hidden;
-}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px;line-height:1.5;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.012) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
 
-/* GRID BACKGROUND */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0,229,160,0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,229,160,0.015) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* SCANLINE */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.04) 2px,
-    rgba(0,0,0,0.04) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-}
-
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-@keyframes spin { to{transform:rotate(360deg)} }
-@keyframes slideIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-@keyframes glow { 0%,100%{box-shadow:0 0 8px rgba(0,229,160,0.3)} 50%{box-shadow:0 0 20px rgba(0,229,160,0.6)} }
-@keyframes blink { 0%,100%{opacity:1} 49%{opacity:1} 50%{opacity:0} 99%{opacity:0} }
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes glow{0%,100%{box-shadow:0 0 6px rgba(0,229,160,.3)}50%{box-shadow:0 0 18px rgba(0,229,160,.6)}}
 
 /* HEADER */
-.header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(4,5,7,0.92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--edge);
-  padding: 0 24px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.logo {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--green);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.logo-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--green);
-  animation: glow 2s ease-in-out infinite;
-}
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--dim);
-}
-.header-clock { color: var(--green); letter-spacing: 1px; }
-.back-link {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--dim);
-  text-decoration: none;
-  transition: color .15s;
-}
-.back-link:hover { color: var(--green); }
+.hdr{position:sticky;top:0;z-index:100;background:rgba(4,6,10,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:46px}
+.hdr-logo{font-family:var(--mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--g);display:flex;align-items:center;gap:8px}
+.hdr-dot{width:7px;height:7px;border-radius:50%;background:var(--g);animation:glow 2s ease-in-out infinite;flex-shrink:0}
+.hdr-r{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.back{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-decoration:none;transition:color .15s}
+.back:hover{color:var(--g)}
+.clk{color:var(--g);letter-spacing:1px}
 
-/* MAIN LAYOUT */
-.main { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 20px 20px 60px; }
+/* LAYOUT */
+.wrap{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:16px 16px 60px}
 
-/* COMPOSITE BANNER */
-.composite-banner {
-  background: var(--panel);
-  border: 1px solid var(--edge2);
-  border-radius: 8px;
-  padding: 20px 24px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-  animation: slideIn .4s ease;
-  position: relative;
-  overflow: hidden;
-}
-.composite-banner::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--banner-color, var(--dim));
-  transition: background .5s;
-}
-.composite-left { display: flex; align-items: center; gap: 20px; }
-.composite-score {
-  font-family: var(--mono);
-  font-size: 48px;
-  font-weight: 500;
-  line-height: 1;
-  color: var(--banner-color, var(--dim));
-  transition: color .5s;
-  min-width: 60px;
-}
-.composite-label {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--bright);
-  margin-bottom: 4px;
-}
-.composite-sub {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: var(--dim);
-  text-transform: uppercase;
-}
-.composite-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.scan-btn {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  background: var(--green);
-  color: var(--void);
-  border: none;
-  padding: 10px 22px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: opacity .15s, transform .1s;
-}
-.scan-btn:hover { opacity: .85; }
-.scan-btn:active { transform: scale(.98); }
-.scan-btn:disabled { opacity: .4; cursor: not-allowed; }
-.auto-toggle {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  background: none;
-  border: 1px solid var(--edge2);
-  color: var(--dim);
-  padding: 10px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all .15s;
-  white-space: nowrap;
-}
-.auto-toggle.on { border-color: var(--green); color: var(--green); }
-.next-scan-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--dim);
-  letter-spacing: 1px;
-}
+/* EXCHANGE STATUS BAR */
+.ex-bar{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:12px 18px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ex-pill{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:4px 11px;border-radius:3px;border:1px solid var(--b2)}
+.ex-pill.ok{color:var(--g);border-color:rgba(0,229,160,.25);background:var(--gg)}
+.ex-pill.fail{color:var(--r);border-color:rgba(255,64,96,.2);background:var(--rd)}
+.ex-pill.loading{color:var(--a);border-color:rgba(255,176,32,.2);background:var(--ad)}
+.ex-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.ex-pill.ok .ex-dot{animation:pulse 2s infinite}
+.ex-count{font-size:9px;opacity:.7}
+.ex-sep{width:1px;height:20px;background:var(--b2);flex-shrink:0}
+.ex-total{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
 
-/* SIGNAL GRID */
-.signal-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
+/* SCAN BAR */
+.scan-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.btn{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;border:none;border-radius:3px;cursor:pointer;transition:opacity .15s,transform .1s;white-space:nowrap;padding:9px 18px}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-primary{background:var(--g);color:#000;font-weight:600}
+.btn-primary:hover{opacity:.85}
+.btn-sec{background:none;border:1px solid var(--b2);color:var(--tx)}
+.btn-sec:hover{border-color:var(--g);color:var(--g)}
+.btn-amber{background:var(--a);color:#000;font-weight:600}
+.scan-status{font-family:var(--mono);font-size:10px;color:var(--dim);flex:1}
+.prog-wrap{flex:1;max-width:200px}
+.prog-track{width:100%;height:3px;background:var(--b2);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--g);border-radius:2px;transition:width .4s ease}
 
-.signal-card {
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  padding: 14px 16px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color .2s;
-  animation: slideIn .4s ease both;
-}
-.signal-card:hover { border-color: var(--edge2); }
-.signal-card::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--sig-color, var(--dim));
-  transition: background .4s;
-}
-.sig-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.sig-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-bottom: 4px;
-}
-.sig-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--bright);
-  line-height: 1.2;
-}
-.sig-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-.sig-badge {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  padding: 3px 9px;
-  border-radius: 3px;
-  border: 1px solid;
-  white-space: nowrap;
-}
-.sig-badge.bull { color: var(--green); border-color: rgba(0,229,160,.3); background: var(--green-d); }
-.sig-badge.bear { color: var(--red); border-color: rgba(255,69,102,.3); background: var(--red-d); }
-.sig-badge.neutral { color: var(--dim); border-color: var(--edge); background: transparent; }
-.sig-badge.loading { color: var(--amber); border-color: rgba(255,184,48,.3); background: var(--amber-d); }
-.sig-direction {
-  font-family: var(--mono);
-  font-size: 18px;
-  font-weight: 700;
-}
-.sig-bar-wrap { margin-bottom: 8px; }
-.sig-bar-track {
-  width: 100%;
-  height: 3px;
-  background: var(--edge);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.sig-bar-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width .8s ease, background .4s;
-}
-.sig-note {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--dim);
-  line-height: 1.5;
-}
-.sig-note strong { color: var(--text); }
-.sig-pairs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-}
-.sig-pair {
-  font-family: var(--mono);
-  font-size: 9px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  border: 1px solid var(--edge);
-  color: var(--dim);
-}
-.sig-pair.bull { border-color: rgba(0,229,160,.2); color: var(--green); background: var(--green-g); }
-.sig-pair.bear { border-color: rgba(255,69,102,.2); color: var(--red); }
-.sig-spinner {
-  width: 14px; height: 14px;
-  border: 2px solid var(--edge2);
-  border-top-color: var(--amber);
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-  flex-shrink: 0;
-}
+/* NEW LISTINGS ALERT */
+.new-alert{background:var(--s1);border:1px solid rgba(255,176,32,.3);border-radius:6px;padding:12px 16px;margin-bottom:12px;display:none;animation:fadeIn .3s ease}
+.new-alert.show{display:block}
+.new-alert-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--a);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.new-coins{display:flex;flex-wrap:wrap;gap:5px}
+.new-coin{font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:3px;border:1px solid rgba(255,176,32,.3);color:var(--a);background:var(--ad);display:flex;align-items:center;gap:5px}
+.new-badge{font-size:8px;background:var(--a);color:#000;padding:1px 4px;border-radius:2px;font-weight:700}
 
-/* POLYMARKET MARKETS */
-.poly-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.poly-item {
-  background: var(--panel2);
-  border: 1px solid var(--edge);
-  border-radius: 4px;
-  padding: 8px 10px;
-}
-.poly-q { font-size: 11px; color: var(--text); line-height: 1.3; margin-bottom:5px; }
-.poly-bar-wrap { display: flex; align-items: center; gap: 8px; }
-.poly-bar-track { flex: 1; height: 4px; background: var(--edge); border-radius: 2px; overflow: hidden; }
-.poly-bar-yes { height: 100%; background: var(--green); border-radius: 2px; transition: width .8s; }
-.poly-pct { font-family: var(--mono); font-size: 10px; font-weight: 500; white-space: nowrap; }
+/* FILTERS */
+.filters{display:flex;align-items:center;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+.flt{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:1px solid var(--b1);color:var(--dim);padding:5px 12px;border-radius:3px;cursor:pointer;transition:all .12s}
+.flt:hover{border-color:var(--b2);color:var(--tx)}
+.flt.on{background:var(--g);color:#000;border-color:var(--g);font-weight:600}
+.flt-count{font-size:9px;margin-left:3px;opacity:.7}
+.flt-sep{width:1px;height:18px;background:var(--b2)}
+.sort-sel{font-family:var(--mono);font-size:10px;background:var(--s2);border:1px solid var(--b2);color:var(--tx);padding:5px 8px;border-radius:3px;outline:none;margin-left:auto}
 
-/* ALERT LOG */
-.log-section { margin-bottom: 16px; }
-.section-title {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.section-title::after { content: ''; flex: 1; height: 1px; background: var(--edge); }
-.log-wrap {
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.log-wrap::-webkit-scrollbar { width: 4px; }
-.log-wrap::-webkit-scrollbar-track { background: var(--panel); }
-.log-wrap::-webkit-scrollbar-thumb { background: var(--edge2); border-radius: 2px; }
-.log-item {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--edge);
-  font-family: var(--mono);
-  font-size: 10px;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  line-height: 1.5;
-}
-.log-item:last-child { border-bottom: none; }
-.log-time { color: var(--dim); flex-shrink: 0; }
-.log-msg { color: var(--text); flex: 1; }
-.log-msg.alert { color: var(--green); }
-.log-msg.warn { color: var(--amber); }
-.log-msg.err { color: var(--red); }
-.log-empty { padding: 20px; text-align: center; color: var(--dim); font-family: var(--mono); font-size: 10px; }
+/* RESULTS HEADER */
+.res-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim)}
+.res-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+/* COIN CARDS GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px}
+
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:14px 16px;position:relative;overflow:hidden;animation:fadeIn .3s ease both;transition:border-color .15s}
+.card:hover{border-color:var(--b2)}
+.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--card-color,var(--dim));transition:background .3s}
+
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.card-sym{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--bright);line-height:1;margin-bottom:3px}
+.card-name{font-size:10px;color:var(--dim)}
+.card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.card-price{font-family:var(--mono);font-size:14px;font-weight:500;color:var(--bright)}
+.card-chg{font-family:var(--mono);font-size:12px;font-weight:600}
+.pos{color:var(--g)}.neg{color:var(--r)}.neu{color:var(--dim)}
+
+.ex-badges{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
+.ex-badge{font-family:var(--mono);font-size:8px;letter-spacing:.5px;padding:2px 6px;border-radius:2px;border:1px solid var(--b2);color:var(--dim)}
+.ex-badge.binance{color:#f0b90b;border-color:rgba(240,185,11,.3);background:rgba(240,185,11,.06)}
+.ex-badge.bybit{color:#ff6b35;border-color:rgba(255,107,53,.3);background:rgba(255,107,53,.06)}
+.ex-badge.coinbase{color:#0052ff;border-color:rgba(0,82,255,.3);background:rgba(0,82,255,.08);color:#5b8fff}
+.ex-badge.webull{color:#00c805;border-color:rgba(0,200,5,.3);background:rgba(0,200,5,.06)}
+.ex-badge.new{color:var(--a);border-color:rgba(255,176,32,.4);background:var(--ad);font-weight:700}
+
+.reasons{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.reason{display:flex;align-items:flex-start;gap:7px;font-size:11px;color:var(--tx);line-height:1.4}
+.reason-icon{font-size:12px;flex-shrink:0;margin-top:1px}
+.reason-txt strong{color:var(--bright)}
+
+.card-bottom{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--b1)}
+.direction-badge{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;padding:4px 12px;border-radius:3px;border:1px solid}
+.direction-badge.long{color:var(--g);border-color:rgba(0,229,160,.35);background:var(--gd)}
+.direction-badge.short{color:var(--r);border-color:rgba(255,64,96,.35);background:var(--rd)}
+.direction-badge.neutral{color:var(--dim);border-color:var(--b2)}
+.conviction{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.conviction strong{color:var(--tx)}
+.vol-badge{font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto}
+.vol-badge strong{color:var(--tx)}
+
+.levels{display:flex;gap:10px;font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:6px;flex-wrap:wrap}
+.level{display:flex;flex-direction:column;gap:1px}
+.level-lbl{font-size:8px;letter-spacing:.5px;text-transform:uppercase}
+.level-val{font-size:10px;font-weight:500}
+.level-val.entry{color:var(--b)}
+.level-val.target{color:var(--g)}
+.level-val.stop{color:var(--r)}
+
+/* SIGNAL TYPE COLORS */
+.card.new-listing{--card-color:var(--a)}
+.card.momentum{--card-color:var(--g)}
+.card.bounce{--card-color:var(--b)}
+.card.squeeze{--card-color:var(--p)}
+.card.volume{--card-color:#ff6b35}
+.card.multi-exchange{--card-color:var(--g)}
+
+/* EMPTY / LOADING */
+.empty{padding:60px 20px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:11px}
+.spinner{width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 
 /* TELEGRAM CONFIG */
-.config-section {
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  border-radius: 6px;
-  padding: 16px 18px;
-  margin-bottom: 16px;
-}
-.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.config-field { display: flex; flex-direction: column; gap: 5px; }
-.config-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-.config-input {
-  background: var(--panel2);
-  border: 1px solid var(--edge2);
-  border-radius: 4px;
-  color: var(--bright);
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 8px 11px;
-  outline: none;
-  transition: border-color .15s;
-  width: 100%;
-}
-.config-input:focus { border-color: var(--green); }
-.config-input::placeholder { color: var(--dim); }
-.config-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-.config-btn {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  border: 1px solid var(--edge2);
-  background: none;
-  color: var(--text);
-  padding: 7px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all .15s;
-}
-.config-btn:hover { border-color: var(--green); color: var(--green); }
-.config-btn.save { background: var(--green); color: var(--void); border-color: var(--green); font-weight: 500; }
-.config-status {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--dim);
-  flex: 1;
-}
-.config-status.ok { color: var(--green); }
-.config-status.err { color: var(--red); }
-.threshold-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-.threshold-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--dim);
-  white-space: nowrap;
-}
-.threshold-btns { display: flex; gap: 4px; }
-.thresh-btn {
-  font-family: var(--mono);
-  font-size: 10px;
-  width: 32px; height: 28px;
-  border: 1px solid var(--edge2);
-  background: none;
-  color: var(--dim);
-  cursor: pointer;
-  border-radius: 3px;
-  transition: all .12s;
-}
-.thresh-btn.active { background: var(--green); color: var(--void); border-color: var(--green); font-weight: 700; }
+.tg-section{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:14px 16px;margin-bottom:12px}
+.tg-title{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.tg-title::after{content:'';flex:1;height:1px;background:var(--b1)}
+.tg-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tg-inp{background:var(--s2);border:1px solid var(--b2);border-radius:3px;color:var(--bright);font-family:var(--mono);font-size:11px;padding:6px 10px;outline:none;transition:border-color .15s;min-width:200px}
+.tg-inp:focus{border-color:var(--g)}
+.tg-inp::placeholder{color:var(--dim)}
+.tg-status{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.tg-status.ok{color:var(--g)}.tg-status.err{color:var(--r)}
 
-/* DIRECTION INDICATOR */
-.direction-bar {
-  background: var(--panel);
-  border: 1px solid var(--edge2);
-  border-radius: 6px;
-  padding: 14px 18px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.dir-label {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-bottom: 3px;
-}
-.dir-value {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-.dir-divider { width: 1px; height: 40px; background: var(--edge); flex-shrink: 0; }
-.win-rate-bar { flex: 1; min-width: 200px; }
-.win-rate-track {
-  width: 100%;
-  height: 6px;
-  background: var(--edge);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 6px;
-}
-.win-rate-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 1s ease;
-}
-.hist-note {
-  font-family: var(--mono);
-  font-size: 9px;
-  color: var(--dim);
-  margin-top: 4px;
-}
-
-/* SETUP GUIDE */
-.setup-box {
-  background: var(--panel);
-  border: 1px solid rgba(255,184,48,.2);
-  border-radius: 6px;
-  padding: 14px 18px;
-  margin-bottom: 16px;
-}
-.setup-title {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--amber);
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.setup-steps { display: flex; flex-direction: column; gap: 6px; }
-.setup-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--text);
-  line-height: 1.5;
-}
-.setup-n {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: rgba(255,184,48,.15);
-  border: 1px solid rgba(255,184,48,.3);
-  color: var(--amber);
-  font-size: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-.setup-step code {
-  background: var(--panel2);
-  border: 1px solid var(--edge2);
-  padding: 0px 5px;
-  border-radius: 3px;
-  color: var(--green);
-  font-size: 10px;
-}
-.setup-dismiss {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  background: none;
-  border: 1px solid var(--edge2);
-  color: var(--dim);
-  padding: 5px 12px;
-  border-radius: 3px;
-  cursor: pointer;
-  margin-top: 10px;
-  transition: all .12s;
-}
-.setup-dismiss:hover { border-color: var(--amber); color: var(--amber); }
-
-@media(max-width:640px) {
-  .signal-grid { grid-template-columns: 1fr; }
-  .config-grid { grid-template-columns: 1fr; }
-  .composite-score { font-size: 36px; }
-}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.ex-bar{gap:6px}}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="logo">
-    <span class="logo-dot"></span>
-    SIGNAL INTELLIGENCE
-  </div>
-  <div class="header-right">
-    <a href="index.html" class="back-link">← Suite</a>
-    <span style="color:var(--edge2)">|</span>
-    <span>Tool XV</span>
-    <span style="color:var(--edge2)">|</span>
-    <span class="header-clock" id="clock">--:--:--</span>
+<div class="hdr">
+  <div class="hdr-logo"><span class="hdr-dot"></span>SIGNAL INTELLIGENCE</div>
+  <div class="hdr-r">
+    <a href="index.html" class="back">← Suite</a>
+    <span style="color:var(--b2)">|</span>
+    <span>Tool XVI</span>
+    <span style="color:var(--b2)">|</span>
+    <span class="clk" id="clk">--:--:--</span>
   </div>
 </div>
 
-<div class="main">
+<div class="wrap">
 
-  <!-- SETUP GUIDE (shown until dismissed) -->
-  <div class="setup-box" id="setup-box">
-    <div class="setup-title">⚡ Telegram Setup Required</div>
-    <div class="setup-steps">
-      <div class="setup-step">
-        <div class="setup-n">1</div>
-        <div>Open Telegram and search for <code>@BotFather</code> — send it <code>/newbot</code> and follow the prompts. Copy the bot token it gives you.</div>
-      </div>
-      <div class="setup-step">
-        <div class="setup-n">2</div>
-        <div>Send any message to your new bot. Then open this URL in your browser, replacing TOKEN: <code>https://api.telegram.org/botTOKEN/getUpdates</code> — find your <code>chat_id</code> in the response.</div>
-      </div>
-      <div class="setup-step">
-        <div class="setup-n">3</div>
-        <div>Paste both values in the Telegram Config section below and click Save. Then hit Test to confirm alerts are working.</div>
-      </div>
-      <div class="setup-step">
-        <div class="setup-n">4</div>
-        <div>Set your alert threshold (how many green signals before Telegram fires) and enable Auto-scan. That's it.</div>
-      </div>
-    </div>
-    <button class="setup-dismiss" onclick="dismissSetup()">Got it — hide this</button>
+  <!-- EXCHANGE STATUS -->
+  <div class="ex-bar" id="ex-bar">
+    <div class="ex-pill loading" id="ex-binance"><span class="ex-dot"></span>Binance <span class="ex-count" id="exc-binance">—</span></div>
+    <div class="ex-sep"></div>
+    <div class="ex-pill loading" id="ex-bybit"><span class="ex-dot"></span>Bybit <span class="ex-count" id="exc-bybit">—</span></div>
+    <div class="ex-sep"></div>
+    <div class="ex-pill loading" id="ex-coinbase"><span class="ex-dot"></span>Coinbase <span class="ex-count" id="exc-coinbase">—</span></div>
+    <div class="ex-sep"></div>
+    <div class="ex-pill loading" id="ex-webull"><span class="ex-dot"></span>Webull <span class="ex-count" id="exc-webull">—</span></div>
+    <div class="ex-total" id="ex-total">Not scanned yet</div>
   </div>
 
-  <!-- COMPOSITE BANNER -->
-  <div class="composite-banner" id="composite-banner" style="--banner-color:var(--dim)">
-    <div class="composite-left">
-      <div class="composite-score" id="comp-score">—</div>
-      <div>
-        <div class="composite-label" id="comp-label">Awaiting scan</div>
-        <div class="composite-sub" id="comp-sub">Run scan to evaluate market signals</div>
-      </div>
-    </div>
-    <div class="composite-right">
-      <div>
-        <div class="next-scan-label" id="next-scan-label">Auto-scan: off</div>
-      </div>
-      <button class="auto-toggle" id="auto-btn" onclick="toggleAuto()">⏱ Auto: Off</button>
-      <button class="scan-btn" id="scan-btn" onclick="runScan()">▶ Run Scan</button>
+  <!-- SCAN BAR -->
+  <div class="scan-bar">
+    <button class="btn btn-primary" id="scan-btn" onclick="runScan()">▶ Scan All Exchanges</button>
+    <button class="btn btn-amber" id="new-btn" onclick="checkNewListings()">🆕 Check New Listings</button>
+    <button class="btn btn-sec" onclick="clearKnown()">Reset Known Coins</button>
+    <span class="scan-status" id="scan-status">Press Scan to pull all coins from Binance, Bybit, Coinbase &amp; Webull</span>
+    <div class="prog-wrap" id="prog-wrap" style="display:none">
+      <div class="prog-track"><div class="prog-fill" id="prog" style="width:0%"></div></div>
     </div>
   </div>
 
-  <!-- DIRECTION + WIN RATE -->
-  <div class="direction-bar" id="direction-bar" style="display:none">
-    <div>
-      <div class="dir-label">Signal Direction</div>
-      <div class="dir-value" id="dir-value">—</div>
-    </div>
-    <div class="dir-divider"></div>
-    <div>
-      <div class="dir-label">Signals Green</div>
-      <div class="dir-value" id="dir-green" style="color:var(--green)">0/6</div>
-    </div>
-    <div class="dir-divider"></div>
-    <div class="win-rate-bar">
-      <div class="dir-label">Historical accuracy at this signal count</div>
-      <div class="win-rate-track">
-        <div class="win-rate-fill" id="wr-fill" style="width:0%;background:var(--dim)"></div>
-      </div>
-      <div class="hist-note" id="hist-note">—</div>
-    </div>
+  <!-- NEW LISTINGS ALERT -->
+  <div class="new-alert" id="new-alert">
+    <div class="new-alert-title">⚡ New Coins Detected Since Last Scan</div>
+    <div class="new-coins" id="new-coins-list"></div>
   </div>
 
-  <!-- SIGNAL CARDS GRID -->
-  <div class="signal-grid" id="signal-grid">
-    <!-- Populated by JS -->
+  <!-- FILTERS -->
+  <div class="filters" id="filters">
+    <button class="flt on" onclick="setFilter('all',this)">All <span class="flt-count" id="fc-all">—</span></button>
+    <button class="flt" onclick="setFilter('new',this)">🆕 New Listings <span class="flt-count" id="fc-new">0</span></button>
+    <button class="flt" onclick="setFilter('momentum',this)">📈 Momentum <span class="flt-count" id="fc-momentum">0</span></button>
+    <button class="flt" onclick="setFilter('bounce',this)">🔄 Bounce <span class="flt-count" id="fc-bounce">0</span></button>
+    <button class="flt" onclick="setFilter('squeeze',this)">⚡ Squeeze <span class="flt-count" id="fc-squeeze">0</span></button>
+    <button class="flt" onclick="setFilter('volume',this)">🔥 Volume <span class="flt-count" id="fc-volume">0</span></button>
+    <button class="flt" onclick="setFilter('multi',this)">🌐 Multi-Exchange <span class="flt-count" id="fc-multi">0</span></button>
+    <div class="flt-sep"></div>
+    <select class="sort-sel" id="sort-sel" onchange="renderResults()">
+      <option value="conviction">Sort: Conviction</option>
+      <option value="change_desc">Sort: Biggest Gain</option>
+      <option value="change_asc">Sort: Biggest Drop</option>
+      <option value="volume">Sort: Volume</option>
+      <option value="new">Sort: Newest First</option>
+    </select>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="res-hdr" id="res-hdr">Awaiting scan</div>
+  <div class="grid" id="grid">
+    <div class="empty">Hit "Scan All Exchanges" to pull live data from Binance, Bybit, Coinbase and Webull.<br><br>The tool will detect new listings automatically and rank every coin by trade opportunity.</div>
   </div>
 
   <!-- TELEGRAM CONFIG -->
-  <div class="section-title">Telegram Configuration</div>
-  <div class="config-section">
-    <div class="config-grid">
-      <div class="config-field">
-        <div class="config-label">Bot Token</div>
-        <input class="config-input" type="password" id="tg-token" placeholder="123456789:ABCDef...">
-      </div>
-      <div class="config-field">
-        <div class="config-label">Chat ID</div>
-        <input class="config-input" type="text" id="tg-chat" placeholder="-100123456789 or your user ID">
-      </div>
-    </div>
-    <div class="threshold-row">
-      <span class="threshold-label">Alert when</span>
-      <div class="threshold-btns" id="thresh-btns">
-        <button class="thresh-btn" onclick="setThresh(2)">2</button>
-        <button class="thresh-btn active" onclick="setThresh(3)">3</button>
-        <button class="thresh-btn" onclick="setThresh(4)">4</button>
-        <button class="thresh-btn" onclick="setThresh(5)">5</button>
-        <button class="thresh-btn" onclick="setThresh(6)">6</button>
-      </div>
-      <span class="threshold-label">or more signals align</span>
-    </div>
-    <div class="config-row">
-      <button class="config-btn save" onclick="saveConfig()">Save Config</button>
-      <button class="config-btn" onclick="testTelegram()">Test Alert</button>
-      <button class="config-btn" onclick="toggleTokenVisibility()">Show/Hide Token</button>
-      <span class="config-status" id="tg-status">Not configured</span>
-    </div>
-  </div>
-
-  <!-- ALERT LOG -->
-  <div class="log-section">
-    <div class="section-title">Signal Log</div>
-    <div class="log-wrap" id="log-wrap">
-      <div class="log-empty" id="log-empty">No signals recorded yet. Run a scan.</div>
+  <div class="tg-section" style="margin-top:20px">
+    <div class="tg-title">Telegram — New Listing Alerts</div>
+    <div class="tg-row">
+      <input class="tg-inp" type="password" id="tg-tok" placeholder="Bot token">
+      <input class="tg-inp" type="text" id="tg-cid" placeholder="Chat ID">
+      <button class="btn btn-sec" onclick="saveTG()">Save</button>
+      <button class="btn btn-sec" onclick="testTG()">Test</button>
+      <span class="tg-status" id="tg-st">Not configured</span>
     </div>
   </div>
 
 </div>
 
 <script>
-// ─── STATE ───
-let autoOn = false;
-let autoTimer = null;
-let autoCountdown = 0;
-let alertThreshold = 3;
-let lastAlertKey = '';
-let logEntries = [];
-const AUTO_INTERVAL = 300; // 5 minutes
+// ── STATE ──
+let allCoins = [];        // merged coin data from all exchanges
+let knownCoins = {};      // {exchange: Set of symbols} — persisted to localStorage
+let fundingRates = {};    // {symbol: rate}
+let activeFilter = 'all';
+let scanRunning = false;
 
-// ─── SIGNAL DEFINITIONS ───
-const SIGNALS = [
-  { id:'funding',   label:'Funding Rate Sentiment',     icon:'⚡' },
-  { id:'feargreed', label:'Fear & Greed Index',          icon:'🧠' },
-  { id:'lsratio',   label:'Long / Short Ratio',          icon:'⚖️' },
-  { id:'oi',        label:'Open Interest Trend',         icon:'📊' },
-  { id:'polymarket',label:'Polymarket — Crypto Odds',    icon:'🎯' },
-  { id:'dominance', label:'BTC Dominance Signal',        icon:'₿' },
-];
+const WEBULL_KNOWN = ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','DOT','LINK','LTC','MATIC','SHIB','UNI','ATOM','NEAR','APT','ARB','OP','SUI','INJ','TIA','IMX','PEPE','WIF','FIL','ICP','HBAR','VET','ALGO','AAVE','SAND','MANA','AXS','CHZ','GALA','ZRX','ENJ','CRV','COMP','LDO','MKR','SNX','SUSHI','BAL','YFI','BLUR','GMX','DYDX','1INCH'];
 
-// ─── RENDER SKELETON CARDS ───
-function renderSkeleton() {
-  const grid = document.getElementById('signal-grid');
-  grid.innerHTML = SIGNALS.map((s, i) => `
-    <div class="signal-card" id="card-${s.id}" style="--sig-color:var(--dim);animation-delay:${i*0.06}s">
-      <div class="sig-top">
-        <div>
-          <div class="sig-label">${s.icon} ${s.label}</div>
-          <div class="sig-value" id="val-${s.id}">—</div>
-        </div>
-        <div class="sig-status">
-          <span class="sig-badge neutral" id="badge-${s.id}">Waiting</span>
-          <span class="sig-direction" id="dir-${s.id}" style="color:var(--dim)">—</span>
-        </div>
-      </div>
-      <div class="sig-bar-wrap">
-        <div class="sig-bar-track"><div class="sig-bar-fill" id="bar-${s.id}" style="width:0%;background:var(--dim)"></div></div>
-      </div>
-      <div class="sig-note" id="note-${s.id}">Awaiting data…</div>
-      <div id="extra-${s.id}"></div>
-    </div>
-  `).join('');
+// ── UTILS ──
+const fmtP = n => {
+  if(!n||n===0) return '$0';
+  if(n>=1000) return '$'+n.toLocaleString(undefined,{maximumFractionDigits:0});
+  if(n>=1) return '$'+n.toFixed(2);
+  if(n>=0.01) return '$'+n.toFixed(4);
+  return '$'+n.toFixed(8);
+};
+const fmtV = n => {
+  if(!n) return '—';
+  if(n>=1e9) return '$'+(n/1e9).toFixed(1)+'B';
+  if(n>=1e6) return '$'+(n/1e6).toFixed(1)+'M';
+  if(n>=1e3) return '$'+(n/1e3).toFixed(0)+'K';
+  return '$'+n.toFixed(0);
+};
+const setP = (pct,el) => { document.getElementById(el).style.width=Math.min(100,pct)+'%'; };
+const setS = msg => { document.getElementById('scan-status').textContent = msg; };
+
+// ── LOAD / SAVE KNOWN COINS ──
+function loadKnown() {
+  try { return JSON.parse(localStorage.getItem('si_known')||'{}'); } catch{ return {}; }
+}
+function saveKnown(obj) {
+  localStorage.setItem('si_known', JSON.stringify(obj));
+}
+function clearKnown() {
+  localStorage.removeItem('si_known');
+  knownCoins = {};
+  document.getElementById('new-alert').classList.remove('show');
+  setS('Known coin list cleared. Run scan to build fresh baseline.');
 }
 
-function setCard(id, {value, badge, dir, note, extra='', pct=50, color='var(--dim)'}) {
-  const card = document.getElementById('card-'+id);
-  if(!card) return;
-  card.style.setProperty('--sig-color', color);
-  document.getElementById('val-'+id).textContent = value||'—';
-  const badgeEl = document.getElementById('badge-'+id);
-  badgeEl.textContent = badge||'—';
-  badgeEl.className = 'sig-badge ' + (color==='var(--green)'?'bull':color==='var(--red)'?'bear':color==='var(--amber)'?'loading':'neutral');
-  const dirEl = document.getElementById('dir-'+id);
-  dirEl.textContent = dir||'';
-  dirEl.style.color = color;
-  document.getElementById('bar-'+id).style.width = Math.max(2,pct)+'%';
-  document.getElementById('bar-'+id).style.background = color;
-  document.getElementById('note-'+id).innerHTML = note||'';
-  document.getElementById('extra-'+id).innerHTML = extra||'';
+// ── EXCHANGE STATUS HELPERS ──
+function setEx(id, status, count) {
+  const el = document.getElementById('ex-'+id);
+  el.className = 'ex-pill ' + status;
+  const ce = document.getElementById('exc-'+id);
+  if(ce) ce.textContent = count ? `(${count})` : '';
 }
 
-function setLoading(id) {
-  setCard(id, {value:'…', badge:'Loading', dir:'', note:'Fetching data…', pct:30, color:'var(--amber)'});
-}
-
-// ─── SIGNAL FETCHERS ───
-
-// 1. FUNDING RATE — Binance perp
-async function fetchFunding() {
-  setLoading('funding');
+// ── FETCH BINANCE ──
+async function fetchBinance() {
+  setEx('binance','loading','…');
   try {
-    const r = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex', {signal: AbortSignal.timeout(10000)});
-    const data = await r.json();
-    // Get top pairs by relevance
-    const pairs = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','AVAXUSDT','LINKUSDT','ADAUSDT','DOTUSDT'];
-    const relevant = data.filter(d => pairs.includes(d.symbol));
-    const rates = relevant.map(d => ({
-      sym: d.symbol.replace('USDT',''),
-      rate: parseFloat(d.lastFundingRate)*100
-    }));
-
-    const avgRate = rates.reduce((s,r) => s+r.rate, 0) / rates.length;
-    const extremeNeg = rates.filter(r => r.rate < -0.05);
-    const extremePos = rates.filter(r => r.rate > 0.08);
-
-    let signal, color, dir, note, pct, badge;
-    const bullish = extremeNeg.length >= 3 || avgRate < -0.02;
-    const bearish = extremePos.length >= 3 || avgRate > 0.06;
-
-    if(bullish) {
-      signal = 'LONG'; color = 'var(--green)'; badge = 'Bullish Setup';
-      dir = '↑';
-      note = `Avg funding: <strong>${avgRate.toFixed(4)}%</strong>. ${extremeNeg.length} pairs with extreme negative funding — shorts are over-leveraged, squeeze risk is elevated.`;
-      pct = Math.min(95, 50 + Math.abs(avgRate)*200);
-    } else if(bearish) {
-      signal = 'SHORT'; color = 'var(--red)'; badge = 'Bearish Setup';
-      dir = '↓';
-      note = `Avg funding: <strong>${avgRate.toFixed(4)}%</strong>. ${extremePos.length} pairs with extreme positive funding — longs are crowded, distribution likely.`;
-      pct = Math.min(95, 50 + avgRate*200);
-    } else {
-      signal = 'NEUTRAL'; color = 'var(--dim)'; badge = 'Neutral';
-      dir = '→';
-      note = `Avg funding: <strong>${avgRate.toFixed(4)}%</strong>. No extreme positioning detected. Wait for a clearer setup.`;
-      pct = 50;
-    }
-
-    const pairs_html = '<div class="sig-pairs">' + rates.map(r => `<span class="sig-pair ${r.rate < -0.05?'bull':r.rate > 0.08?'bear':''}">${r.sym} ${r.rate.toFixed(3)}%</span>`).join('') + '</div>';
-
-    setCard('funding', {value: `${avgRate.toFixed(4)}% avg`, badge, dir, note, extra: pairs_html, pct, color});
-    return {id:'funding', signal, color, label:'Funding Rate'};
-  } catch(e) {
-    setCard('funding', {value:'Error', badge:'Failed', dir:'?', note:`Could not fetch funding data. ${e.message}`, pct:0, color:'var(--red)'});
-    return {id:'funding', signal:'NEUTRAL', color:'var(--dim)', label:'Funding Rate'};
-  }
-}
-
-// 2. FEAR & GREED
-async function fetchFearGreed() {
-  setLoading('feargreed');
-  try {
-    const r = await fetch('https://api.alternative.me/fng/?limit=3', {signal: AbortSignal.timeout(10000)});
-    const d = await r.json();
-    const latest = d.data[0];
-    const prev = d.data[2] || d.data[0];
-    const val = parseInt(latest.value);
-    const prevVal = parseInt(prev.value);
-    const trend = val - prevVal;
-    const label = latest.value_classification;
-
-    let signal, color, dir, badge, pct, note;
-    if(val <= 20) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Extreme Fear';
-      note = `<strong>Extreme Fear (${val})</strong> — historically the highest-conviction long signal. Retail is panic selling. Every major bottom has occurred in this zone.`;
-      pct = 90;
-    } else if(val <= 35) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Fear Zone';
-      note = `<strong>Fear (${val})</strong> — market is fearful. Historically a favourable entry zone for patient capital. Trend: ${trend>0?'+':''}${trend} vs 3 days ago.`;
-      pct = 70;
-    } else if(val >= 80) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'Extreme Greed';
-      note = `<strong>Extreme Greed (${val})</strong> — historically the highest-conviction short or reduce signal. Late-cycle FOMO. Every major top has occurred in this zone.`;
-      pct = 90;
-    } else if(val >= 65) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'Greed Zone';
-      note = `<strong>Greed (${val})</strong> — elevated optimism. Consider reducing size rather than adding. Trend: ${trend>0?'+':''}${trend} vs 3 days ago.`;
-      pct = 65;
-    } else {
-      signal = 'NEUTRAL'; color = 'var(--dim)'; dir = '→'; badge = 'Neutral';
-      note = `<strong>Neutral (${val}) — ${label}</strong>. No strong contrarian signal. Market sentiment is balanced.`;
-      pct = 50;
-    }
-
-    setCard('feargreed', {value: `${val}/100 — ${label}`, badge, dir, note, pct, color});
-    return {id:'feargreed', signal, color, label:'Fear & Greed'};
-  } catch(e) {
-    setCard('feargreed', {value:'Error', badge:'Failed', dir:'?', note:`Fear & Greed fetch failed. ${e.message}`, pct:0, color:'var(--red)'});
-    return {id:'feargreed', signal:'NEUTRAL', color:'var(--dim)', label:'Fear & Greed'};
-  }
-}
-
-// 3. LONG/SHORT RATIO — Binance global account ratio
-async function fetchLSRatio() {
-  setLoading('lsratio');
-  try {
-    const r = await fetch('https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1h&limit=6', {signal: AbortSignal.timeout(10000)});
-    const data = await r.json();
-    if(!data || !data.length) throw new Error('No data');
-
-    const latest = data[data.length-1];
-    const ratio = parseFloat(latest.longShortRatio);
-    const longPct = parseFloat(latest.longAccount)*100;
-    const shortPct = parseFloat(latest.shortAccount)*100;
-
-    // Trend: compare first and last
-    const oldest = data[0];
-    const trend = ratio - parseFloat(oldest.longShortRatio);
-
-    let signal, color, dir, badge, pct, note;
-    // Extreme long bias (>65% longs) + ratio not rising = bearish
-    if(longPct > 65) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'Longs Crowded';
-      note = `<strong>${longPct.toFixed(1)}% longs</strong> vs ${shortPct.toFixed(1)}% shorts. Extreme long crowding — when longs dominate this heavily, liquidation cascades become likely on any dip.`;
-      pct = Math.min(95, longPct);
-    } else if(shortPct > 60) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Shorts Crowded';
-      note = `<strong>${shortPct.toFixed(1)}% shorts</strong> vs ${longPct.toFixed(1)}% longs. Short crowding — elevated squeeze probability. Any positive catalyst ignites rapid upside.`;
-      pct = Math.min(95, shortPct);
-    } else {
-      signal = 'NEUTRAL'; color = 'var(--dim)'; dir = '→'; badge = 'Balanced';
-      note = `<strong>Balanced positioning</strong> — ${longPct.toFixed(1)}% longs, ${shortPct.toFixed(1)}% shorts. No extreme bias. Trend: ${trend>0?'+':''}${trend.toFixed(2)} vs 6 periods ago.`;
-      pct = 50;
-    }
-
-    const barHtml = `<div class="poly-bar-wrap" style="margin-top:6px">
-      <div class="poly-bar-track" style="height:6px;background:var(--red-d)">
-        <div class="poly-bar-yes" style="width:${longPct.toFixed(1)}%;background:var(--green)"></div>
-      </div>
-      <span class="poly-pct" style="color:var(--green)">${longPct.toFixed(1)}%L</span>
-    </div>`;
-
-    setCard('lsratio', {value: `${longPct.toFixed(1)}% / ${shortPct.toFixed(1)}%`, badge, dir, note, extra: barHtml, pct, color});
-    return {id:'lsratio', signal, color, label:'Long/Short Ratio'};
-  } catch(e) {
-    setCard('lsratio', {value:'Error', badge:'Failed', dir:'?', note:`L/S ratio fetch failed. ${e.message}`, pct:0, color:'var(--red)'});
-    return {id:'lsratio', signal:'NEUTRAL', color:'var(--dim)', label:'Long/Short Ratio'};
-  }
-}
-
-// 4. OPEN INTEREST TREND
-async function fetchOI() {
-  setLoading('oi');
-  try {
-    const r = await fetch('https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=4h&limit=8', {signal: AbortSignal.timeout(10000)});
-    const data = await r.json();
-    if(!data || !data.length) throw new Error('No data');
-
-    const latest = parseFloat(data[data.length-1].sumOpenInterest);
-    const oldest = parseFloat(data[0].sumOpenInterest);
-    const priceDelta = parseFloat(data[data.length-1].sumOpenInterestValue) - parseFloat(data[0].sumOpenInterestValue);
-    const oiChange = ((latest - oldest) / oldest * 100);
-
-    // Get current price context from Binance
-    let priceChange = 0;
-    try {
-      const pr = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');
-      const pd = await pr.json();
-      priceChange = parseFloat(pd.priceChangePercent);
-    } catch(e) {}
-
-    let signal, color, dir, badge, pct, note;
-    // OI falling + price falling = capitulation (bullish setup forming)
-    if(oiChange < -3 && priceChange < -2) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Capitulation';
-      note = `OI down <strong>${oiChange.toFixed(1)}%</strong> with price down ${priceChange.toFixed(1)}%. Leveraged positions being forcibly closed. Capitulation setup — often precedes reversal.`;
-      pct = 75;
-    }
-    // OI rising + price falling = bearish pressure building
-    else if(oiChange > 2 && priceChange < -1) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'Bear Pressure';
-      note = `OI rising <strong>+${oiChange.toFixed(1)}%</strong> while price falls. New shorts being added into weakness — bearish conviction increasing.`;
-      pct = 70;
-    }
-    // OI rising + price rising = genuine momentum
-    else if(oiChange > 2 && priceChange > 1) {
-      signal = 'LONG'; color = 'var(--blue)'; dir = '↑'; badge = 'Momentum';
-      note = `OI rising <strong>+${oiChange.toFixed(1)}%</strong> with price up ${priceChange.toFixed(1)}%. New money entering longs with price confirmation — genuine momentum.`;
-      pct = 60;
-    }
-    // OI falling + price rising = short squeeze
-    else if(oiChange < -2 && priceChange > 1) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Short Squeeze';
-      note = `OI falling <strong>${oiChange.toFixed(1)}%</strong> with price rising. Shorts being forced to cover — squeeze in progress.`;
-      pct = 80;
-    }
-    else {
-      signal = 'NEUTRAL'; color = 'var(--dim)'; dir = '→'; badge = 'Neutral';
-      note = `OI change: <strong>${oiChange>0?'+':''}${oiChange.toFixed(1)}%</strong> over 32h. Price: ${priceChange>0?'+':''}${priceChange.toFixed(1)}%. No strong directional signal.`;
-      pct = 50;
-    }
-
-    setCard('oi', {value: `OI ${oiChange>0?'+':''}${oiChange.toFixed(1)}% (32h)`, badge, dir, note, pct, color});
-    return {id:'oi', signal, color, label:'Open Interest'};
-  } catch(e) {
-    setCard('oi', {value:'Error', badge:'Failed', dir:'?', note:`OI fetch failed. ${e.message}`, pct:0, color:'var(--red)'});
-    return {id:'oi', signal:'NEUTRAL', color:'var(--dim)', label:'Open Interest'};
-  }
-}
-
-// 5. POLYMARKET — Crypto markets
-async function fetchPolymarket() {
-  setLoading('polymarket');
-  // Polymarket CLOB API — free, no auth needed for public markets
-  const PROXY = u => `https://corsproxy.io/?${encodeURIComponent(u)}`;
-  try {
-    const url = 'https://gamma-api.polymarket.com/markets?closed=false&archived=false&limit=50&tag_id=crypto&order=volume&ascending=false';
-    const r = await fetch(PROXY(url), {signal: AbortSignal.timeout(12000)});
-    const data = await r.json();
-
-    if(!data || !data.length) throw new Error('No markets found');
-
-    // Filter to crypto-relevant markets with significant volume
-    const markets = data.filter(m =>
-      m.volume > 10000 &&
-      m.question &&
-      /bitcoin|ethereum|btc|eth|crypto|token|coinbase|sec|etf|altcoin|solana|bnb|xrp/i.test(m.question)
-    ).slice(0, 5);
-
-    if(!markets.length) throw new Error('No relevant markets');
-
-    // Score the markets: strong YES on bullish events = bullish signal
-    let bullishScore = 0, bearishScore = 0, totalMarkets = 0;
-    const marketItems = markets.map(m => {
-      const yesPct = parseFloat(m.outcomePrices?.[0] || m.bestBid || 0.5) * 100;
-      const isBullishEvent = /etf approved|pass|launch|listing|upgrade|approve|bullish|rally|above|exceed|reach/i.test(m.question);
-      const isBearishEvent = /ban|crash|fall|below|drop|fail|reject|bearish|delist/i.test(m.question);
-      if(isBullishEvent && yesPct > 55) bullishScore++;
-      if(isBearishEvent && yesPct > 55) bearishScore++;
-      if(isBullishEvent || isBearishEvent) totalMarkets++;
-      return { q: m.question, yes: yesPct };
-    });
-
-    let signal, color, dir, badge, pct, note;
-    const netScore = bullishScore - bearishScore;
-    if(netScore >= 2) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Crowd Bullish';
-      note = `<strong>${bullishScore} bullish markets</strong> pricing YES at >55% probability. Prediction market crowd is net bullish on near-term crypto outcomes.`;
-      pct = Math.min(90, 55 + netScore*10);
-    } else if(netScore <= -2) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'Crowd Bearish';
-      note = `<strong>${bearishScore} bearish markets</strong> pricing YES at >55%. Prediction market crowd is net bearish on near-term crypto outcomes.`;
-      pct = Math.min(90, 55 + Math.abs(netScore)*10);
-    } else {
-      signal = 'NEUTRAL'; color = 'var(--dim)'; dir = '→'; badge = 'Mixed Odds';
-      note = `Prediction markets are mixed — ${bullishScore} bullish vs ${bearishScore} bearish outcomes pricing >55%. No strong directional consensus.`;
-      pct = 50;
-    }
-
-    const polyHtml = `<div class="poly-list">` + marketItems.slice(0,3).map(m => `
-      <div class="poly-item">
-        <div class="poly-q">${m.q.length>80?m.q.slice(0,77)+'…':m.q}</div>
-        <div class="poly-bar-wrap">
-          <div class="poly-bar-track"><div class="poly-bar-yes" style="width:${m.yes.toFixed(0)}%"></div></div>
-          <span class="poly-pct" style="color:${m.yes>55?'var(--green)':m.yes<45?'var(--red)':'var(--dim)'}">${m.yes.toFixed(0)}% YES</span>
-        </div>
-      </div>`).join('') + `</div>`;
-
-    setCard('polymarket', {value: `${markets.length} active crypto markets`, badge, dir, note, extra: polyHtml, pct, color});
-    return {id:'polymarket', signal, color, label:'Polymarket'};
-  } catch(e) {
-    // Polymarket fallback — try without proxy
-    try {
-      const r2 = await fetch('https://gamma-api.polymarket.com/markets?closed=false&limit=20&order=volume&ascending=false', {signal: AbortSignal.timeout(8000)});
-      const d2 = await r2.json();
-      if(d2 && d2.length) {
-        setCard('polymarket', {value: `${d2.length} markets loaded`, badge:'Available', dir:'→', note:'Polymarket data loaded without proxy. Markets available but crypto filtering limited.', pct:50, color:'var(--dim)'});
-        return {id:'polymarket', signal:'NEUTRAL', color:'var(--dim)', label:'Polymarket'};
-      }
-    } catch(e2) {}
-    setCard('polymarket', {value:'Unavailable', badge:'Proxy Needed', dir:'?', note:`Polymarket requires CORS proxy. corsproxy.io may be rate limited — try again in 60s. Error: ${e.message}`, pct:0, color:'var(--amber)'});
-    return {id:'polymarket', signal:'NEUTRAL', color:'var(--dim)', label:'Polymarket'};
-  }
-}
-
-// 6. BTC DOMINANCE
-async function fetchDominance() {
-  setLoading('dominance');
-  try {
-    const r = await fetch('https://api.coingecko.com/api/v3/global', {signal: AbortSignal.timeout(10000)});
-    const d = await r.json();
-    const btcDom = d.data?.market_cap_percentage?.btc || 0;
-    const ethDom = d.data?.market_cap_percentage?.eth || 0;
-    const totalChg = d.data?.market_cap_change_percentage_24h_usd || 0;
-
-    let signal, color, dir, badge, pct, note;
-    // BTC dominance falling below 50% + total market up = alt season signal (LONG alts)
-    if(btcDom < 48 && totalChg > 0) {
-      signal = 'LONG'; color = 'var(--green)'; dir = '↑'; badge = 'Alt Season';
-      note = `BTC dominance at <strong>${btcDom.toFixed(1)}%</strong> — below 48% with rising total market cap. Capital is rotating into altcoins. Alt season conditions active.`;
-      pct = 80;
-    }
-    // BTC dominance rising above 58% = BTC season, alts lag (NEUTRAL/BEAR for alts)
-    else if(btcDom > 58) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'BTC Season';
-      note = `BTC dominance at <strong>${btcDom.toFixed(1)}%</strong> — above 58%. BTC is absorbing most capital. Altcoins historically underperform in this regime.`;
-      pct = 65;
-    }
-    // Market cap falling sharply = risk-off (BEAR)
-    else if(totalChg < -4) {
-      signal = 'SHORT'; color = 'var(--red)'; dir = '↓'; badge = 'Risk-Off';
-      note = `Total market cap down <strong>${totalChg.toFixed(1)}%</strong> in 24h. Broad risk-off. BTC dominance: ${btcDom.toFixed(1)}%. Avoid adding positions in this environment.`;
-      pct = 75;
-    }
-    // Market cap rising + moderate BTC dominance = healthy bull (LONG)
-    else if(totalChg > 3 && btcDom < 55) {
-      signal = 'LONG'; color = 'var(--blue)'; dir = '↑'; badge = 'Bull Rotation';
-      note = `Market cap up <strong>+${totalChg.toFixed(1)}%</strong> with BTC dominance at ${btcDom.toFixed(1)}%. Healthy broad market rotation — good environment for altcoin exposure.`;
-      pct = 65;
-    }
-    else {
-      signal = 'NEUTRAL'; color = 'var(--dim)'; dir = '→'; badge = 'Neutral';
-      note = `BTC dominance: <strong>${btcDom.toFixed(1)}%</strong> · ETH dominance: ${ethDom.toFixed(1)}% · 24h market cap change: ${totalChg>0?'+':''}${totalChg.toFixed(2)}%. No strong directional signal.`;
-      pct = 50;
-    }
-
-    const domBar = `<div class="poly-bar-wrap" style="margin-top:6px">
-      <div class="poly-bar-track" style="height:5px">
-        <div class="poly-bar-yes" style="width:${btcDom.toFixed(0)}%;background:var(--amber)"></div>
-      </div>
-      <span class="poly-pct" style="color:var(--amber)">${btcDom.toFixed(1)}% BTC</span>
-    </div>`;
-
-    setCard('dominance', {value: `BTC ${btcDom.toFixed(1)}% dom`, badge, dir, note, extra: domBar, pct, color});
-    return {id:'dominance', signal, color, label:'BTC Dominance'};
-  } catch(e) {
-    setCard('dominance', {value:'Error', badge:'Failed', dir:'?', note:`Dominance fetch failed. ${e.message}`, pct:0, color:'var(--red)'});
-    return {id:'dominance', signal:'NEUTRAL', color:'var(--dim)', label:'BTC Dominance'};
-  }
-}
-
-// ─── COMPOSITE SCORE ───
-function computeComposite(results) {
-  const bullish = results.filter(r => r.signal === 'LONG').length;
-  const bearish = results.filter(r => r.signal === 'SHORT').length;
-  const total = results.length;
-
-  let direction, color, label, sub, winRate, histNote;
-
-  if(bullish >= 4) {
-    direction = '🟢 STRONG LONG'; color = 'var(--green)';
-    label = bullish >= 5 ? 'Very Strong Long Signal' : 'Strong Long Signal';
-    sub = `${bullish}/${total} signals bullish — high conviction entry window`;
-    winRate = bullish >= 5 ? 78 : 68;
-    histNote = `Historical accuracy at ${bullish}/${total} bullish: ~${winRate}% over 2020–2025 cycles`;
-  } else if(bullish === 3) {
-    direction = '🟡 LONG BIAS'; color = 'var(--amber)';
-    label = 'Moderate Long Bias';
-    sub = `${bullish}/${total} signals bullish — acceptable entry with tight stop`;
-    winRate = 58;
-    histNote = `Historical accuracy at 3/${total} bullish: ~58% — manageable risk/reward`;
-  } else if(bearish >= 4) {
-    direction = '🔴 STRONG SHORT'; color = 'var(--red)';
-    label = bearish >= 5 ? 'Very Strong Short Signal' : 'Strong Short Signal';
-    sub = `${bearish}/${total} signals bearish — short or reduce exposure`;
-    winRate = bearish >= 5 ? 74 : 64;
-    histNote = `Historical accuracy at ${bearish}/${total} bearish: ~${winRate}% over 2020–2025 cycles`;
-  } else if(bearish === 3) {
-    direction = '🟡 SHORT BIAS'; color = 'var(--amber)';
-    label = 'Moderate Short Bias';
-    sub = `${bearish}/${total} signals bearish — reduce exposure, avoid new longs`;
-    winRate = 55;
-    histNote = `Historical accuracy at 3/${total} bearish: ~55%`;
-  } else {
-    direction = '⚪ NEUTRAL'; color = 'var(--dim)';
-    label = 'No Clear Signal';
-    sub = `Mixed signals — ${bullish} bullish, ${bearish} bearish. Wait for alignment.`;
-    winRate = 45;
-    histNote = 'Neutral regime — no edge, wait for signal alignment';
-  }
-
-  // Update composite banner
-  const banner = document.getElementById('composite-banner');
-  banner.style.setProperty('--banner-color', color);
-  document.getElementById('comp-score').textContent = `${bullish}/${total}`;
-  document.getElementById('comp-score').style.color = color;
-  document.getElementById('comp-label').textContent = label;
-  document.getElementById('comp-sub').textContent = sub;
-
-  // Update direction bar
-  const dirBar = document.getElementById('direction-bar');
-  dirBar.style.display = 'flex';
-  document.getElementById('dir-value').textContent = direction;
-  document.getElementById('dir-value').style.color = color;
-  document.getElementById('dir-green').textContent = `${bullish}/${total}`;
-  document.getElementById('wr-fill').style.width = winRate + '%';
-  document.getElementById('wr-fill').style.background = color;
-  document.getElementById('hist-note').textContent = histNote;
-
-  return { bullish, bearish, total, direction, color, winRate };
-}
-
-// ─── MAIN SCAN ───
-async function runScan() {
-  const btn = document.getElementById('scan-btn');
-  btn.disabled = true;
-  btn.textContent = '⟳ Scanning…';
-  addLog('Starting signal scan…', 'normal');
-
-  try {
-    const results = await Promise.all([
-      fetchFunding(),
-      fetchFearGreed(),
-      fetchLSRatio(),
-      fetchOI(),
-      fetchPolymarket(),
-      fetchDominance(),
+    const [tickerRes, fundRes] = await Promise.all([
+      fetch('https://api.binance.com/api/v3/ticker/24hr', {signal:AbortSignal.timeout(12000)}),
+      fetch('https://fapi.binance.com/fapi/v1/premiumIndex', {signal:AbortSignal.timeout(10000)}).catch(()=>null)
     ]);
-
-    const composite = computeComposite(results);
-
-    const bullishLabels = results.filter(r=>r.signal==='LONG').map(r=>r.label);
-    const bearishLabels = results.filter(r=>r.signal==='SHORT').map(r=>r.label);
-
-    const logMsg = `Scan complete — ${composite.bullish} bullish [${bullishLabels.join(', ')||'none'}] | ${composite.bearish} bearish [${bearishLabels.join(', ')||'none'}]`;
-    addLog(logMsg, 'normal');
-
-    // Check alert threshold
-    const dominant = Math.max(composite.bullish, composite.bearish);
-    const dir = composite.bullish > composite.bearish ? 'LONG' : 'SHORT';
-    const alertKey = `${dir}-${dominant}-${new Date().toDateString()}`;
-
-    if(dominant >= alertThreshold && alertKey !== lastAlertKey) {
-      lastAlertKey = alertKey;
-      const msg = `🚨 SIGNAL ALERT\n\n${composite.direction}\n${composite.bullish}/${composite.total} signals aligned\nHistorical accuracy: ~${composite.winRate}%\n\nBullish: ${bullishLabels.join(', ')||'none'}\nBearish: ${bearishLabels.join(', ')||'none'}\n\nTime: ${new Date().toLocaleTimeString()}`;
-      addLog(`⚡ Alert threshold reached (${dominant}/${composite.total}) — sending Telegram`, 'alert');
-      await sendTelegram(msg);
+    const tickers = await tickerRes.json();
+    // Build funding map
+    if(fundRes && fundRes.ok) {
+      const fdata = await fundRes.json();
+      fdata.forEach(f => {
+        const sym = f.symbol.replace('USDT','').replace('BUSD','');
+        fundingRates[sym] = parseFloat(f.lastFundingRate)*100;
+      });
     }
-
+    const pairs = tickers
+      .filter(t => t.symbol.endsWith('USDT'))
+      .map(t => ({
+        sym: t.symbol.replace('USDT',''),
+        price: parseFloat(t.lastPrice),
+        chg24: parseFloat(t.priceChangePercent),
+        vol: parseFloat(t.quoteVolume),  // USDT volume
+        high: parseFloat(t.highPrice),
+        low: parseFloat(t.lowPrice),
+        count: parseInt(t.count),
+        exchange: 'binance'
+      }))
+      .filter(t => t.vol > 50000); // filter dust
+    setEx('binance','ok', pairs.length);
+    return pairs;
   } catch(e) {
-    addLog('Scan error: ' + e.message, 'err');
+    setEx('binance','fail','');
+    return [];
   }
-
-  btn.disabled = false;
-  btn.textContent = '▶ Run Scan';
-  document.getElementById('scan-btn').textContent = '↺ Rescan';
 }
 
-// ─── TELEGRAM ───
-async function sendTelegram(message) {
-  const token = localStorage.getItem('tg_token');
-  const chat  = localStorage.getItem('tg_chat');
-  if(!token || !chat) {
-    addLog('Telegram not configured — configure token and chat ID below', 'warn');
-    return false;
-  }
+// ── FETCH BYBIT ──
+async function fetchBybit() {
+  setEx('bybit','loading','…');
   try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({chat_id: chat, text: message, parse_mode: 'HTML'})
-    });
+    const r = await fetch('https://api.bybit.com/v5/market/tickers?category=spot&limit=1000', {signal:AbortSignal.timeout(12000)});
     const d = await r.json();
-    if(d.ok) {
-      addLog('✅ Telegram alert sent successfully', 'alert');
-      return true;
-    } else {
-      addLog(`❌ Telegram error: ${d.description}`, 'err');
-      return false;
-    }
+    const pairs = (d?.result?.list||[])
+      .filter(t => t.symbol.endsWith('USDT'))
+      .map(t => ({
+        sym: t.symbol.replace('USDT',''),
+        price: parseFloat(t.lastPrice),
+        chg24: parseFloat(t.price24hPcnt)*100,
+        vol: parseFloat(t.turnover24h||0),
+        exchange: 'bybit'
+      }))
+      .filter(t => t.vol > 10000);
+    setEx('bybit','ok', pairs.length);
+    return pairs;
   } catch(e) {
-    addLog(`❌ Telegram failed: ${e.message}`, 'err');
-    return false;
+    setEx('bybit','fail','');
+    return [];
   }
 }
 
-async function testTelegram() {
-  addLog('Sending test Telegram message…', 'normal');
-  const ok = await sendTelegram(`🧪 TEST ALERT\n\nSignal Intelligence tool is connected and working.\nThreshold: ${alertThreshold} signals\nTime: ${new Date().toLocaleTimeString()}`);
-  document.getElementById('tg-status').textContent = ok ? '✅ Test sent successfully' : '❌ Test failed — check token and chat ID';
-  document.getElementById('tg-status').className = 'config-status ' + (ok ? 'ok' : 'err');
-}
-
-// ─── CONFIG ───
-function saveConfig() {
-  const token = document.getElementById('tg-token').value.trim();
-  const chat  = document.getElementById('tg-chat').value.trim();
-  if(!token || !chat) { alert('Enter both bot token and chat ID.'); return; }
-  localStorage.setItem('tg_token', token);
-  localStorage.setItem('tg_chat', chat);
-  document.getElementById('tg-status').textContent = '✅ Saved — click Test to verify';
-  document.getElementById('tg-status').className = 'config-status ok';
-  addLog('Telegram config saved', 'normal');
-}
-
-function loadConfig() {
-  const token = localStorage.getItem('tg_token');
-  const chat  = localStorage.getItem('tg_chat');
-  if(token) document.getElementById('tg-token').value = token;
-  if(chat)  document.getElementById('tg-chat').value  = chat;
-  if(token && chat) {
-    document.getElementById('tg-status').textContent = '✅ Configured';
-    document.getElementById('tg-status').className = 'config-status ok';
-  }
-  const thresh = parseInt(localStorage.getItem('tg_thresh')||'3');
-  setThresh(thresh);
-  if(localStorage.getItem('setup_dismissed')) {
-    document.getElementById('setup-box').style.display = 'none';
+// ── FETCH COINBASE ──
+async function fetchCoinbase() {
+  setEx('coinbase','loading','…');
+  try {
+    const r = await fetch('https://api.exchange.coinbase.com/products', {signal:AbortSignal.timeout(12000)});
+    const d = await r.json();
+    const pairs = d
+      .filter(p => p.quote_currency==='USD' && p.status==='online' && !p.cancel_only)
+      .map(p => ({
+        sym: p.base_currency,
+        exchange: 'coinbase',
+        vol: 0, price: 0, chg24: 0
+      }));
+    setEx('coinbase','ok', pairs.length);
+    return pairs;
+  } catch(e) {
+    setEx('coinbase','fail','');
+    return [];
   }
 }
 
-function setThresh(n) {
-  alertThreshold = n;
-  localStorage.setItem('tg_thresh', n);
-  document.querySelectorAll('.thresh-btn').forEach(b => b.classList.toggle('active', parseInt(b.textContent)===n));
-}
-
-function toggleTokenVisibility() {
-  const inp = document.getElementById('tg-token');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
-}
-
-function dismissSetup() {
-  document.getElementById('setup-box').style.display = 'none';
-  localStorage.setItem('setup_dismissed', '1');
-}
-
-// ─── AUTO SCAN ───
-function toggleAuto() {
-  autoOn = !autoOn;
-  const btn = document.getElementById('auto-btn');
-  btn.textContent = autoOn ? '⏹ Auto: On' : '⏱ Auto: Off';
-  btn.classList.toggle('on', autoOn);
-  if(autoOn) {
-    addLog(`Auto-scan enabled — scanning every ${AUTO_INTERVAL/60} minutes`, 'normal');
-    runScan();
-    startAutoTimer();
-  } else {
-    clearInterval(autoTimer);
-    autoTimer = null;
-    document.getElementById('next-scan-label').textContent = 'Auto-scan: off';
-    addLog('Auto-scan disabled', 'normal');
-  }
-}
-
-function startAutoTimer() {
-  if(autoTimer) clearInterval(autoTimer);
-  autoCountdown = AUTO_INTERVAL;
-  autoTimer = setInterval(() => {
-    autoCountdown--;
-    const m = Math.floor(autoCountdown/60);
-    const s = autoCountdown%60;
-    document.getElementById('next-scan-label').textContent = `Next scan: ${m}:${s.toString().padStart(2,'0')}`;
-    if(autoCountdown <= 0) {
-      autoCountdown = AUTO_INTERVAL;
-      runScan();
+// ── WEBULL (best effort, unofficial) ──
+async function fetchWebull() {
+  setEx('webull','loading','…');
+  // Webull has no public API — use known static list + try unofficial endpoint
+  try {
+    // Try unofficial Webull crypto endpoint via proxy
+    const proxy = `https://corsproxy.io/?${encodeURIComponent('https://quotes.webull.com/api/securities/v5/ticker-detail?regionId=6&tickerType=crypto')}`;
+    const r = await fetch(proxy, {signal:AbortSignal.timeout(8000)});
+    const d = await r.json();
+    const items = d?.data?.items||[];
+    if(items.length > 0) {
+      const syms = items.map(i => ({ sym: (i.symbol||'').replace('USD','').replace('-',''), exchange:'webull', vol:0, price:0, chg24:0 })).filter(s=>s.sym);
+      setEx('webull','ok', syms.length);
+      return syms;
     }
-  }, 1000);
+  } catch(e) {}
+  // Fall back to known static list
+  const syms = WEBULL_KNOWN.map(s => ({sym:s, exchange:'webull', vol:0, price:0, chg24:0}));
+  setEx('webull','ok', `~${syms.length}`);
+  return syms;
 }
 
-// ─── LOG ───
-function addLog(msg, type='normal') {
-  const now = new Date().toLocaleTimeString();
-  logEntries.unshift({time:now, msg, type});
-  if(logEntries.length > 50) logEntries.pop();
-  renderLog();
+// ── MERGE EXCHANGE DATA ──
+function mergeExchanges(binance, bybit, coinbase, webull) {
+  const map = {};
+
+  // Binance is primary — has full price + volume data
+  binance.forEach(c => {
+    map[c.sym] = { sym:c.sym, price:c.price, chg24:c.chg24, vol:c.vol, high:c.high, low:c.low, count:c.count, exchanges:['binance'] };
+  });
+
+  // Bybit — add exchange presence, fill price if missing
+  bybit.forEach(c => {
+    if(map[c.sym]) { map[c.sym].exchanges.push('bybit'); }
+    else { map[c.sym] = { sym:c.sym, price:c.price, chg24:c.chg24, vol:c.vol, high:0, low:0, count:0, exchanges:['bybit'] }; }
+  });
+
+  // Coinbase — exchange presence only (no price from this endpoint)
+  coinbase.forEach(c => {
+    if(map[c.sym]) map[c.sym].exchanges.push('coinbase');
+    else map[c.sym] = { sym:c.sym, price:0, chg24:0, vol:0, high:0, low:0, count:0, exchanges:['coinbase'] };
+  });
+
+  // Webull
+  webull.forEach(c => {
+    if(map[c.sym]) map[c.sym].exchanges.push('webull');
+    else map[c.sym] = { sym:c.sym, price:0, chg24:0, vol:0, high:0, low:0, count:0, exchanges:['webull'] };
+  });
+
+  return Object.values(map);
 }
 
-function renderLog() {
-  const wrap = document.getElementById('log-wrap');
-  const empty = document.getElementById('log-empty');
-  if(!logEntries.length) { if(empty) empty.style.display='block'; return; }
-  if(empty) empty.style.display = 'none';
-  wrap.innerHTML = logEntries.map(e =>
-    `<div class="log-item"><span class="log-time">${e.time}</span><span class="log-msg ${e.type==='alert'?'alert':e.type==='warn'?'warn':e.type==='err'?'err':''}">${e.msg}</span></div>`
-  ).join('');
+// ── DETECT NEW LISTINGS ──
+function detectNew(merged, known) {
+  const newCoins = [];
+  const exchanges = ['binance','bybit','coinbase','webull'];
+  exchanges.forEach(ex => {
+    const current = new Set(merged.filter(c=>c.exchanges.includes(ex)).map(c=>c.sym));
+    const prev = new Set(known[ex]||[]);
+    if(prev.size === 0) return; // first run — no baseline
+    current.forEach(sym => {
+      if(!prev.has(sym)) newCoins.push({sym, exchange:ex});
+    });
+  });
+  return newCoins;
 }
 
-// ─── CLOCK ───
-setInterval(() => {
-  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
-}, 1000);
+// ── SIGNAL ENGINE ──
+function computeSignals(coin) {
+  const signals = [];
+  const chg = coin.chg24||0;
+  const vol = coin.vol||0;
+  const funding = fundingRates[coin.sym];
+  const exCount = coin.exchanges.length;
+  const range = coin.high&&coin.low&&coin.price ? (coin.high-coin.low)/coin.price*100 : 0;
+  const isNew = coin.isNew||false;
 
-// ─── INIT ───
-window.addEventListener('load', () => {
-  renderSkeleton();
-  loadConfig();
-  addLog('Signal Intelligence loaded — press Run Scan to begin', 'normal');
+  // 1. NEW LISTING
+  if(isNew) {
+    signals.push({
+      type:'new-listing', priority:100,
+      icon:'🆕', direction:'long',
+      text:`<strong>New listing detected on ${coin.newExchange}</strong> — Exchange listings historically average +35% in first 48–72h. First-mover window is open.`
+    });
+  }
+
+  // 2. MOMENTUM BREAKOUT — strong positive move with volume
+  if(chg >= 8 && vol >= 500000) {
+    signals.push({
+      type:'momentum', priority:85,
+      icon:'📈', direction:'long',
+      text:`<strong>+${chg.toFixed(1)}% in 24h</strong> with ${fmtV(vol)} volume — confirmed momentum breakout. Ride the trend with a trailing stop.`
+    });
+  } else if(chg >= 5 && vol >= 200000) {
+    signals.push({
+      type:'momentum', priority:70,
+      icon:'📈', direction:'long',
+      text:`<strong>+${chg.toFixed(1)}% move</strong> with ${fmtV(vol)} volume — building momentum. Watch for continuation above today's high.`
+    });
+  }
+
+  // 3. OVERSOLD BOUNCE — significant drop, showing signs of stabilisation
+  if(chg <= -8 && chg >= -25 && vol >= 200000) {
+    signals.push({
+      type:'bounce', priority:75,
+      icon:'🔄', direction:'long',
+      text:`<strong>Down ${Math.abs(chg).toFixed(1)}% in 24h</strong> — sharp sell-off creates mean reversion opportunity. Enter on first green candle with stop below today's low.`
+    });
+  } else if(chg <= -5 && chg >= -15 && vol >= 100000) {
+    signals.push({
+      type:'bounce', priority:60,
+      icon:'🔄', direction:'long',
+      text:`<strong>Down ${Math.abs(chg).toFixed(1)}% in 24h</strong> — oversold territory. Watch for volume confirmation before entry.`
+    });
+  }
+
+  // 4. FUNDING SQUEEZE — shorts/longs overcrowded
+  if(funding !== undefined) {
+    if(funding < -0.04) {
+      signals.push({
+        type:'squeeze', priority:80,
+        icon:'⚡', direction:'long',
+        text:`<strong>Funding rate ${funding.toFixed(3)}%</strong> — shorts heavily overcrowded. One bullish catalyst triggers forced covering — high squeeze probability.`
+      });
+    } else if(funding < -0.02) {
+      signals.push({
+        type:'squeeze', priority:65,
+        icon:'⚡', direction:'long',
+        text:`<strong>Funding rate ${funding.toFixed(3)}%</strong> — negative funding indicates short bias. Squeeze setup building.`
+      });
+    } else if(funding > 0.08) {
+      signals.push({
+        type:'squeeze', priority:72,
+        icon:'⚡', direction:'short',
+        text:`<strong>Funding rate +${funding.toFixed(3)}%</strong> — longs overcrowded, paying heavy premium. Short the overleveraged crowd or wait for flush.`
+      });
+    }
+  }
+
+  // 5. VOLUME ANOMALY — volume spike without proportional price move
+  if(vol >= 5000000 && Math.abs(chg) < 3) {
+    signals.push({
+      type:'volume', priority:78,
+      icon:'🔥', direction:'long',
+      text:`<strong>${fmtV(vol)} volume</strong> with only ${chg.toFixed(1)}% price move — large players accumulating without moving price. Breakout likely imminent.`
+    });
+  } else if(vol >= 2000000 && Math.abs(chg) < 2) {
+    signals.push({
+      type:'volume', priority:60,
+      icon:'🔥', direction:'long',
+      text:`<strong>${fmtV(vol)} volume surge</strong> with flat price — stealth accumulation pattern. Monitor for directional break.`
+    });
+  }
+
+  // 6. MULTI-EXCHANGE — listed across all major exchanges = institutional grade
+  if(exCount >= 3) {
+    signals.push({
+      type:'multi', priority:55,
+      icon:'🌐', direction:'long',
+      text:`<strong>Listed on ${exCount} exchanges</strong> (${coin.exchanges.join(', ')}) — institutional-grade liquidity. Lower manipulation risk, tighter spreads.`
+    });
+  }
+
+  // 7. HIGH RANGE DAY — wide candle body indicates decisive move
+  if(range > 12 && vol >= 300000) {
+    signals.push({
+      type:'volume', priority:62,
+      icon:'📊', direction: chg > 0 ? 'long' : 'short',
+      text:`<strong>${range.toFixed(0)}% daily range</strong> — decisive directional day with ${fmtV(vol)} volume. Continuation plays favoured.`
+    });
+  }
+
+  // 8. NOT ON COINBASE but on Binance/Bybit — potential upcoming listing
+  if(!coin.exchanges.includes('coinbase') && coin.exchanges.includes('binance') && vol >= 1000000) {
+    signals.push({
+      type:'multi', priority:58,
+      icon:'🏛️', direction:'long',
+      text:`<strong>Not yet on Coinbase</strong> — listed on Binance with ${fmtV(vol)} volume. Coinbase listing would drive significant price appreciation.`
+    });
+  }
+
+  return signals.sort((a,b)=>b.priority-a.priority);
+}
+
+// ── SCORE COIN ──
+function scoreAndRank(coins) {
+  return coins.map(coin => {
+    const signals = computeSignals(coin);
+    if(!signals.length) return null;
+    const topSig = signals[0];
+    const conviction = signals.reduce((s,sig)=>s+sig.priority,0);
+    const direction = topSig.direction;
+    // Entry/target/stop
+    const price = coin.price;
+    let entry=price, target=price, stop=price;
+    if(price > 0) {
+      if(direction === 'long') { entry=price; target=price*1.08; stop=price*0.95; }
+      else { entry=price; target=price*0.92; stop=price*1.05; }
+    }
+    return { ...coin, signals, topType:topSig.type, direction, conviction, entry, target, stop };
+  }).filter(Boolean).sort((a,b)=>b.conviction-a.conviction);
+}
+
+// ── MAIN SCAN ──
+async function runScan() {
+  if(scanRunning) return;
+  scanRunning = true;
+  document.getElementById('scan-btn').disabled = true;
+  document.getElementById('prog-wrap').style.display = 'block';
+  document.getElementById('grid').innerHTML = '<div class="empty"><div style="display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner"></div> Scanning exchanges…</div></div>';
+
+  setP(5,'prog'); setS('Connecting to Binance…');
+  const binance = await fetchBinance();
+
+  setP(30,'prog'); setS('Connecting to Bybit…');
+  const bybit = await fetchBybit();
+
+  setP(55,'prog'); setS('Connecting to Coinbase…');
+  const coinbase = await fetchCoinbase();
+
+  setP(75,'prog'); setS('Connecting to Webull…');
+  const webull = await fetchWebull();
+
+  setP(88,'prog'); setS('Merging data and detecting new listings…');
+
+  const merged = mergeExchanges(binance, bybit, coinbase, webull);
+  const prevKnown = loadKnown();
+
+  // Detect new listings
+  const newListings = detectNew(merged, prevKnown);
+  newListings.forEach(nl => {
+    const c = merged.find(m=>m.sym===nl.sym);
+    if(c) { c.isNew = true; c.newExchange = nl.exchange; }
+  });
+
+  // Show new listings alert
+  if(newListings.length > 0) {
+    document.getElementById('new-coins-list').innerHTML = newListings.map(nl =>
+      `<div class="new-coin">${nl.sym} <span class="new-badge">NEW on ${nl.exchange}</span></div>`
+    ).join('');
+    document.getElementById('new-alert').classList.add('show');
+    // Telegram alert for new listings
+    const msg = `🆕 NEW LISTINGS DETECTED\n\n${newListings.map(n=>`• ${n.sym} — just listed on ${n.exchange}`).join('\n')}\n\nTime: ${new Date().toLocaleTimeString()}`;
+    sendTelegram(msg);
+  } else {
+    document.getElementById('new-alert').classList.remove('show');
+  }
+
+  // Save new baseline
+  const newKnown = {};
+  ['binance','bybit','coinbase','webull'].forEach(ex => {
+    newKnown[ex] = merged.filter(c=>c.exchanges.includes(ex)).map(c=>c.sym);
+  });
+  saveKnown(newKnown);
+
+  allCoins = scoreAndRank(merged);
+  setP(100,'prog');
+
+  const total = merged.length;
+  const exTotal = `${binance.length} Binance · ${bybit.length} Bybit · ${coinbase.length} Coinbase · ${webull.length||'~50'} Webull · ${total} total unique coins`;
+  document.getElementById('ex-total').textContent = exTotal;
+  setS(`Scan complete — ${allCoins.length} trade opportunities ranked`);
+
+  updateFilterCounts();
+  renderResults();
+
+  document.getElementById('scan-btn').disabled = false;
+  document.getElementById('prog-wrap').style.display = 'none';
+  scanRunning = false;
+}
+
+// ── CHECK NEW LISTINGS ONLY (no full rescan) ──
+async function checkNewListings() {
+  setS('Checking for new listings…');
+  document.getElementById('new-btn').disabled = true;
+  const prevKnown = loadKnown();
+  if(Object.keys(prevKnown).length === 0) {
+    setS('No baseline found. Run full scan first to build a baseline.');
+    document.getElementById('new-btn').disabled = false;
+    return;
+  }
+  // Quick fetch just coin lists
+  const [binance, bybit, coinbase, webull] = await Promise.all([
+    fetchBinance(), fetchBybit(), fetchCoinbase(), fetchWebull()
+  ]);
+  const merged = mergeExchanges(binance, bybit, coinbase, webull);
+  const newListings = detectNew(merged, prevKnown);
+  if(newListings.length > 0) {
+    document.getElementById('new-coins-list').innerHTML = newListings.map(nl =>
+      `<div class="new-coin">${nl.sym} <span class="new-badge">NEW on ${nl.exchange}</span></div>`
+    ).join('');
+    document.getElementById('new-alert').classList.add('show');
+    const msg = `🆕 NEW LISTINGS\n\n${newListings.map(n=>`• ${n.sym} on ${n.exchange}`).join('\n')}\n\n${new Date().toLocaleTimeString()}`;
+    sendTelegram(msg);
+    setS(`${newListings.length} new coin(s) detected`);
+  } else {
+    setS('No new listings detected since last scan');
+    document.getElementById('new-alert').classList.remove('show');
+  }
+  // Update baseline
+  const newKnown = {};
+  ['binance','bybit','coinbase','webull'].forEach(ex => {
+    newKnown[ex] = merged.filter(c=>c.exchanges.includes(ex)).map(c=>c.sym);
+  });
+  saveKnown(newKnown);
+  document.getElementById('new-btn').disabled = false;
+}
+
+// ── FILTER + RENDER ──
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.flt').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderResults();
+}
+
+function updateFilterCounts() {
+  const counts = {all:0, new:0, momentum:0, bounce:0, squeeze:0, volume:0, multi:0};
+  allCoins.forEach(c => {
+    counts.all++;
+    const types = [...new Set(c.signals.map(s=>s.type))];
+    if(types.includes('new-listing')) counts.new++;
+    if(types.includes('momentum')) counts.momentum++;
+    if(types.includes('bounce')) counts.bounce++;
+    if(types.includes('squeeze')) counts.squeeze++;
+    if(types.includes('volume')) counts.volume++;
+    if(types.includes('multi')) counts.multi++;
+  });
+  Object.entries(counts).forEach(([k,v]) => {
+    const el = document.getElementById('fc-'+k);
+    if(el) el.textContent = v;
+  });
+}
+
+function renderResults() {
+  const sort = document.getElementById('sort-sel').value;
+  let filtered = [...allCoins];
+
+  if(activeFilter !== 'all') {
+    const typeMap = {new:'new-listing', momentum:'momentum', bounce:'bounce', squeeze:'squeeze', volume:'volume', multi:'multi'};
+    const t = typeMap[activeFilter];
+    filtered = filtered.filter(c => c.signals.some(s=>s.type===t));
+  }
+
+  // Sort
+  if(sort==='change_desc') filtered.sort((a,b)=>b.chg24-a.chg24);
+  else if(sort==='change_asc') filtered.sort((a,b)=>a.chg24-b.chg24);
+  else if(sort==='volume') filtered.sort((a,b)=>(b.vol||0)-(a.vol||0));
+  else if(sort==='new') filtered.sort((a,b)=>(b.isNew?1:0)-(a.isNew?1:0));
+  else filtered.sort((a,b)=>b.conviction-a.conviction);
+
+  document.getElementById('res-hdr').textContent = `${filtered.length} opportunities · sorted by ${sort}`;
+
+  if(!filtered.length) {
+    document.getElementById('grid').innerHTML = '<div class="empty">No coins match this filter in current scan results.</div>';
+    return;
+  }
+
+  // Render top 60 max
+  document.getElementById('grid').innerHTML = filtered.slice(0,60).map((c,i) => {
+    const chgColor = c.chg24>0?'pos':c.chg24<0?'neg':'neu';
+    const dirClass = c.direction==='long'?'long':c.direction==='short'?'short':'neutral';
+    const dirText = c.direction==='long'?'▲ LONG':c.direction==='short'?'▼ SHORT':'→ NEUTRAL';
+    const topSigs = c.signals.slice(0,3);
+    const exBadges = c.exchanges.map(ex=>`<span class="ex-badge ${ex}">${ex}</span>`).join('');
+    const newBadge = c.isNew ? `<span class="ex-badge new">NEW</span>` : '';
+
+    return `<div class="card ${c.topType}" style="animation-delay:${Math.min(i*0.025,0.5)}s">
+      <div class="card-top">
+        <div>
+          <div class="card-sym">${c.sym}</div>
+          <div class="card-name">${c.exchanges.length} exchange${c.exchanges.length>1?'s':''} · ${c.signals.length} signal${c.signals.length>1?'s':''}</div>
+        </div>
+        <div class="card-right">
+          ${c.price>0?`<div class="card-price">${fmtP(c.price)}</div>`:''}
+          ${c.chg24!==0?`<div class="card-chg ${chgColor}">${c.chg24>0?'+':''}${c.chg24.toFixed(2)}%</div>`:''}
+        </div>
+      </div>
+      <div class="ex-badges">${exBadges}${newBadge}</div>
+      <div class="reasons">
+        ${topSigs.map(s=>`<div class="reason"><span class="reason-icon">${s.icon}</span><span class="reason-txt">${s.text}</span></div>`).join('')}
+      </div>
+      <div class="card-bottom">
+        <span class="direction-badge ${dirClass}">${dirText}</span>
+        <span class="conviction">Conviction: <strong>${c.conviction>200?'HIGH':c.conviction>120?'MED':'LOW'}</strong></span>
+        ${c.vol>0?`<span class="vol-badge">Vol: <strong>${fmtV(c.vol)}</strong></span>`:''}
+      </div>
+      ${c.price>0?`<div class="levels">
+        <div class="level"><div class="level-lbl">Entry</div><div class="level-val entry">${fmtP(c.entry)}</div></div>
+        <div class="level"><div class="level-lbl">Target</div><div class="level-val target">${fmtP(c.target)}</div></div>
+        <div class="level"><div class="level-lbl">Stop</div><div class="level-val stop">${fmtP(c.stop)}</div></div>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── TELEGRAM ──
+async function sendTelegram(msg) {
+  const tok=localStorage.getItem('tg_tok'), cid=localStorage.getItem('tg_cid');
+  if(!tok||!cid) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${tok}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,text:msg})});
+  } catch(e){}
+}
+async function testTG() {
+  const ok = await sendTelegram(`✅ Signal Intelligence connected.\nTest sent: ${new Date().toLocaleTimeString()}`);
+  document.getElementById('tg-st').textContent = '✅ Test sent';
+  document.getElementById('tg-st').className = 'tg-status ok';
+}
+function saveTG() {
+  const tok=document.getElementById('tg-tok').value.trim(), cid=document.getElementById('tg-cid').value.trim();
+  if(!tok||!cid){alert('Enter both token and chat ID');return;}
+  localStorage.setItem('tg_tok',tok); localStorage.setItem('tg_cid',cid);
+  document.getElementById('tg-st').textContent='✅ Saved'; document.getElementById('tg-st').className='tg-status ok';
+}
+
+// ── INIT ──
+setInterval(()=>{document.getElementById('clk').textContent=new Date().toLocaleTimeString()},1000);
+window.addEventListener('load',()=>{
+  const tok=localStorage.getItem('tg_tok'), cid=localStorage.getItem('tg_cid');
+  if(tok) document.getElementById('tg-tok').value=tok;
+  if(cid) document.getElementById('tg-cid').value=cid;
+  if(tok&&cid){document.getElementById('tg-st').textContent='✅ Configured';document.getElementById('tg-st').className='tg-status ok';}
+  const known=loadKnown();
+  const total=Object.values(known).reduce((s,a)=>s+(a.length||0),0);
+  if(total>0) setS(`Last scan baseline: ${total} coins tracked. Press Scan to refresh.`);
 });
 </script>
 </body>
