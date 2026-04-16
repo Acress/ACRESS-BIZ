@@ -7,800 +7,790 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#04060a;--s1:#090d14;--s2:#0d1520;--s3:#111c28;
-  --b1:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.09);--b3:rgba(255,255,255,0.14);
-  --tx:#c2cad8;--dim:#4a5568;--bright:#e8edf5;
-  --g:#00e5a0;--gd:rgba(0,229,160,0.10);--gg:rgba(0,229,160,0.04);
-  --r:#ff4060;--rd:rgba(255,64,96,0.10);
-  --a:#ffb020;--ad:rgba(255,176,32,0.10);
-  --b:#3d9fff;--bd:rgba(61,159,255,0.10);
-  --p:#a78bfa;--pd:rgba(167,139,250,0.10);
-  --mono:'IBM Plex Mono',monospace;
-  --sans:'IBM Plex Sans',sans-serif;
+  --bg:#03050a;--s1:#070c14;--s2:#0c1320;--s3:#101a28;
+  --b1:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.09);--b3:rgba(255,255,255,0.15);
+  --tx:#b8c4d4;--dim:#3d4f64;--br:#dde4f0;
+  --g:#00e5a0;--gd:rgba(0,229,160,.10);--gg:rgba(0,229,160,.04);
+  --r:#ff3d5a;--rd:rgba(255,61,90,.10);
+  --a:#ffb020;--ad:rgba(255,176,32,.10);
+  --bl:#3d9fff;--bld:rgba(61,159,255,.10);
+  --pu:#a78bfa;--pud:rgba(167,139,250,.10);
+  --mono:"IBM Plex Mono",monospace;
+  --sans:"IBM Plex Sans",sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px;line-height:1.5;min-height:100vh;overflow-x:hidden}
-body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.012) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
-
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px;line-height:1.5;min-height:100vh}
+body::before{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,.012) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 @keyframes glow{0%,100%{box-shadow:0 0 6px rgba(0,229,160,.3)}50%{box-shadow:0 0 18px rgba(0,229,160,.6)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
 /* HEADER */
-.hdr{position:sticky;top:0;z-index:100;background:rgba(4,6,10,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:46px}
-.hdr-logo{font-family:var(--mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--g);display:flex;align-items:center;gap:8px}
-.hdr-dot{width:7px;height:7px;border-radius:50%;background:var(--g);animation:glow 2s ease-in-out infinite;flex-shrink:0}
+.hdr{position:sticky;top:0;z-index:100;background:rgba(3,5,10,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:46px}
+.logo{font-family:var(--mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--g);display:flex;align-items:center;gap:8px}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--g);animation:glow 2s ease-in-out infinite}
 .hdr-r{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:10px;color:var(--dim)}
 .back{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-decoration:none;transition:color .15s}
 .back:hover{color:var(--g)}
-.clk{color:var(--g);letter-spacing:1px}
 
-/* LAYOUT */
-.wrap{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:16px 16px 60px}
+/* WRAP */
+.wrap{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:16px 16px 60px}
 
-/* EXCHANGE STATUS BAR */
-.ex-bar{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:12px 18px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ex-pill{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:4px 11px;border-radius:3px;border:1px solid var(--b2)}
-.ex-pill.ok{color:var(--g);border-color:rgba(0,229,160,.25);background:var(--gg)}
-.ex-pill.fail{color:var(--r);border-color:rgba(255,64,96,.2);background:var(--rd)}
-.ex-pill.loading{color:var(--a);border-color:rgba(255,176,32,.2);background:var(--ad)}
-.ex-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
-.ex-pill.ok .ex-dot{animation:pulse 2s infinite}
-.ex-count{font-size:9px;opacity:.7}
-.ex-sep{width:1px;height:20px;background:var(--b2);flex-shrink:0}
-.ex-total{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
-
-/* SCAN BAR */
-.scan-bar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+/* BUTTONS */
 .btn{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;text-transform:uppercase;border:none;border-radius:3px;cursor:pointer;transition:opacity .15s,transform .1s;white-space:nowrap;padding:9px 18px}
 .btn:active{transform:scale(.98)}
 .btn:disabled{opacity:.35;cursor:not-allowed}
-.btn-primary{background:var(--g);color:#000;font-weight:600}
-.btn-primary:hover{opacity:.85}
-.btn-sec{background:none;border:1px solid var(--b2);color:var(--tx)}
-.btn-sec:hover{border-color:var(--g);color:var(--g)}
-.btn-amber{background:var(--a);color:#000;font-weight:600}
-.scan-status{font-family:var(--mono);font-size:10px;color:var(--dim);flex:1}
-.prog-wrap{flex:1;max-width:200px}
+.btn-g{background:var(--g);color:#000;font-weight:600}
+.btn-g:hover:not(:disabled){opacity:.85}
+.btn-s{background:none;border:1px solid var(--b2);color:var(--tx)}
+.btn-s:hover:not(:disabled){border-color:var(--g);color:var(--g)}
+
+/* WATCHLIST BAR */
+.wl-bar{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:12px 16px;margin-bottom:10px}
+.wl-title{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.wl-title::after{content:"";flex:1;height:1px;background:var(--b1)}
+.wl-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:3px;border:1px solid var(--b2);color:var(--tx);background:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .12s}
+.chip:hover{border-color:var(--r);color:var(--r)}
+.chip .rm{font-size:11px;opacity:.5}
+.chip:hover .rm{opacity:1}
+.wl-add{display:flex;gap:6px;align-items:center}
+.wl-inp{font-family:var(--mono);font-size:11px;background:var(--s2);border:1px solid var(--b2);border-radius:3px;color:var(--br);padding:5px 10px;outline:none;width:100px;text-transform:uppercase;transition:border-color .15s}
+.wl-inp:focus{border-color:var(--g)}
+.wl-inp::placeholder{color:var(--dim);text-transform:none}
+
+/* SCAN BAR */
+.scan-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.scan-info{font-family:var(--mono);font-size:10px;color:var(--dim);flex:1;min-width:200px}
+
+/* PROGRESS */
+.prog-section{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:12px 16px;margin-bottom:10px;display:none}
+.prog-section.show{display:block}
+.prog-steps{display:flex;gap:0;margin-bottom:8px}
+.prog-step{flex:1;text-align:center;padding:6px 4px;font-family:var(--mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);border-bottom:2px solid var(--b1);transition:all .3s}
+.prog-step.active{color:var(--a);border-bottom-color:var(--a)}
+.prog-step.done{color:var(--g);border-bottom-color:var(--g)}
 .prog-track{width:100%;height:3px;background:var(--b2);border-radius:2px;overflow:hidden}
-.prog-fill{height:100%;background:var(--g);border-radius:2px;transition:width .4s ease}
+.prog-fill{height:100%;background:var(--g);border-radius:2px;transition:width .5s ease}
+.prog-label{font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:6px}
 
-/* NEW LISTINGS ALERT */
-.new-alert{background:var(--s1);border:1px solid rgba(255,176,32,.3);border-radius:6px;padding:12px 16px;margin-bottom:12px;display:none;animation:fadeIn .3s ease}
-.new-alert.show{display:block}
-.new-alert-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--a);margin-bottom:8px;display:flex;align-items:center;gap:8px}
-.new-coins{display:flex;flex-wrap:wrap;gap:5px}
-.new-coin{font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:3px;border:1px solid rgba(255,176,32,.3);color:var(--a);background:var(--ad);display:flex;align-items:center;gap:5px}
-.new-badge{font-size:8px;background:var(--a);color:#000;padding:1px 4px;border-radius:2px;font-weight:700}
+/* RESULTS */
+.res-meta{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.res-meta::after{content:"";flex:1;height:1px;background:var(--b1)}
+.verdict-counts{display:flex;gap:8px;flex-wrap:wrap}
+.vc{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:2px;border:1px solid}
 
-/* FILTERS */
-.filters{display:flex;align-items:center;gap:4px;margin-bottom:12px;flex-wrap:wrap}
-.flt{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;background:none;border:1px solid var(--b1);color:var(--dim);padding:5px 12px;border-radius:3px;cursor:pointer;transition:all .12s}
-.flt:hover{border-color:var(--b2);color:var(--tx)}
-.flt.on{background:var(--g);color:#000;border-color:var(--g);font-weight:600}
-.flt-count{font-size:9px;margin-left:3px;opacity:.7}
-.flt-sep{width:1px;height:18px;background:var(--b2)}
-.sort-sel{font-family:var(--mono);font-size:10px;background:var(--s2);border:1px solid var(--b2);color:var(--tx);padding:5px 8px;border-radius:3px;outline:none;margin-left:auto}
+/* CARDS GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:10px}
 
-/* RESULTS HEADER */
-.res-hdr{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim)}
-.res-hdr::after{content:'';flex:1;height:1px;background:var(--b1)}
-
-/* COIN CARDS GRID */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px}
-
-.card{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:14px 16px;position:relative;overflow:hidden;animation:fadeIn .3s ease both;transition:border-color .15s}
+.card{background:var(--s1);border:1px solid var(--b1);border-radius:6px;overflow:hidden;position:relative;animation:fadeIn .3s ease both;transition:border-color .15s}
 .card:hover{border-color:var(--b2)}
-.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--card-color,var(--dim));transition:background .3s}
+.card-accent{height:3px;width:100%}
 
-.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
-.card-sym{font-family:var(--mono);font-size:17px;font-weight:600;color:var(--bright);line-height:1;margin-bottom:3px}
-.card-name{font-size:10px;color:var(--dim)}
-.card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
-.card-price{font-family:var(--mono);font-size:14px;font-weight:500;color:var(--bright)}
-.card-chg{font-family:var(--mono);font-size:12px;font-weight:600}
-.pos{color:var(--g)}.neg{color:var(--r)}.neu{color:var(--dim)}
+.card-head{padding:12px 14px 10px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid var(--b1)}
+.card-sym{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--br);line-height:1;margin-bottom:2px}
+.card-price{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.verdict-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.verdict{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:1.5px;padding:4px 12px;border-radius:3px;border:1px solid;white-space:nowrap}
+.v-long{color:var(--g);border-color:rgba(0,229,160,.35);background:var(--gd)}
+.v-short{color:var(--r);border-color:rgba(255,61,90,.35);background:var(--rd)}
+.v-spot{color:var(--bl);border-color:rgba(61,159,255,.35);background:var(--bld)}
+.v-reduce{color:var(--a);border-color:rgba(255,176,32,.35);background:var(--ad)}
+.v-notrade{color:var(--dim);border-color:var(--b2)}
+.conviction{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase}
+.conv-high{color:var(--g)}.conv-med{color:var(--a)}.conv-low{color:var(--dim)}
 
-.ex-badges{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
-.ex-badge{font-family:var(--mono);font-size:8px;letter-spacing:.5px;padding:2px 6px;border-radius:2px;border:1px solid var(--b2);color:var(--dim)}
-.ex-badge.binance{color:#f0b90b;border-color:rgba(240,185,11,.3);background:rgba(240,185,11,.06)}
-.ex-badge.bybit{color:#ff6b35;border-color:rgba(255,107,53,.3);background:rgba(255,107,53,.06)}
-.ex-badge.coinbase{color:#0052ff;border-color:rgba(0,82,255,.3);background:rgba(0,82,255,.08);color:#5b8fff}
-.ex-badge.webull{color:#00c805;border-color:rgba(0,200,5,.3);background:rgba(0,200,5,.06)}
-.ex-badge.new{color:var(--a);border-color:rgba(255,176,32,.4);background:var(--ad);font-weight:700}
+/* STEPS */
+.steps{padding:10px 14px}
+.step{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--b1)}
+.step:last-child{border-bottom:none}
+.step-num{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--dim);padding-top:1px}
+.step-body{}
+.step-label{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.step-icon{font-size:11px}
+.step-val{font-size:11px;color:var(--br);line-height:1.4}
+.step-val strong{font-weight:600}
+.step-sub{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:2px}
+.tag{font-family:var(--mono);font-size:8px;letter-spacing:1px;text-transform:uppercase;padding:1px 6px;border-radius:2px;border:1px solid;margin-left:4px}
+.tg{color:var(--g);border-color:rgba(0,229,160,.3);background:var(--gg)}
+.tr{color:var(--r);border-color:rgba(255,61,90,.3);background:var(--rd)}
+.ta{color:var(--a);border-color:rgba(255,176,32,.3);background:var(--ad)}
+.tb{color:var(--bl);border-color:rgba(61,159,255,.3);background:var(--bld)}
+.tm{color:var(--dim);border-color:var(--b2)}
 
-.reasons{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
-.reason{display:flex;align-items:flex-start;gap:7px;font-size:11px;color:var(--tx);line-height:1.4}
-.reason-icon{font-size:12px;flex-shrink:0;margin-top:1px}
-.reason-txt strong{color:var(--bright)}
+/* LEVELS */
+.levels{display:flex;gap:0;border-top:1px solid var(--b1)}
+.lv{flex:1;padding:8px 14px;text-align:center;border-right:1px solid var(--b1)}
+.lv:last-child{border-right:none}
+.lv-lbl{font-family:var(--mono);font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+.lv-val{font-family:var(--mono);font-size:12px;font-weight:500}
+.lv-entry{color:var(--bl)}.lv-target{color:var(--g)}.lv-stop{color:var(--r)}
 
-.card-bottom{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--b1)}
-.direction-badge{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1px;padding:4px 12px;border-radius:3px;border:1px solid}
-.direction-badge.long{color:var(--g);border-color:rgba(0,229,160,.35);background:var(--gd)}
-.direction-badge.short{color:var(--r);border-color:rgba(255,64,96,.35);background:var(--rd)}
-.direction-badge.neutral{color:var(--dim);border-color:var(--b2)}
-.conviction{font-family:var(--mono);font-size:10px;color:var(--dim)}
-.conviction strong{color:var(--tx)}
-.vol-badge{font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto}
-.vol-badge strong{color:var(--tx)}
+/* NO TRADE CARD */
+.card.no-trade{opacity:.55}
+.card.no-trade:hover{opacity:.75}
+.no-trade-reason{padding:10px 14px;font-family:var(--mono);font-size:10px;color:var(--dim);line-height:1.5}
 
-.levels{display:flex;gap:10px;font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:6px;flex-wrap:wrap}
-.level{display:flex;flex-direction:column;gap:1px}
-.level-lbl{font-size:8px;letter-spacing:.5px;text-transform:uppercase}
-.level-val{font-size:10px;font-weight:500}
-.level-val.entry{color:var(--b)}
-.level-val.target{color:var(--g)}
-.level-val.stop{color:var(--r)}
+/* ERROR */
+.step-err{font-family:var(--mono);font-size:9px;color:var(--r)}
 
-/* SIGNAL TYPE COLORS */
-.card.new-listing{--card-color:var(--a)}
-.card.momentum{--card-color:var(--g)}
-.card.bounce{--card-color:var(--b)}
-.card.squeeze{--card-color:var(--p)}
-.card.volume{--card-color:#ff6b35}
-.card.multi-exchange{--card-color:var(--g)}
-
-/* EMPTY / LOADING */
-.empty{padding:60px 20px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:11px}
-.spinner{width:14px;height:14px;border:2px solid var(--b2);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-
-/* TELEGRAM CONFIG */
-.tg-section{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:14px 16px;margin-bottom:12px}
-.tg-title{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:8px}
-.tg-title::after{content:'';flex:1;height:1px;background:var(--b1)}
+/* TELEGRAM */
+.tg-bar{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:12px 16px;margin-top:16px}
+.tg-t{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.tg-t::after{content:"";flex:1;height:1px;background:var(--b1)}
 .tg-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.tg-inp{background:var(--s2);border:1px solid var(--b2);border-radius:3px;color:var(--bright);font-family:var(--mono);font-size:11px;padding:6px 10px;outline:none;transition:border-color .15s;min-width:200px}
+.tg-inp{font-family:var(--mono);font-size:11px;background:var(--s2);border:1px solid var(--b2);border-radius:3px;color:var(--br);padding:6px 10px;outline:none;min-width:180px;transition:border-color .15s}
 .tg-inp:focus{border-color:var(--g)}
 .tg-inp::placeholder{color:var(--dim)}
-.tg-status{font-family:var(--mono);font-size:10px;color:var(--dim)}
-.tg-status.ok{color:var(--g)}.tg-status.err{color:var(--r)}
+.tg-st{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.tg-st.ok{color:var(--g)}.tg-st.err{color:var(--r)}
 
-@media(max-width:600px){.grid{grid-template-columns:1fr}.ex-bar{gap:6px}}
+.empty{padding:48px 20px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:11px;line-height:1.8}
+.spinner{width:13px;height:13px;border:2px solid var(--b2);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+@media(max-width:600px){.grid{grid-template-columns:1fr}.prog-steps{flex-wrap:wrap}.prog-step{flex:none;width:50%}}
 </style>
 </head>
 <body>
 
 <div class="hdr">
-  <div class="hdr-logo"><span class="hdr-dot"></span>SIGNAL INTELLIGENCE</div>
+  <div class="logo"><span class="logo-dot"></span>SIGNAL INTELLIGENCE</div>
   <div class="hdr-r">
     <a href="index.html" class="back">← Suite</a>
+    <span style="color:var(--b2)">|</span><span>Tool XVI</span>
     <span style="color:var(--b2)">|</span>
-    <span>Tool XVI</span>
-    <span style="color:var(--b2)">|</span>
-    <span class="clk" id="clk">--:--:--</span>
+    <span style="color:var(--g);font-family:var(--mono);font-size:10px" id="clk">--:--:--</span>
   </div>
 </div>
 
 <div class="wrap">
 
-  <!-- EXCHANGE STATUS -->
-  <div class="ex-bar" id="ex-bar">
-    <div class="ex-pill loading" id="ex-binance"><span class="ex-dot"></span>Binance <span class="ex-count" id="exc-binance">—</span></div>
-    <div class="ex-sep"></div>
-    <div class="ex-pill loading" id="ex-bybit"><span class="ex-dot"></span>Bybit <span class="ex-count" id="exc-bybit">—</span></div>
-    <div class="ex-sep"></div>
-    <div class="ex-pill loading" id="ex-coinbase"><span class="ex-dot"></span>Coinbase <span class="ex-count" id="exc-coinbase">—</span></div>
-    <div class="ex-sep"></div>
-    <div class="ex-pill loading" id="ex-webull"><span class="ex-dot"></span>Webull <span class="ex-count" id="exc-webull">—</span></div>
-    <div class="ex-total" id="ex-total">Not scanned yet</div>
+  <!-- WATCHLIST -->
+  <div class="wl-bar">
+    <div class="wl-title">Watchlist — coins with perp markets</div>
+    <div class="wl-chips" id="wl-chips"></div>
+    <div class="wl-add">
+      <input class="wl-inp" id="wl-inp" type="text" placeholder="Add coin e.g. SOL" maxlength="10"
+        onkeydown="if(event.key==='Enter')addCoin()">
+      <button class="btn btn-s" onclick="addCoin()">+ Add</button>
+      <button class="btn btn-s" onclick="resetWatchlist()">Reset Default</button>
+    </div>
   </div>
 
   <!-- SCAN BAR -->
   <div class="scan-bar">
-    <button class="btn btn-primary" id="scan-btn" onclick="runScan()">▶ Scan All Exchanges</button>
-    <button class="btn btn-amber" id="new-btn" onclick="checkNewListings()">🆕 Check New Listings</button>
-    <button class="btn btn-sec" onclick="clearKnown()">Reset Known Coins</button>
-    <span class="scan-status" id="scan-status">Press Scan to pull all coins from Binance, Bybit, Coinbase &amp; Webull</span>
-    <div class="prog-wrap" id="prog-wrap" style="display:none">
-      <div class="prog-track"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+    <button class="btn btn-g" id="scan-btn" onclick="runScan()">▶ Run Full Analysis</button>
+    <span class="scan-info" id="scan-info">5-step engine: Structure → Positioning → Resolution → Volume → Liquidity</span>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="prog-section" id="prog-section">
+    <div class="prog-steps" id="prog-steps">
+      <div class="prog-step" id="ps1">1 · Structure</div>
+      <div class="prog-step" id="ps2">2 · Positioning</div>
+      <div class="prog-step" id="ps3">3 · Resolution</div>
+      <div class="prog-step" id="ps4">4 · Volume</div>
+      <div class="prog-step" id="ps5">5 · Liquidity</div>
+    </div>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="prog-label" id="prog-lbl">Initialising…</div>
+  </div>
+
+  <!-- RESULTS META -->
+  <div class="res-meta" id="res-meta" style="display:none">
+    <span id="res-count">—</span>
+    <div class="verdict-counts" id="vc-wrap"></div>
+  </div>
+
+  <!-- GRID -->
+  <div class="grid" id="grid">
+    <div class="empty">
+      Add coins to your watchlist and hit <strong>Run Full Analysis</strong>.<br>
+      Each coin runs through all 5 steps independently.<br>
+      Output: LONG · SHORT · SPOT BUY · REDUCE · NO TRADE
     </div>
   </div>
 
-  <!-- NEW LISTINGS ALERT -->
-  <div class="new-alert" id="new-alert">
-    <div class="new-alert-title">⚡ New Coins Detected Since Last Scan</div>
-    <div class="new-coins" id="new-coins-list"></div>
-  </div>
-
-  <!-- FILTERS -->
-  <div class="filters" id="filters">
-    <button class="flt on" onclick="setFilter('all',this)">All <span class="flt-count" id="fc-all">—</span></button>
-    <button class="flt" onclick="setFilter('new',this)">🆕 New Listings <span class="flt-count" id="fc-new">0</span></button>
-    <button class="flt" onclick="setFilter('momentum',this)">📈 Momentum <span class="flt-count" id="fc-momentum">0</span></button>
-    <button class="flt" onclick="setFilter('bounce',this)">🔄 Bounce <span class="flt-count" id="fc-bounce">0</span></button>
-    <button class="flt" onclick="setFilter('squeeze',this)">⚡ Squeeze <span class="flt-count" id="fc-squeeze">0</span></button>
-    <button class="flt" onclick="setFilter('volume',this)">🔥 Volume <span class="flt-count" id="fc-volume">0</span></button>
-    <button class="flt" onclick="setFilter('multi',this)">🌐 Multi-Exchange <span class="flt-count" id="fc-multi">0</span></button>
-    <div class="flt-sep"></div>
-    <select class="sort-sel" id="sort-sel" onchange="renderResults()">
-      <option value="conviction">Sort: Conviction</option>
-      <option value="change_desc">Sort: Biggest Gain</option>
-      <option value="change_asc">Sort: Biggest Drop</option>
-      <option value="volume">Sort: Volume</option>
-      <option value="new">Sort: Newest First</option>
-    </select>
-  </div>
-
-  <!-- RESULTS -->
-  <div class="res-hdr" id="res-hdr">Awaiting scan</div>
-  <div class="grid" id="grid">
-    <div class="empty">Hit "Scan All Exchanges" to pull live data from Binance, Bybit, Coinbase and Webull.<br><br>The tool will detect new listings automatically and rank every coin by trade opportunity.</div>
-  </div>
-
-  <!-- TELEGRAM CONFIG -->
-  <div class="tg-section" style="margin-top:20px">
-    <div class="tg-title">Telegram — New Listing Alerts</div>
+  <!-- TELEGRAM -->
+  <div class="tg-bar">
+    <div class="tg-t">Telegram — alert on HIGH conviction signals</div>
     <div class="tg-row">
       <input class="tg-inp" type="password" id="tg-tok" placeholder="Bot token">
       <input class="tg-inp" type="text" id="tg-cid" placeholder="Chat ID">
-      <button class="btn btn-sec" onclick="saveTG()">Save</button>
-      <button class="btn btn-sec" onclick="testTG()">Test</button>
-      <span class="tg-status" id="tg-st">Not configured</span>
+      <button class="btn btn-s" onclick="saveTG()">Save</button>
+      <button class="btn btn-s" onclick="testTG()">Test</button>
+      <span class="tg-st" id="tg-st">Not configured</span>
     </div>
   </div>
 
 </div>
 
 <script>
-// ── STATE ──
-let allCoins = [];        // merged coin data from all exchanges
-let knownCoins = {};      // {exchange: Set of symbols} — persisted to localStorage
-let fundingRates = {};    // {symbol: rate}
-let activeFilter = 'all';
-let scanRunning = false;
+// ─── DEFAULT WATCHLIST ───
+const DEFAULT_WL = ['BTC','ETH','SOL','BNB','XRP','DOGE','AVAX','LINK','DOT','NEAR','INJ','SUI','ARB','OP','TIA','WIF','PEPE','APT','ATOM','LTC'];
+let watchlist = JSON.parse(localStorage.getItem('si_wl')||'null') || [...DEFAULT_WL];
+let allFunding = {};
+let scanResults = [];
 
-const WEBULL_KNOWN = ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','DOT','LINK','LTC','MATIC','SHIB','UNI','ATOM','NEAR','APT','ARB','OP','SUI','INJ','TIA','IMX','PEPE','WIF','FIL','ICP','HBAR','VET','ALGO','AAVE','SAND','MANA','AXS','CHZ','GALA','ZRX','ENJ','CRV','COMP','LDO','MKR','SNX','SUSHI','BAL','YFI','BLUR','GMX','DYDX','1INCH'];
+// ─── WATCHLIST UI ───
+function renderWL() {
+  document.getElementById('wl-chips').innerHTML = watchlist.map(s =>
+    `<button class="chip" onclick="removeCoin('${s}')">${s} <span class="rm">×</span></button>`
+  ).join('');
+}
+function addCoin() {
+  const v = document.getElementById('wl-inp').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(!v || watchlist.includes(v)) { document.getElementById('wl-inp').value=''; return; }
+  watchlist.push(v);
+  localStorage.setItem('si_wl', JSON.stringify(watchlist));
+  renderWL();
+  document.getElementById('wl-inp').value='';
+}
+function removeCoin(s) {
+  watchlist = watchlist.filter(x=>x!==s);
+  localStorage.setItem('si_wl', JSON.stringify(watchlist));
+  renderWL();
+}
+function resetWatchlist() {
+  watchlist = [...DEFAULT_WL];
+  localStorage.setItem('si_wl', JSON.stringify(watchlist));
+  renderWL();
+}
 
-// ── UTILS ──
-const fmtP = n => {
-  if(!n||n===0) return '$0';
+// ─── PROGRESS ───
+const STEPS = ['ps1','ps2','ps3','ps4','ps5'];
+function setStep(n, msg) { // n = 1-5
+  STEPS.forEach((id,i) => {
+    const el = document.getElementById(id);
+    if(i+1 < n) el.className='prog-step done';
+    else if(i+1 === n) el.className='prog-step active';
+    else el.className='prog-step';
+  });
+  document.getElementById('prog-lbl').textContent = msg;
+  document.getElementById('prog-fill').style.width = ((n-1)/5*100)+'%';
+}
+function finishProg() {
+  STEPS.forEach(id=>document.getElementById(id).className='prog-step done');
+  document.getElementById('prog-fill').style.width='100%';
+}
+
+// ─── STEP 1: STRUCTURE ───
+// Where is price relative to 30-day range?
+async function step1_structure(sym) {
+  const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}USDT&interval=1d&limit=30`,
+    {signal:AbortSignal.timeout(10000)});
+  const candles = await r.json();
+  if(!candles || !candles.length) throw new Error('No kline data');
+  const highs = candles.map(c=>parseFloat(c[2]));
+  const lows  = candles.map(c=>parseFloat(c[3]));
+  const quoteVols = candles.map(c=>parseFloat(c[7])); // quote asset volume (USDT)
+  const high30 = Math.max(...highs);
+  const low30  = Math.min(...lows);
+  const price  = parseFloat(candles[candles.length-1][4]);
+  const avgVol7d = quoteVols.slice(-7).reduce((a,b)=>a+b,0)/7;
+  const pricePos = high30 > low30 ? (price-low30)/(high30-low30) : 0.5;
+  let zone, zoneTag, zoneNote;
+  if(pricePos <= 0.25) {
+    zone='support'; zoneTag='tg';
+    zoneNote=`Price at ${(pricePos*100).toFixed(0)}% of 30d range — lower quarter. Near support. LONG setups evaluated.`;
+  } else if(pricePos >= 0.75) {
+    zone='resistance'; zoneTag='tr';
+    zoneNote=`Price at ${(pricePos*100).toFixed(0)}% of 30d range — upper quarter. Near resistance. SHORT setups evaluated.`;
+  } else {
+    zone='midrange'; zoneTag='tm';
+    zoneNote=`Price at ${(pricePos*100).toFixed(0)}% of 30d range — mid-range. No structural edge. Strong signals required.`;
+  }
+  return {zone, zoneTag, zoneNote, pricePos, high30, low30, price, avgVol7d};
+}
+
+// ─── STEP 2: POSITIONING ───
+// Who is trapped? Funding + L/S ratio
+async function step2_positioning(sym) {
+  const funding = allFunding[sym] !== undefined ? allFunding[sym] : null;
+  let longPct=null, lsRatio=null;
+  try {
+    const r = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${sym}USDT&period=1h&limit=3`,
+      {signal:AbortSignal.timeout(8000)});
+    const d = await r.json();
+    if(Array.isArray(d) && d.length) {
+      longPct = parseFloat(d[d.length-1].longAccount)*100;
+      lsRatio = parseFloat(d[d.length-1].longShortRatio);
+    }
+  } catch(e){}
+
+  let trapped='none', trappedTag='tm', trappedNote='';
+  const hasFunding = funding !== null;
+
+  if(hasFunding) {
+    // SHORTS TRAPPED: negative funding (shorts paying) + more shorts than longs
+    if(funding < -0.02) {
+      trapped='shorts'; trappedTag='tg';
+      const lsNote = longPct!==null ? ` ${(100-longPct).toFixed(1)}% short bias confirms overcrowding.` : '';
+      trappedNote=`Funding ${funding.toFixed(4)}% — shorts paying longs.${lsNote} Shorts are trapped. Any catalyst forces covering.`;
+    }
+    // LONGS TRAPPED: positive funding (longs paying) + more longs than shorts
+    else if(funding > 0.05) {
+      trapped='longs'; trappedTag='tr';
+      const lsNote = longPct!==null ? ` ${longPct.toFixed(1)}% long bias confirms overleveraging.` : '';
+      trappedNote=`Funding +${funding.toFixed(4)}% — longs paying shorts.${lsNote} Longs are overleveraged. Distribution risk is high.`;
+    }
+    // FUNDING FLIPPING: was negative, now near zero or turning positive = squeeze may be complete
+    else if(funding >= -0.01 && funding <= 0.02) {
+      trapped='flipping'; trappedTag='ta';
+      trappedNote=`Funding ${funding.toFixed(4)}% — near neutral. If coming from negative: squeeze may be complete, edge is expiring. If coming from positive: flush may be over.`;
+    }
+    else {
+      trapped='none'; trappedTag='tm';
+      trappedNote=`Funding ${funding.toFixed(4)}% — no extreme positioning. Neither side is significantly trapped.`;
+    }
+  } else {
+    trappedNote='No perpetual market found for this coin. Positioning signals not available — spot-only analysis.';
+  }
+
+  return {trapped, trappedTag, trappedNote, funding, longPct, lsRatio, hasFunding};
+}
+
+// ─── STEP 3: RESOLUTION ───
+// Is the trap resolving? Price direction vs OI change
+async function step3_resolution(sym) {
+  let oiChange=0, oiNote='', hasOI=false;
+  try {
+    const r = await fetch(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${sym}USDT&period=4h&limit=8`,
+      {signal:AbortSignal.timeout(8000)});
+    const d = await r.json();
+    if(Array.isArray(d) && d.length >= 2) {
+      hasOI=true;
+      const latest = parseFloat(d[d.length-1].sumOpenInterest);
+      const oldest = parseFloat(d[0].sumOpenInterest);
+      oiChange = (latest-oldest)/oldest*100;
+    }
+  } catch(e){}
+
+  // Get 24h price change from ticker (we need a fresh call for this coin)
+  let priceChg24=0;
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}USDT`,
+      {signal:AbortSignal.timeout(8000)});
+    const d = await r.json();
+    priceChg24 = parseFloat(d.priceChangePercent)||0;
+  } catch(e){}
+
+  let signal='neutral', signalTag='tm';
+  let note='';
+
+  if(!hasOI) {
+    signal='unknown'; signalTag='tm';
+    note=`No OI data available. Price 24h: ${priceChg24>=0?'+':''}${priceChg24.toFixed(2)}%. Resolution signal unavailable for this coin.`;
+  } else {
+    const oiDir = oiChange > 1 ? 'rising' : oiChange < -1 ? 'falling' : 'flat';
+    const priceDir = priceChg24 > 0.5 ? 'up' : priceChg24 < -0.5 ? 'down' : 'flat';
+
+    if(priceDir==='up' && oiDir==='falling') {
+      signal='bullish'; signalTag='tg';
+      note=`Price +${priceChg24.toFixed(2)}% while OI ${oiChange.toFixed(1)}% — shorts are closing. This is the mechanical signature of a short squeeze resolving. Bullish confirmation.`;
+    } else if(priceDir==='down' && oiDir==='rising') {
+      signal='bearish'; signalTag='tr';
+      note=`Price ${priceChg24.toFixed(2)}% while OI +${oiChange.toFixed(1)}% — new shorts entering as price falls. Bearish positioning building. Longs being squeezed out.`;
+    } else if(priceDir==='down' && oiDir==='falling') {
+      signal='liq'; signalTag='tr';
+      note=`Price ${priceChg24.toFixed(2)}% while OI ${oiChange.toFixed(1)}% — longs being liquidated. Forced selling. Potential capitulation bottom forming if this exhausts.`;
+    } else if(priceDir==='up' && oiDir==='rising') {
+      signal='continuation'; signalTag='tb';
+      note=`Price +${priceChg24.toFixed(2)}% while OI +${oiChange.toFixed(1)}% — new longs entering with price. Trend continuation. Not a squeeze — genuine buyers.`;
+    } else if(priceDir==='up' && oiDir==='flat') {
+      signal='weak_bull'; signalTag='ta';
+      note=`Price +${priceChg24.toFixed(2)}% with flat OI — move happening but without new position build. Could be organic spot buying or shallow short covering.`;
+    } else {
+      signal='neutral'; signalTag='tm';
+      note=`Price ${priceChg24.toFixed(2)}%, OI ${oiChange.toFixed(1)}% — no clear directional resolution. Market is coiling or waiting for a catalyst.`;
+    }
+  }
+  return {signal, signalTag, note, oiChange, priceChg24, hasOI};
+}
+
+// ─── STEP 4: VOLUME ───
+// Is real volume confirming the direction?
+async function step4_volume(sym, avgVol7d, priceChg24) {
+  let currentVol=0, volNote='', signal='normal', signalTag='tm';
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}USDT`,
+      {signal:AbortSignal.timeout(8000)});
+    const d = await r.json();
+    currentVol = parseFloat(d.quoteVolume)||0;
+  } catch(e){}
+
+  const volRatio = avgVol7d > 0 ? currentVol/avgVol7d : 0;
+  const fmtR = volRatio.toFixed(2);
+  const fmtV = n => n>=1e9?'$'+(n/1e9).toFixed(1)+'B':n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+n.toFixed(0);
+
+  if(volRatio >= 3 && priceChg24 > 1) {
+    signal='strong_bull'; signalTag='tg';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — major volume spike with rising price. Institutional-grade confirmation. High conviction.`;
+  } else if(volRatio >= 1.5 && priceChg24 > 0.5) {
+    signal='bullish'; signalTag='tg';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — elevated volume with price rising. Buyers in control. Volume is confirming the move.`;
+  } else if(volRatio >= 2 && Math.abs(priceChg24) < 1.5) {
+    signal='stealth'; signalTag='tb';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — high volume with flat price. Large players absorbing supply without moving price. Accumulation or distribution — check direction bias.`;
+  } else if(volRatio >= 1.5 && priceChg24 < -0.5) {
+    signal='bearish'; signalTag='tr';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — elevated volume with falling price. Sellers in control. Volume is confirming the downside move.`;
+  } else if(volRatio >= 3 && priceChg24 < -1) {
+    signal='strong_bear'; signalTag='tr';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — major volume spike with falling price. Heavy sell-side pressure.`;
+  } else if(volRatio < 0.5 && priceChg24 > 1) {
+    signal='weak_bull'; signalTag='ta';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — price rising on LOW volume. Move not confirmed by participation. High risk of reversal.`;
+  } else if(volRatio < 0.5 && priceChg24 < -1) {
+    signal='weak_bear'; signalTag='ta';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — price falling on low volume. Lack of conviction on the downside. May be exhausting.`;
+  } else {
+    signal='normal'; signalTag='tm';
+    volNote=`${fmtV(currentVol)} (${fmtR}x 7d avg) — volume in normal range. No anomaly detected. Not a confirming factor.`;
+  }
+  return {signal, signalTag, volNote, currentVol, volRatio};
+}
+
+// ─── STEP 5: LIQUIDITY ───
+// Is there room to move? Order book depth analysis
+async function step5_liquidity(sym, structure) {
+  let bidDepth=0, askDepth=0, depthRatio=1, liqNote='', signal='neutral', signalTag='tm';
+  try {
+    const r = await fetch(`https://api.binance.com/api/v3/depth?symbol=${sym}USDT&limit=20`,
+      {signal:AbortSignal.timeout(8000)});
+    const d = await r.json();
+    // Sum top 10 levels in USDT value
+    askDepth = (d.asks||[]).slice(0,10).reduce((s,a)=>s+parseFloat(a[0])*parseFloat(a[1]),0);
+    bidDepth = (d.bids||[]).slice(0,10).reduce((s,b)=>s+parseFloat(b[0])*parseFloat(b[1]),0);
+    depthRatio = askDepth > 0 ? bidDepth/askDepth : 1;
+    const fmtD = n=>n>=1e6?'$'+(n/1e6).toFixed(1)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+n.toFixed(0);
+
+    if(depthRatio >= 1.5) {
+      signal='long_clear'; signalTag='tg';
+      liqNote=`Bids ${fmtD(bidDepth)} vs asks ${fmtD(askDepth)} (${depthRatio.toFixed(2)}x ratio). More buy support than sell wall. Path upward is relatively clear.`;
+    } else if(depthRatio >= 1.2) {
+      signal='long_slight'; signalTag='tg';
+      liqNote=`Bids ${fmtD(bidDepth)} vs asks ${fmtD(askDepth)} (${depthRatio.toFixed(2)}x ratio). Slight bid dominance. Marginal advantage to the upside.`;
+    } else if(depthRatio <= 0.67) {
+      signal='short_clear'; signalTag='tr';
+      liqNote=`Asks ${fmtD(askDepth)} vs bids ${fmtD(bidDepth)} (${depthRatio.toFixed(2)}x ratio). Heavy sell wall above. Upside resistance is significant — favors short or caution on longs.`;
+    } else if(depthRatio <= 0.83) {
+      signal='short_slight'; signalTag='tr';
+      liqNote=`Asks ${fmtD(askDepth)} vs bids ${fmtD(bidDepth)} (${depthRatio.toFixed(2)}x ratio). Slight ask dominance. Modest resistance above.`;
+    } else {
+      signal='balanced'; signalTag='tm';
+      liqNote=`Bids ${fmtD(bidDepth)} vs asks ${fmtD(askDepth)} (${depthRatio.toFixed(2)}x ratio). Order book is balanced. No liquidity edge in either direction.`;
+    }
+  } catch(e) {
+    liqNote='Order book data unavailable. Liquidity path cannot be assessed.';
+  }
+  return {signal, signalTag, liqNote, bidDepth, askDepth, depthRatio};
+}
+
+// ─── VERDICT ENGINE ───
+function computeVerdict(s1, s2, s3, s4, s5) {
+  const {zone, pricePos} = s1;
+  const {trapped, hasFunding} = s2;
+  const {signal: res} = s3;
+  const {signal: vol} = s4;
+  const {signal: liq} = s5;
+
+  // Score each direction independently
+  let longPts=0, shortPts=0;
+
+  // Step 1 — Structure (weight: 2)
+  if(zone==='support')    longPts  += 2;
+  if(zone==='resistance') shortPts += 2;
+
+  // Step 2 — Positioning (weight: 2)
+  if(trapped==='shorts')  longPts  += 2;
+  if(trapped==='longs')   shortPts += 2;
+  if(trapped==='flipping') { longPts -= 1; shortPts -= 1; } // expiring edge
+
+  // Step 3 — Resolution (weight: 2, conditional)
+  if(res==='bullish')      longPts  += 2;
+  if(res==='continuation') longPts  += 1;
+  if(res==='weak_bull')    longPts  += 0.5;
+  if(res==='bearish')      shortPts += 2;
+  if(res==='liq')          shortPts += 1.5; // liquidation favors short continuation
+  if(res==='weak_bear')    shortPts += 0.5;
+
+  // Step 4 — Volume (weight: 1.5)
+  if(vol==='strong_bull' || vol==='bullish') longPts  += 1.5;
+  if(vol==='stealth') { longPts += 0.75; shortPts += 0.75; } // ambiguous — slight edge both
+  if(vol==='strong_bear' || vol==='bearish') shortPts += 1.5;
+  if(vol==='weak_bull')  { longPts -= 0.5; } // unconfirmed move = deduct
+  if(vol==='weak_bear')  { shortPts -= 0.5; }
+
+  // Step 5 — Liquidity (weight: 1)
+  if(liq==='long_clear' || liq==='long_slight')   longPts  += liq==='long_clear'?1:0.5;
+  if(liq==='short_clear' || liq==='short_slight') shortPts += liq==='short_clear'?1:0.5;
+
+  const maxPts = 8.5;
+  const longScore  = Math.max(0, Math.min(maxPts, longPts));
+  const shortScore = Math.max(0, Math.min(maxPts, shortPts));
+
+  // SPOT BUY — at support, no perp, volume accumulation
+  if(!hasFunding && zone==='support' && (vol==='bullish'||vol==='stealth'||vol==='strong_bull')) {
+    const conv = longScore >= 3 ? 'HIGH' : 'MED';
+    return {verdict:'SPOT BUY', vclass:'v-spot', conv, convClass:'conv-'+conv.toLowerCase(), longScore, shortScore,
+      reason:'No perpetual market available. Spot structure and volume support accumulation at this price level.'};
+  }
+
+  // REDUCE/SELL — signs of exhaustion at highs
+  if(pricePos > 0.72 && (trapped==='flipping'||trapped==='longs') && (vol==='weak_bull'||vol==='bearish'||vol==='stealth') && (res==='continuation'||res==='neutral'||res==='bearish')) {
+    const conv = shortScore >= 4 ? 'HIGH' : 'MED';
+    return {verdict:'REDUCE', vclass:'v-reduce', conv, convClass:'conv-'+conv.toLowerCase(), longScore, shortScore,
+      reason:'Price extended with signs of momentum loss. Funding flipping or longs trapped. Volume weakening. Reduce or hedge existing positions.'};
+  }
+
+  // LONG — need support zone + shorts trapped at minimum, plus at least 2 more confirming
+  if(zone==='support' && trapped==='shorts') {
+    if(longScore >= 7)      return {verdict:'LONG', vclass:'v-long', conv:'HIGH', convClass:'conv-high', longScore, shortScore};
+    if(longScore >= 5)      return {verdict:'LONG', vclass:'v-long', conv:'MED',  convClass:'conv-med',  longScore, shortScore};
+    if(longScore >= 3.5)    return {verdict:'LONG', vclass:'v-long', conv:'LOW',  convClass:'conv-low',  longScore, shortScore};
+  }
+
+  // SHORT — need resistance zone + longs trapped at minimum
+  if(zone==='resistance' && trapped==='longs') {
+    if(shortScore >= 7)     return {verdict:'SHORT', vclass:'v-short', conv:'HIGH', convClass:'conv-high', longScore, shortScore};
+    if(shortScore >= 5)     return {verdict:'SHORT', vclass:'v-short', conv:'MED',  convClass:'conv-med',  longScore, shortScore};
+    if(shortScore >= 3.5)   return {verdict:'SHORT', vclass:'v-short', conv:'LOW',  convClass:'conv-low',  longScore, shortScore};
+  }
+
+  // MID-RANGE with overwhelming signals
+  if(zone==='midrange' && longScore >= 7) return {verdict:'LONG', vclass:'v-long', conv:'LOW', convClass:'conv-low', longScore, shortScore,
+    reason:'Mid-range zone but signals are overwhelmingly bullish. Treat as low conviction — tight stop required.'};
+  if(zone==='midrange' && shortScore >= 7) return {verdict:'SHORT', vclass:'v-short', conv:'LOW', convClass:'conv-low', longScore, shortScore,
+    reason:'Mid-range zone but signals are overwhelmingly bearish. Treat as low conviction — tight stop required.'};
+
+  // NO TRADE
+  let noReason = '';
+  if(zone==='midrange') noReason='Price is mid-range — no structural anchor. Wait for price to reach support or resistance.';
+  else if(trapped==='none') noReason='No extreme positioning detected on either side. No trapped crowd to squeeze in either direction.';
+  else if(Math.abs(longScore-shortScore) < 1.5) noReason='Conflicting signals — bullish and bearish evidence is roughly balanced. No directional edge.';
+  else noReason='Insufficient signal convergence. One or more critical steps are not confirming.';
+
+  return {verdict:'NO TRADE', vclass:'v-notrade', conv:null, convClass:'', longScore, shortScore, noReason};
+}
+
+// ─── COMPUTE LEVELS ───
+function computeLevels(verdict, price, structure) {
+  if(!price || price<=0) return null;
+  const {high30, low30} = structure;
+  const range = high30 - low30;
+  if(verdict==='LONG' || verdict==='SPOT BUY') {
+    return {
+      entry: price,
+      target: Math.min(high30, price + range*0.12),
+      stop:   Math.max(low30, price - range*0.07)
+    };
+  }
+  if(verdict==='SHORT') {
+    return {
+      entry: price,
+      target: Math.max(low30, price - range*0.12),
+      stop:   Math.min(high30, price + range*0.07)
+    };
+  }
+  return null;
+}
+
+// ─── RENDER CARD ───
+function fmtP(n) {
+  if(!n||n===0) return '—';
   if(n>=1000) return '$'+n.toLocaleString(undefined,{maximumFractionDigits:0});
   if(n>=1) return '$'+n.toFixed(2);
   if(n>=0.01) return '$'+n.toFixed(4);
   return '$'+n.toFixed(8);
-};
-const fmtV = n => {
-  if(!n) return '—';
-  if(n>=1e9) return '$'+(n/1e9).toFixed(1)+'B';
-  if(n>=1e6) return '$'+(n/1e6).toFixed(1)+'M';
-  if(n>=1e3) return '$'+(n/1e3).toFixed(0)+'K';
-  return '$'+n.toFixed(0);
-};
-const setP = (pct,el) => { document.getElementById(el).style.width=Math.min(100,pct)+'%'; };
-const setS = msg => { document.getElementById('scan-status').textContent = msg; };
-
-// ── LOAD / SAVE KNOWN COINS ──
-function loadKnown() {
-  try { return JSON.parse(localStorage.getItem('si_known')||'{}'); } catch{ return {}; }
-}
-function saveKnown(obj) {
-  localStorage.setItem('si_known', JSON.stringify(obj));
-}
-function clearKnown() {
-  localStorage.removeItem('si_known');
-  knownCoins = {};
-  document.getElementById('new-alert').classList.remove('show');
-  setS('Known coin list cleared. Run scan to build fresh baseline.');
 }
 
-// ── EXCHANGE STATUS HELPERS ──
-function setEx(id, status, count) {
-  const el = document.getElementById('ex-'+id);
-  el.className = 'ex-pill ' + status;
-  const ce = document.getElementById('exc-'+id);
-  if(ce) ce.textContent = count ? `(${count})` : '';
-}
+function cardHTML(sym, s1, s2, s3, s4, s5, verdict, levels, idx) {
+  const accentColor = verdict.verdict==='LONG'||verdict.verdict==='SPOT BUY'?'var(--g)':
+    verdict.verdict==='SHORT'?'var(--r)':verdict.verdict==='REDUCE'?'var(--a)':'var(--dim)';
+  const isNoTrade = verdict.verdict==='NO TRADE';
 
-// ── FETCH BINANCE ──
-async function fetchBinance() {
-  setEx('binance','loading','…');
-  try {
-    const [tickerRes, fundRes] = await Promise.all([
-      fetch('https://api.binance.com/api/v3/ticker/24hr', {signal:AbortSignal.timeout(12000)}),
-      fetch('https://fapi.binance.com/fapi/v1/premiumIndex', {signal:AbortSignal.timeout(10000)}).catch(()=>null)
-    ]);
-    const tickers = await tickerRes.json();
-    // Build funding map
-    if(fundRes && fundRes.ok) {
-      const fdata = await fundRes.json();
-      fdata.forEach(f => {
-        const sym = f.symbol.replace('USDT','').replace('BUSD','');
-        fundingRates[sym] = parseFloat(f.lastFundingRate)*100;
-      });
-    }
-    const pairs = tickers
-      .filter(t => t.symbol.endsWith('USDT'))
-      .map(t => ({
-        sym: t.symbol.replace('USDT',''),
-        price: parseFloat(t.lastPrice),
-        chg24: parseFloat(t.priceChangePercent),
-        vol: parseFloat(t.quoteVolume),  // USDT volume
-        high: parseFloat(t.highPrice),
-        low: parseFloat(t.lowPrice),
-        count: parseInt(t.count),
-        exchange: 'binance'
-      }))
-      .filter(t => t.vol > 50000); // filter dust
-    setEx('binance','ok', pairs.length);
-    return pairs;
-  } catch(e) {
-    setEx('binance','fail','');
-    return [];
-  }
-}
+  const convHtml = verdict.conv ?
+    `<div class="conviction ${verdict.convClass}">${verdict.conv} CONVICTION</div>` : '';
 
-// ── FETCH BYBIT ──
-async function fetchBybit() {
-  setEx('bybit','loading','…');
-  try {
-    const r = await fetch('https://api.bybit.com/v5/market/tickers?category=spot&limit=1000', {signal:AbortSignal.timeout(12000)});
-    const d = await r.json();
-    const pairs = (d?.result?.list||[])
-      .filter(t => t.symbol.endsWith('USDT'))
-      .map(t => ({
-        sym: t.symbol.replace('USDT',''),
-        price: parseFloat(t.lastPrice),
-        chg24: parseFloat(t.price24hPcnt)*100,
-        vol: parseFloat(t.turnover24h||0),
-        exchange: 'bybit'
-      }))
-      .filter(t => t.vol > 10000);
-    setEx('bybit','ok', pairs.length);
-    return pairs;
-  } catch(e) {
-    setEx('bybit','fail','');
-    return [];
-  }
-}
-
-// ── FETCH COINBASE ──
-async function fetchCoinbase() {
-  setEx('coinbase','loading','…');
-  try {
-    const r = await fetch('https://api.exchange.coinbase.com/products', {signal:AbortSignal.timeout(12000)});
-    const d = await r.json();
-    const pairs = d
-      .filter(p => p.quote_currency==='USD' && p.status==='online' && !p.cancel_only)
-      .map(p => ({
-        sym: p.base_currency,
-        exchange: 'coinbase',
-        vol: 0, price: 0, chg24: 0
-      }));
-    setEx('coinbase','ok', pairs.length);
-    return pairs;
-  } catch(e) {
-    setEx('coinbase','fail','');
-    return [];
-  }
-}
-
-// ── WEBULL (best effort, unofficial) ──
-async function fetchWebull() {
-  setEx('webull','loading','…');
-  // Webull has no public API — use known static list + try unofficial endpoint
-  try {
-    // Try unofficial Webull crypto endpoint via proxy
-    const proxy = `https://corsproxy.io/?${encodeURIComponent('https://quotes.webull.com/api/securities/v5/ticker-detail?regionId=6&tickerType=crypto')}`;
-    const r = await fetch(proxy, {signal:AbortSignal.timeout(8000)});
-    const d = await r.json();
-    const items = d?.data?.items||[];
-    if(items.length > 0) {
-      const syms = items.map(i => ({ sym: (i.symbol||'').replace('USD','').replace('-',''), exchange:'webull', vol:0, price:0, chg24:0 })).filter(s=>s.sym);
-      setEx('webull','ok', syms.length);
-      return syms;
-    }
-  } catch(e) {}
-  // Fall back to known static list
-  const syms = WEBULL_KNOWN.map(s => ({sym:s, exchange:'webull', vol:0, price:0, chg24:0}));
-  setEx('webull','ok', `~${syms.length}`);
-  return syms;
-}
-
-// ── MERGE EXCHANGE DATA ──
-function mergeExchanges(binance, bybit, coinbase, webull) {
-  const map = {};
-
-  // Binance is primary — has full price + volume data
-  binance.forEach(c => {
-    map[c.sym] = { sym:c.sym, price:c.price, chg24:c.chg24, vol:c.vol, high:c.high, low:c.low, count:c.count, exchanges:['binance'] };
-  });
-
-  // Bybit — add exchange presence, fill price if missing
-  bybit.forEach(c => {
-    if(map[c.sym]) { map[c.sym].exchanges.push('bybit'); }
-    else { map[c.sym] = { sym:c.sym, price:c.price, chg24:c.chg24, vol:c.vol, high:0, low:0, count:0, exchanges:['bybit'] }; }
-  });
-
-  // Coinbase — exchange presence only (no price from this endpoint)
-  coinbase.forEach(c => {
-    if(map[c.sym]) map[c.sym].exchanges.push('coinbase');
-    else map[c.sym] = { sym:c.sym, price:0, chg24:0, vol:0, high:0, low:0, count:0, exchanges:['coinbase'] };
-  });
-
-  // Webull
-  webull.forEach(c => {
-    if(map[c.sym]) map[c.sym].exchanges.push('webull');
-    else map[c.sym] = { sym:c.sym, price:0, chg24:0, vol:0, high:0, low:0, count:0, exchanges:['webull'] };
-  });
-
-  return Object.values(map);
-}
-
-// ── DETECT NEW LISTINGS ──
-function detectNew(merged, known) {
-  const newCoins = [];
-  const exchanges = ['binance','bybit','coinbase','webull'];
-  exchanges.forEach(ex => {
-    const current = new Set(merged.filter(c=>c.exchanges.includes(ex)).map(c=>c.sym));
-    const prev = new Set(known[ex]||[]);
-    if(prev.size === 0) return; // first run — no baseline
-    current.forEach(sym => {
-      if(!prev.has(sym)) newCoins.push({sym, exchange:ex});
-    });
-  });
-  return newCoins;
-}
-
-// ── SIGNAL ENGINE ──
-function computeSignals(coin) {
-  const signals = [];
-  const chg = coin.chg24||0;
-  const vol = coin.vol||0;
-  const funding = fundingRates[coin.sym];
-  const exCount = coin.exchanges.length;
-  const range = coin.high&&coin.low&&coin.price ? (coin.high-coin.low)/coin.price*100 : 0;
-  const isNew = coin.isNew||false;
-
-  // 1. NEW LISTING
-  if(isNew) {
-    signals.push({
-      type:'new-listing', priority:100,
-      icon:'🆕', direction:'long',
-      text:`<strong>New listing detected on ${coin.newExchange}</strong> — Exchange listings historically average +35% in first 48–72h. First-mover window is open.`
-    });
-  }
-
-  // 2. MOMENTUM BREAKOUT — strong positive move with volume
-  if(chg >= 8 && vol >= 500000) {
-    signals.push({
-      type:'momentum', priority:85,
-      icon:'📈', direction:'long',
-      text:`<strong>+${chg.toFixed(1)}% in 24h</strong> with ${fmtV(vol)} volume — confirmed momentum breakout. Ride the trend with a trailing stop.`
-    });
-  } else if(chg >= 5 && vol >= 200000) {
-    signals.push({
-      type:'momentum', priority:70,
-      icon:'📈', direction:'long',
-      text:`<strong>+${chg.toFixed(1)}% move</strong> with ${fmtV(vol)} volume — building momentum. Watch for continuation above today's high.`
-    });
-  }
-
-  // 3. OVERSOLD BOUNCE — significant drop, showing signs of stabilisation
-  if(chg <= -8 && chg >= -25 && vol >= 200000) {
-    signals.push({
-      type:'bounce', priority:75,
-      icon:'🔄', direction:'long',
-      text:`<strong>Down ${Math.abs(chg).toFixed(1)}% in 24h</strong> — sharp sell-off creates mean reversion opportunity. Enter on first green candle with stop below today's low.`
-    });
-  } else if(chg <= -5 && chg >= -15 && vol >= 100000) {
-    signals.push({
-      type:'bounce', priority:60,
-      icon:'🔄', direction:'long',
-      text:`<strong>Down ${Math.abs(chg).toFixed(1)}% in 24h</strong> — oversold territory. Watch for volume confirmation before entry.`
-    });
-  }
-
-  // 4. FUNDING SQUEEZE — shorts/longs overcrowded
-  if(funding !== undefined) {
-    if(funding < -0.04) {
-      signals.push({
-        type:'squeeze', priority:80,
-        icon:'⚡', direction:'long',
-        text:`<strong>Funding rate ${funding.toFixed(3)}%</strong> — shorts heavily overcrowded. One bullish catalyst triggers forced covering — high squeeze probability.`
-      });
-    } else if(funding < -0.02) {
-      signals.push({
-        type:'squeeze', priority:65,
-        icon:'⚡', direction:'long',
-        text:`<strong>Funding rate ${funding.toFixed(3)}%</strong> — negative funding indicates short bias. Squeeze setup building.`
-      });
-    } else if(funding > 0.08) {
-      signals.push({
-        type:'squeeze', priority:72,
-        icon:'⚡', direction:'short',
-        text:`<strong>Funding rate +${funding.toFixed(3)}%</strong> — longs overcrowded, paying heavy premium. Short the overleveraged crowd or wait for flush.`
-      });
-    }
-  }
-
-  // 5. VOLUME ANOMALY — volume spike without proportional price move
-  if(vol >= 5000000 && Math.abs(chg) < 3) {
-    signals.push({
-      type:'volume', priority:78,
-      icon:'🔥', direction:'long',
-      text:`<strong>${fmtV(vol)} volume</strong> with only ${chg.toFixed(1)}% price move — large players accumulating without moving price. Breakout likely imminent.`
-    });
-  } else if(vol >= 2000000 && Math.abs(chg) < 2) {
-    signals.push({
-      type:'volume', priority:60,
-      icon:'🔥', direction:'long',
-      text:`<strong>${fmtV(vol)} volume surge</strong> with flat price — stealth accumulation pattern. Monitor for directional break.`
-    });
-  }
-
-  // 6. MULTI-EXCHANGE — listed across all major exchanges = institutional grade
-  if(exCount >= 3) {
-    signals.push({
-      type:'multi', priority:55,
-      icon:'🌐', direction:'long',
-      text:`<strong>Listed on ${exCount} exchanges</strong> (${coin.exchanges.join(', ')}) — institutional-grade liquidity. Lower manipulation risk, tighter spreads.`
-    });
-  }
-
-  // 7. HIGH RANGE DAY — wide candle body indicates decisive move
-  if(range > 12 && vol >= 300000) {
-    signals.push({
-      type:'volume', priority:62,
-      icon:'📊', direction: chg > 0 ? 'long' : 'short',
-      text:`<strong>${range.toFixed(0)}% daily range</strong> — decisive directional day with ${fmtV(vol)} volume. Continuation plays favoured.`
-    });
-  }
-
-  // 8. NOT ON COINBASE but on Binance/Bybit — potential upcoming listing
-  if(!coin.exchanges.includes('coinbase') && coin.exchanges.includes('binance') && vol >= 1000000) {
-    signals.push({
-      type:'multi', priority:58,
-      icon:'🏛️', direction:'long',
-      text:`<strong>Not yet on Coinbase</strong> — listed on Binance with ${fmtV(vol)} volume. Coinbase listing would drive significant price appreciation.`
-    });
-  }
-
-  return signals.sort((a,b)=>b.priority-a.priority);
-}
-
-// ── SCORE COIN ──
-function scoreAndRank(coins) {
-  return coins.map(coin => {
-    const signals = computeSignals(coin);
-    if(!signals.length) return null;
-    const topSig = signals[0];
-    const conviction = signals.reduce((s,sig)=>s+sig.priority,0);
-    const direction = topSig.direction;
-    // Entry/target/stop
-    const price = coin.price;
-    let entry=price, target=price, stop=price;
-    if(price > 0) {
-      if(direction === 'long') { entry=price; target=price*1.08; stop=price*0.95; }
-      else { entry=price; target=price*0.92; stop=price*1.05; }
-    }
-    return { ...coin, signals, topType:topSig.type, direction, conviction, entry, target, stop };
-  }).filter(Boolean).sort((a,b)=>b.conviction-a.conviction);
-}
-
-// ── MAIN SCAN ──
-async function runScan() {
-  if(scanRunning) return;
-  scanRunning = true;
-  document.getElementById('scan-btn').disabled = true;
-  document.getElementById('prog-wrap').style.display = 'block';
-  document.getElementById('grid').innerHTML = '<div class="empty"><div style="display:flex;align-items:center;justify-content:center;gap:10px"><div class="spinner"></div> Scanning exchanges…</div></div>';
-
-  setP(5,'prog'); setS('Connecting to Binance…');
-  const binance = await fetchBinance();
-
-  setP(30,'prog'); setS('Connecting to Bybit…');
-  const bybit = await fetchBybit();
-
-  setP(55,'prog'); setS('Connecting to Coinbase…');
-  const coinbase = await fetchCoinbase();
-
-  setP(75,'prog'); setS('Connecting to Webull…');
-  const webull = await fetchWebull();
-
-  setP(88,'prog'); setS('Merging data and detecting new listings…');
-
-  const merged = mergeExchanges(binance, bybit, coinbase, webull);
-  const prevKnown = loadKnown();
-
-  // Detect new listings
-  const newListings = detectNew(merged, prevKnown);
-  newListings.forEach(nl => {
-    const c = merged.find(m=>m.sym===nl.sym);
-    if(c) { c.isNew = true; c.newExchange = nl.exchange; }
-  });
-
-  // Show new listings alert
-  if(newListings.length > 0) {
-    document.getElementById('new-coins-list').innerHTML = newListings.map(nl =>
-      `<div class="new-coin">${nl.sym} <span class="new-badge">NEW on ${nl.exchange}</span></div>`
-    ).join('');
-    document.getElementById('new-alert').classList.add('show');
-    // Telegram alert for new listings
-    const msg = `🆕 NEW LISTINGS DETECTED\n\n${newListings.map(n=>`• ${n.sym} — just listed on ${n.exchange}`).join('\n')}\n\nTime: ${new Date().toLocaleTimeString()}`;
-    sendTelegram(msg);
-  } else {
-    document.getElementById('new-alert').classList.remove('show');
-  }
-
-  // Save new baseline
-  const newKnown = {};
-  ['binance','bybit','coinbase','webull'].forEach(ex => {
-    newKnown[ex] = merged.filter(c=>c.exchanges.includes(ex)).map(c=>c.sym);
-  });
-  saveKnown(newKnown);
-
-  allCoins = scoreAndRank(merged);
-  setP(100,'prog');
-
-  const total = merged.length;
-  const exTotal = `${binance.length} Binance · ${bybit.length} Bybit · ${coinbase.length} Coinbase · ${webull.length||'~50'} Webull · ${total} total unique coins`;
-  document.getElementById('ex-total').textContent = exTotal;
-  setS(`Scan complete — ${allCoins.length} trade opportunities ranked`);
-
-  updateFilterCounts();
-  renderResults();
-
-  document.getElementById('scan-btn').disabled = false;
-  document.getElementById('prog-wrap').style.display = 'none';
-  scanRunning = false;
-}
-
-// ── CHECK NEW LISTINGS ONLY (no full rescan) ──
-async function checkNewListings() {
-  setS('Checking for new listings…');
-  document.getElementById('new-btn').disabled = true;
-  const prevKnown = loadKnown();
-  if(Object.keys(prevKnown).length === 0) {
-    setS('No baseline found. Run full scan first to build a baseline.');
-    document.getElementById('new-btn').disabled = false;
-    return;
-  }
-  // Quick fetch just coin lists
-  const [binance, bybit, coinbase, webull] = await Promise.all([
-    fetchBinance(), fetchBybit(), fetchCoinbase(), fetchWebull()
-  ]);
-  const merged = mergeExchanges(binance, bybit, coinbase, webull);
-  const newListings = detectNew(merged, prevKnown);
-  if(newListings.length > 0) {
-    document.getElementById('new-coins-list').innerHTML = newListings.map(nl =>
-      `<div class="new-coin">${nl.sym} <span class="new-badge">NEW on ${nl.exchange}</span></div>`
-    ).join('');
-    document.getElementById('new-alert').classList.add('show');
-    const msg = `🆕 NEW LISTINGS\n\n${newListings.map(n=>`• ${n.sym} on ${n.exchange}`).join('\n')}\n\n${new Date().toLocaleTimeString()}`;
-    sendTelegram(msg);
-    setS(`${newListings.length} new coin(s) detected`);
-  } else {
-    setS('No new listings detected since last scan');
-    document.getElementById('new-alert').classList.remove('show');
-  }
-  // Update baseline
-  const newKnown = {};
-  ['binance','bybit','coinbase','webull'].forEach(ex => {
-    newKnown[ex] = merged.filter(c=>c.exchanges.includes(ex)).map(c=>c.sym);
-  });
-  saveKnown(newKnown);
-  document.getElementById('new-btn').disabled = false;
-}
-
-// ── FILTER + RENDER ──
-function setFilter(f, btn) {
-  activeFilter = f;
-  document.querySelectorAll('.flt').forEach(b=>b.classList.remove('on'));
-  btn.classList.add('on');
-  renderResults();
-}
-
-function updateFilterCounts() {
-  const counts = {all:0, new:0, momentum:0, bounce:0, squeeze:0, volume:0, multi:0};
-  allCoins.forEach(c => {
-    counts.all++;
-    const types = [...new Set(c.signals.map(s=>s.type))];
-    if(types.includes('new-listing')) counts.new++;
-    if(types.includes('momentum')) counts.momentum++;
-    if(types.includes('bounce')) counts.bounce++;
-    if(types.includes('squeeze')) counts.squeeze++;
-    if(types.includes('volume')) counts.volume++;
-    if(types.includes('multi')) counts.multi++;
-  });
-  Object.entries(counts).forEach(([k,v]) => {
-    const el = document.getElementById('fc-'+k);
-    if(el) el.textContent = v;
-  });
-}
-
-function renderResults() {
-  const sort = document.getElementById('sort-sel').value;
-  let filtered = [...allCoins];
-
-  if(activeFilter !== 'all') {
-    const typeMap = {new:'new-listing', momentum:'momentum', bounce:'bounce', squeeze:'squeeze', volume:'volume', multi:'multi'};
-    const t = typeMap[activeFilter];
-    filtered = filtered.filter(c => c.signals.some(s=>s.type===t));
-  }
-
-  // Sort
-  if(sort==='change_desc') filtered.sort((a,b)=>b.chg24-a.chg24);
-  else if(sort==='change_asc') filtered.sort((a,b)=>a.chg24-b.chg24);
-  else if(sort==='volume') filtered.sort((a,b)=>(b.vol||0)-(a.vol||0));
-  else if(sort==='new') filtered.sort((a,b)=>(b.isNew?1:0)-(a.isNew?1:0));
-  else filtered.sort((a,b)=>b.conviction-a.conviction);
-
-  document.getElementById('res-hdr').textContent = `${filtered.length} opportunities · sorted by ${sort}`;
-
-  if(!filtered.length) {
-    document.getElementById('grid').innerHTML = '<div class="empty">No coins match this filter in current scan results.</div>';
-    return;
-  }
-
-  // Render top 60 max
-  document.getElementById('grid').innerHTML = filtered.slice(0,60).map((c,i) => {
-    const chgColor = c.chg24>0?'pos':c.chg24<0?'neg':'neu';
-    const dirClass = c.direction==='long'?'long':c.direction==='short'?'short':'neutral';
-    const dirText = c.direction==='long'?'▲ LONG':c.direction==='short'?'▼ SHORT':'→ NEUTRAL';
-    const topSigs = c.signals.slice(0,3);
-    const exBadges = c.exchanges.map(ex=>`<span class="ex-badge ${ex}">${ex}</span>`).join('');
-    const newBadge = c.isNew ? `<span class="ex-badge new">NEW</span>` : '';
-
-    return `<div class="card ${c.topType}" style="animation-delay:${Math.min(i*0.025,0.5)}s">
-      <div class="card-top">
-        <div>
-          <div class="card-sym">${c.sym}</div>
-          <div class="card-name">${c.exchanges.length} exchange${c.exchanges.length>1?'s':''} · ${c.signals.length} signal${c.signals.length>1?'s':''}</div>
-        </div>
-        <div class="card-right">
-          ${c.price>0?`<div class="card-price">${fmtP(c.price)}</div>`:''}
-          ${c.chg24!==0?`<div class="card-chg ${chgColor}">${c.chg24>0?'+':''}${c.chg24.toFixed(2)}%</div>`:''}
-        </div>
+  const stepRow = (num, icon, label, tagCls, tagTxt, note) => `
+    <div class="step">
+      <div class="step-num">${num}</div>
+      <div class="step-body">
+        <div class="step-label"><span class="step-icon">${icon}</span>${label}<span class="tag ${tagCls}">${tagTxt}</span></div>
+        <div class="step-val">${note}</div>
       </div>
-      <div class="ex-badges">${exBadges}${newBadge}</div>
-      <div class="reasons">
-        ${topSigs.map(s=>`<div class="reason"><span class="reason-icon">${s.icon}</span><span class="reason-txt">${s.text}</span></div>`).join('')}
-      </div>
-      <div class="card-bottom">
-        <span class="direction-badge ${dirClass}">${dirText}</span>
-        <span class="conviction">Conviction: <strong>${c.conviction>200?'HIGH':c.conviction>120?'MED':'LOW'}</strong></span>
-        ${c.vol>0?`<span class="vol-badge">Vol: <strong>${fmtV(c.vol)}</strong></span>`:''}
-      </div>
-      ${c.price>0?`<div class="levels">
-        <div class="level"><div class="level-lbl">Entry</div><div class="level-val entry">${fmtP(c.entry)}</div></div>
-        <div class="level"><div class="level-lbl">Target</div><div class="level-val target">${fmtP(c.target)}</div></div>
-        <div class="level"><div class="level-lbl">Stop</div><div class="level-val stop">${fmtP(c.stop)}</div></div>
-      </div>`:''}
     </div>`;
-  }).join('');
+
+  const stepsHtml = isNoTrade ? '' : `
+    <div class="steps">
+      ${stepRow(1,'🏗','Structure',s1.zoneTag, s1.zone.toUpperCase(), s1.zoneNote)}
+      ${stepRow(2,'⚖️','Positioning',s2.trappedTag, s2.trapped==='shorts'?'SHORTS TRAPPED':s2.trapped==='longs'?'LONGS TRAPPED':s2.trapped==='flipping'?'FLIPPING':'NEUTRAL', s2.trappedNote)}
+      ${stepRow(3,'🔄','Resolution',s3.signalTag, s3.signal.toUpperCase().replace('_',' '), s3.note)}
+      ${stepRow(4,'📊','Volume',s4.signalTag, s4.signal.toUpperCase().replace('_',' '), s4.volNote)}
+      ${stepRow(5,'📖','Liquidity',s5.signalTag, s5.signal.toUpperCase().replace('_',' '), s5.liqNote)}
+    </div>`;
+
+  const noTradeHtml = isNoTrade ? `<div class="no-trade-reason">${verdict.noReason||verdict.reason||'Insufficient signal convergence.'}</div>` : '';
+
+  const levelsHtml = levels && !isNoTrade ? `
+    <div class="levels">
+      <div class="lv"><div class="lv-lbl">Entry</div><div class="lv-val lv-entry">${fmtP(levels.entry)}</div></div>
+      <div class="lv"><div class="lv-lbl">Target</div><div class="lv-val lv-target">${fmtP(levels.target)}</div></div>
+      <div class="lv"><div class="lv-lbl">Stop</div><div class="lv-val lv-stop">${fmtP(levels.stop)}</div></div>
+    </div>` : '';
+
+  return `<div class="card ${isNoTrade?'no-trade':''}" style="animation-delay:${idx*0.04}s">
+    <div class="card-accent" style="background:${accentColor}"></div>
+    <div class="card-head">
+      <div>
+        <div class="card-sym">${sym}</div>
+        <div class="card-price">${fmtP(s1.price)}</div>
+      </div>
+      <div class="verdict-wrap">
+        <span class="verdict ${verdict.vclass}">${verdict.verdict}</span>
+        ${convHtml}
+      </div>
+    </div>
+    ${stepsHtml}
+    ${noTradeHtml}
+    ${levelsHtml}
+  </div>`;
 }
 
-// ── TELEGRAM ──
-async function sendTelegram(msg) {
-  const tok=localStorage.getItem('tg_tok'), cid=localStorage.getItem('tg_cid');
+// ─── MAIN SCAN ───
+async function runScan() {
+  if(document.getElementById('scan-btn').disabled) return;
+  document.getElementById('scan-btn').disabled = true;
+  document.getElementById('prog-section').classList.add('show');
+  document.getElementById('res-meta').style.display='none';
+  document.getElementById('grid').innerHTML = `<div class="empty"><span class="spinner"></span>Running analysis…</div>`;
+  scanResults = [];
+
+  // Fetch all funding rates at once
+  setStep(1,'Fetching 30-day price structure for all coins…');
+  try {
+    const fr = await fetch('https://fapi.binance.com/fapi/v1/premiumIndex',{signal:AbortSignal.timeout(10000)});
+    const fd = await fr.json();
+    fd.forEach(f=>{
+      const sym=f.symbol.replace('USDT','').replace('BUSD','');
+      allFunding[sym]=parseFloat(f.lastFundingRate)*100;
+    });
+  } catch(e){}
+
+  // Process each coin
+  for(let i=0; i<watchlist.length; i++) {
+    const sym = watchlist[i];
+    const pct = Math.round((i/watchlist.length)*100);
+    document.getElementById('prog-fill').style.width=pct+'%';
+    document.getElementById('prog-lbl').textContent=`Analysing ${sym} (${i+1}/${watchlist.length})…`;
+
+    // Mark steps as we run them
+    if(i===0) setStep(1,`Step 1 — Structure: analysing ${sym}…`);
+    else if(i===Math.floor(watchlist.length*0.2)) setStep(2,`Step 2 — Positioning: analysing ${sym}…`);
+    else if(i===Math.floor(watchlist.length*0.4)) setStep(3,`Step 3 — Resolution: analysing ${sym}…`);
+    else if(i===Math.floor(watchlist.length*0.6)) setStep(4,`Step 4 — Volume: analysing ${sym}…`);
+    else if(i===Math.floor(watchlist.length*0.8)) setStep(5,`Step 5 — Liquidity: analysing ${sym}…`);
+
+    try {
+      const [s1, s2, s3] = await Promise.all([
+        step1_structure(sym),
+        step2_positioning(sym),
+        step3_resolution(sym)
+      ]);
+      const [s4, s5] = await Promise.all([
+        step4_volume(sym, s1.avgVol7d, s3.priceChg24),
+        step5_liquidity(sym, s1)
+      ]);
+      const verdict = computeVerdict(s1,s2,s3,s4,s5);
+      const levels  = computeLevels(verdict.verdict, s1.price, s1);
+      scanResults.push({sym, s1, s2, s3, s4, s5, verdict, levels});
+    } catch(e) {
+      scanResults.push({sym, error:e.message});
+    }
+    // Small delay to avoid rate limits
+    if(i < watchlist.length-1) await new Promise(r=>setTimeout(r,300));
+  }
+
+  finishProg();
+  renderGrid();
+  sendAlerts();
+  document.getElementById('scan-btn').disabled=false;
+}
+
+// ─── RENDER GRID ───
+function renderGrid() {
+  const counts={LONG:0,SHORT:0,'SPOT BUY':0,REDUCE:0,'NO TRADE':0};
+  scanResults.forEach(r=>{ if(r.verdict) counts[r.verdict.verdict]=(counts[r.verdict.verdict]||0)+1; });
+
+  // Sort: HIGH conviction first, then MED, then LOW, then NO TRADE
+  const order = {HIGH:0,MED:1,LOW:2,null:3};
+  const vOrder = {LONG:0,SHORT:0,'SPOT BUY':1,REDUCE:1,'NO TRADE':2};
+  const sorted = [...scanResults].filter(r=>!r.error).sort((a,b)=>{
+    const va=vOrder[a.verdict.verdict]||0, vb=vOrder[b.verdict.verdict]||0;
+    if(va!==vb) return va-vb;
+    return (order[a.verdict.conv]??3)-(order[b.verdict.conv]??3);
+  });
+
+  document.getElementById('res-meta').style.display='flex';
+  document.getElementById('res-count').textContent=`${sorted.length} coins analysed`;
+  document.getElementById('vc-wrap').innerHTML = [
+    counts.LONG   ?`<span class="vc" style="color:var(--g);border-color:rgba(0,229,160,.3)">${counts.LONG} LONG</span>`:'',
+    counts.SHORT  ?`<span class="vc" style="color:var(--r);border-color:rgba(255,61,90,.3)">${counts.SHORT} SHORT</span>`:'',
+    counts['SPOT BUY']?`<span class="vc" style="color:var(--bl);border-color:rgba(61,159,255,.3)">${counts['SPOT BUY']} SPOT BUY</span>`:'',
+    counts.REDUCE ?`<span class="vc" style="color:var(--a);border-color:rgba(255,176,32,.3)">${counts.REDUCE} REDUCE</span>`:'',
+    counts['NO TRADE']?`<span class="vc" style="color:var(--dim);border-color:var(--b2)">${counts['NO TRADE']} NO TRADE</span>`:''
+  ].filter(Boolean).join('');
+
+  document.getElementById('grid').innerHTML = sorted.map((r,i)=>
+    r.error
+      ? `<div class="card no-trade"><div class="card-head"><div><div class="card-sym">${r.sym}</div></div><span class="verdict v-notrade">ERROR</span></div><div class="no-trade-reason">${r.error}</div></div>`
+      : cardHTML(r.sym,r.s1,r.s2,r.s3,r.s4,r.s5,r.verdict,r.levels,i)
+  ).join('');
+}
+
+// ─── TELEGRAM ───
+async function sendAlerts() {
+  const tok=localStorage.getItem('si_tg_tok'), cid=localStorage.getItem('si_tg_cid');
   if(!tok||!cid) return;
+  const high = scanResults.filter(r=>r.verdict?.conv==='HIGH' && r.verdict?.verdict!=='NO TRADE');
+  if(!high.length) return;
+  const lines = high.map(r=>{
+    const icon = r.verdict.verdict==='LONG'?'🟢':r.verdict.verdict==='SHORT'?'🔴':'🟡';
+    return icon+' '+r.sym+' — '+r.verdict.verdict+'\nStructure: '+r.s1.zone+' | Trapped: '+r.s2.trapped+'\nResolution: '+r.s3.signal+' | Volume: '+r.s4.signal;
+  });
+  const msg = '🚨 HIGH CONVICTION SIGNALS\n\n'+lines.join('\n\n')+'\n\nTime: '+new Date().toLocaleTimeString();
   try {
     await fetch(`https://api.telegram.org/bot${tok}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,text:msg})});
   } catch(e){}
 }
 async function testTG() {
-  const ok = await sendTelegram(`✅ Signal Intelligence connected.\nTest sent: ${new Date().toLocaleTimeString()}`);
-  document.getElementById('tg-st').textContent = '✅ Test sent';
-  document.getElementById('tg-st').className = 'tg-status ok';
+  const tok=document.getElementById('tg-tok').value.trim()||localStorage.getItem('si_tg_tok');
+  const cid=document.getElementById('tg-cid').value.trim()||localStorage.getItem('si_tg_cid');
+  if(!tok||!cid){alert('Save config first');return;}
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${tok}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:cid,text:`✅ Signal Intelligence connected.
+Test: ${new Date().toLocaleTimeString()}`})});
+    const d=await r.json();
+    document.getElementById('tg-st').textContent=d.ok?'✅ Test sent':'❌ '+d.description;
+    document.getElementById('tg-st').className='tg-st '+(d.ok?'ok':'err');
+  }catch(e){document.getElementById('tg-st').textContent='❌ '+e.message;document.getElementById('tg-st').className='tg-st err';}
 }
-function saveTG() {
-  const tok=document.getElementById('tg-tok').value.trim(), cid=document.getElementById('tg-cid').value.trim();
-  if(!tok||!cid){alert('Enter both token and chat ID');return;}
-  localStorage.setItem('tg_tok',tok); localStorage.setItem('tg_cid',cid);
-  document.getElementById('tg-st').textContent='✅ Saved'; document.getElementById('tg-st').className='tg-status ok';
+function saveTG(){
+  const tok=document.getElementById('tg-tok').value.trim(),cid=document.getElementById('tg-cid').value.trim();
+  if(!tok||!cid){alert('Enter both values');return;}
+  localStorage.setItem('si_tg_tok',tok);localStorage.setItem('si_tg_cid',cid);
+  document.getElementById('tg-st').textContent='✅ Saved';document.getElementById('tg-st').className='tg-st ok';
 }
 
-// ── INIT ──
+// ─── INIT ───
 setInterval(()=>{document.getElementById('clk').textContent=new Date().toLocaleTimeString()},1000);
 window.addEventListener('load',()=>{
-  const tok=localStorage.getItem('tg_tok'), cid=localStorage.getItem('tg_cid');
-  if(tok) document.getElementById('tg-tok').value=tok;
-  if(cid) document.getElementById('tg-cid').value=cid;
-  if(tok&&cid){document.getElementById('tg-st').textContent='✅ Configured';document.getElementById('tg-st').className='tg-status ok';}
-  const known=loadKnown();
-  const total=Object.values(known).reduce((s,a)=>s+(a.length||0),0);
-  if(total>0) setS(`Last scan baseline: ${total} coins tracked. Press Scan to refresh.`);
+  renderWL();
+  const tok=localStorage.getItem('si_tg_tok'),cid=localStorage.getItem('si_tg_cid');
+  if(tok)document.getElementById('tg-tok').value=tok;
+  if(cid)document.getElementById('tg-cid').value=cid;
+  if(tok&&cid){document.getElementById('tg-st').textContent='✅ Configured';document.getElementById('tg-st').className='tg-st ok';}
 });
 </script>
 </body>
