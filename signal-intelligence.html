@@ -4,240 +4,368 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Signal Intelligence -- Acress Biz</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+
 :root{
-  --bg:#03050a;--s1:#070d16;--s2:#0b1420;
-  --b1:rgba(255,255,255,.05);--b2:rgba(255,255,255,.09);
-  --tx:#b0bdd0;--dim:#3a4f68;--br:#e0e8f4;
-  --g:#00e5a0;--gd:rgba(0,229,160,.10);
-  --r:#ff3d5a;--rd:rgba(255,61,90,.10);
-  --a:#ffb020;--ad:rgba(255,176,32,.10);
-  --bl:#3d9fff;--bld:rgba(61,159,255,.10);
-  --mono:"IBM Plex Mono",monospace;--sans:"IBM Plex Sans",sans-serif;
+  --bg:#020408;--s1:#06090f;--s2:#0a0f18;--s3:#0f1520;
+  --b1:rgba(255,255,255,.04);--b2:rgba(255,255,255,.08);--b3:rgba(255,255,255,.14);
+  --tx:#8fa3b8;--dim:#2d3f54;--br:#d8e4f0;--white:#f0f5ff;
+  --g:#00e5a0;--gd:rgba(0,229,160,.08);
+  --r:#ff3355;--rd:rgba(255,51,85,.08);
+  --a:#ffaa00;--ad:rgba(255,170,0,.08);
+  --bl:#2d8eff;--bld:rgba(45,142,255,.08);
+  --p:#a855f7;--pd:rgba(168,85,247,.08);
+  --mono:"JetBrains Mono","IBM Plex Mono",monospace;
+  --sans:"Inter","IBM Plex Sans",sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px;line-height:1.5;min-height:100vh}
-body::before{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,.01) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,.01) 1px,transparent 1px);background-size:52px 52px;pointer-events:none;z-index:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:13px;line-height:1.5;min-height:100vh;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%,rgba(0,229,160,.04) 0%,transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%,rgba(45,142,255,.04) 0%,transparent 60%),
+    repeating-linear-gradient(0deg,transparent,transparent 47px,rgba(255,255,255,.015) 47px,rgba(255,255,255,.015) 48px),
+    repeating-linear-gradient(90deg,transparent,transparent 47px,rgba(255,255,255,.015) 47px,rgba(255,255,255,.015) 48px);
+  pointer-events:none}
 @keyframes spin{to{transform:rotate(360deg)}}
-@keyframes glow{0%,100%{box-shadow:0 0 8px rgba(0,229,160,.4)}50%{box-shadow:0 0 20px rgba(0,229,160,.7)}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.hdr{position:sticky;top:0;z-index:100;background:rgba(3,5,10,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:48px}
-.logo{font-family:var(--mono);font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--g);display:flex;align-items:center;gap:10px}
-.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:glow 2.5s ease-in-out infinite;flex-shrink:0}
-.hdr-r{display:flex;align-items:center;gap:16px;font-family:var(--mono);font-size:10px;color:var(--dim)}
-.back{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);text-decoration:none;transition:color .15s}
-.back:hover{color:var(--g)}
-.wrap{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:20px 16px 60px}
-.panel{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:16px 20px;margin-bottom:14px}
-.panel-title{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:8px}
-.btn-scan{font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;background:var(--g);color:#000;border:none;border-radius:4px;padding:10px 24px;cursor:pointer;font-weight:600;transition:opacity .15s}
-.btn-scan:hover:not(:disabled){opacity:.85}
-.btn-scan:disabled{opacity:.35;cursor:not-allowed}
-.btn-s{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;background:none;border:1px solid var(--b2);color:var(--dim);border-radius:3px;padding:5px 10px;cursor:pointer;transition:all .12s}
-.btn-s:hover{border-color:var(--g);color:var(--g)}
-.scan-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.scan-note{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.7;flex:1}
-.coin-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
-.coin-tag{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:2px;border:1px solid var(--b1);color:var(--dim);background:none}
-.coin-tag.active{border-color:rgba(0,229,160,.3);color:var(--g);background:rgba(0,229,160,.05)}
-.ex-row{display:flex;gap:8px;margin-top:8px;align-items:center}
-.ex-pill{font-family:var(--mono);font-size:9px;padding:3px 10px;border-radius:2px;border:1px solid var(--b2);color:var(--dim);display:flex;align-items:center;gap:5px}
-.ex-pill.ok{border-color:rgba(0,229,160,.3);color:var(--g);background:rgba(0,229,160,.05)}
-.ex-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
-.prog-wrap{display:none;margin-bottom:14px}
-.prog-wrap.show{display:block}
-.prog-inner{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:12px 18px}
-.prog-steps{display:flex;margin-bottom:8px}
-.pstep{flex:1;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim);padding:4px;border-bottom:2px solid var(--b1);transition:all .3s}
-.pstep.on{color:var(--a);border-bottom-color:var(--a)}
-.pstep.done{color:var(--g);border-bottom-color:var(--g)}
-.prog-bar{width:100%;height:4px;background:var(--b2);border-radius:2px;overflow:hidden;margin-bottom:6px}
-.prog-fill{height:100%;background:linear-gradient(90deg,var(--g),#00c8ff);border-radius:2px;transition:width .4s ease}
-.prog-msg{font-family:var(--mono);font-size:10px;color:var(--dim)}
-.summary{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.sum-pill{font-family:var(--mono);font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid;white-space:nowrap}
-.sp-dim{color:var(--dim);border-color:var(--b2)}
-.sp-long{color:var(--g);border-color:rgba(0,229,160,.3);background:rgba(0,229,160,.06)}
-.sp-short{color:var(--r);border-color:rgba(255,61,90,.3);background:rgba(255,61,90,.06)}
-.sp-spot{color:var(--bl);border-color:rgba(61,159,255,.3);background:rgba(61,159,255,.06)}
-.sp-reduce{color:var(--a);border-color:rgba(255,176,32,.3);background:rgba(255,176,32,.06)}
-.sum-note{font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto}
-.cards{display:flex;flex-direction:column;gap:6px}
-.card{background:var(--s1);border:1px solid var(--b1);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s;animation:fadeUp .3s ease both}
-.card:hover{border-color:var(--b2)}
-.card-main{display:flex;align-items:center;gap:10px;padding:11px 16px}
-.c-rank{font-family:var(--mono);font-size:12px;color:var(--dim);min-width:22px;text-align:right;flex-shrink:0}
-.c-sym{min-width:62px;flex-shrink:0}
-.sym-n{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--br)}
-.sym-ex{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:1px;display:flex;gap:3px}
-.ex-badge{padding:1px 4px;border-radius:2px;border:1px solid var(--b1);font-size:8px}
-.ex-bn{color:#f0b90b;border-color:rgba(240,185,11,.25);background:rgba(240,185,11,.05)}
-.ex-bb{color:#ff6b35;border-color:rgba(255,107,53,.25);background:rgba(255,107,53,.05)}
-.ex-wb{color:var(--g);border-color:rgba(0,229,160,.2);background:rgba(0,229,160,.04)}
-.c-score{display:flex;flex-direction:column;gap:3px;min-width:76px;flex-shrink:0}
-.sc-n{font-family:var(--mono);font-size:13px;font-weight:600}
-.sc-bar{height:3px;background:var(--b2);border-radius:2px;overflow:hidden;width:66px}
-.sc-fill{height:100%;border-radius:2px}
-.c-verdict{min-width:88px;flex-shrink:0;display:flex;flex-direction:column;gap:3px}
-.vbadge{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.5px;padding:4px 10px;border-radius:3px;border:1px solid;white-space:nowrap;display:inline-block}
-.vb-long{color:var(--g);border-color:rgba(0,229,160,.4);background:var(--gd)}
-.vb-short{color:var(--r);border-color:rgba(255,61,90,.4);background:var(--rd)}
-.vb-spot{color:var(--bl);border-color:rgba(61,159,255,.4);background:var(--bld)}
-.vb-reduce{color:var(--a);border-color:rgba(255,176,32,.4);background:var(--ad)}
-.vb-nt{color:var(--dim);border-color:var(--b2)}
-.c-conv{font-family:var(--mono);font-size:8px;letter-spacing:.5px;text-transform:uppercase}
-.c-stats{display:flex;gap:14px;flex:1;flex-wrap:wrap}
+@keyframes breath{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes barIn{from{width:0}to{width:var(--w)}}
+@keyframes scanLine{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* HEADER */
+.hdr{position:sticky;top:0;z-index:200;
+  background:rgba(2,4,8,.88);backdrop-filter:blur(16px) saturate(180%);
+  border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;height:52px}
+.hdr-logo{display:flex;align-items:center;gap:12px}
+.logo-mark{width:28px;height:28px;border-radius:6px;
+  background:linear-gradient(135deg,var(--g),#00a87a);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;font-weight:700;color:#000;
+  box-shadow:0 0 16px rgba(0,229,160,.3)}
+.logo-text{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--white)}
+.logo-sub{font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:1px}
+.hdr-right{display:flex;align-items:center;gap:16px}
+.hdr-stat{font-family:var(--mono);font-size:9px;color:var(--dim);display:flex;align-items:center;gap:6px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--g);animation:breath 2s ease-in-out infinite}
+.back-link{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;padding:5px 10px;border:1px solid var(--b2);
+  border-radius:3px;transition:all .15s}
+.back-link:hover{border-color:var(--g);color:var(--g)}
+
+/* MAIN */
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:20px 16px 80px}
+
+/* SCAN CARD */
+.scan-card{
+  background:linear-gradient(135deg,rgba(6,9,15,.9),rgba(10,15,24,.9));
+  border:1px solid var(--b2);border-radius:12px;
+  padding:20px 24px;margin-bottom:16px;
+  position:relative;overflow:hidden}
+.scan-card::before{
+  content:"";position:absolute;inset:0;border-radius:12px;
+  background:linear-gradient(135deg,rgba(0,229,160,.03),rgba(45,142,255,.03));
+  pointer-events:none}
+.scan-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.scan-label{font-family:var(--mono);font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--g);margin-bottom:6px}
+.scan-title{font-size:18px;font-weight:700;color:var(--white);letter-spacing:-.3px;margin-bottom:4px}
+.scan-desc{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.7}
+.scan-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0}
+.btn-run{
+  font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  background:linear-gradient(135deg,var(--g),#00c8a0);color:#000;
+  border:none;border-radius:6px;padding:12px 28px;cursor:pointer;
+  transition:all .2s;white-space:nowrap;position:relative;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,229,160,.25)}
+.btn-run:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 28px rgba(0,229,160,.4)}
+.btn-run:active{transform:translateY(0)}
+.btn-run:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-run::after{content:"";position:absolute;top:0;left:-100%;width:50%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);
+  animation:scanLine 2s ease-in-out infinite}
+.btn-run:disabled::after{display:none}
+.exchange-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ex-item{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9px;
+  padding:4px 10px;border-radius:4px;border:1px solid var(--b2);color:var(--dim);transition:all .3s}
+.ex-item.ok-green{border-color:rgba(0,229,160,.3);color:var(--g);background:rgba(0,229,160,.05)}
+.ex-item.ok-orange{border-color:rgba(255,107,53,.3);color:#ff6b35;background:rgba(255,107,53,.05)}
+.ex-item.ok-blue{border-color:rgba(45,142,255,.3);color:var(--bl);background:rgba(45,142,255,.05)}
+.ex-dot-i{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* PROGRESS */
+.prog-card{
+  background:rgba(6,9,15,.9);border:1px solid var(--b1);border-radius:10px;
+  padding:14px 20px;margin-bottom:16px;display:none}
+.prog-card.show{display:block}
+.prog-steps{display:flex;gap:0;margin-bottom:10px}
+.pst{flex:1;text-align:center;font-family:var(--mono);font-size:8px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--dim);padding:5px 4px;
+  border-bottom:2px solid transparent;transition:all .3s}
+.pst.on{color:var(--a);border-bottom-color:var(--a)}
+.pst.done{color:var(--g);border-bottom-color:var(--g)}
+.prog-bar{width:100%;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;margin-bottom:8px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--g),#00c8ff,var(--g));
+  background-size:200% 100%;border-radius:2px;transition:width .5s ease;
+  animation:shimmer 2s linear infinite}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.prog-status{display:flex;align-items:center;justify-content:space-between}
+.prog-msg{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.prog-count{font-family:var(--mono);font-size:9px;color:var(--g)}
+
+/* SUMMARY */
+.summary-row{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.s-pill{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:1px;
+  padding:4px 12px;border-radius:20px;border:1px solid;white-space:nowrap;transition:all .2s}
+.s-pill:hover{transform:translateY(-1px)}
+.sp-total{color:var(--dim);border-color:var(--b2)}
+.sp-long{color:var(--g);border-color:rgba(0,229,160,.3);background:rgba(0,229,160,.07)}
+.sp-short{color:var(--r);border-color:rgba(255,51,85,.3);background:rgba(255,51,85,.07)}
+.sp-spot{color:var(--bl);border-color:rgba(45,142,255,.3);background:rgba(45,142,255,.07)}
+.sp-reduce{color:var(--a);border-color:rgba(255,170,0,.3);background:rgba(255,170,0,.07)}
+.sp-note{font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto}
+
+/* CARD LIST */
+.cards{display:flex;flex-direction:column;gap:5px}
+
+/* INDIVIDUAL CARD */
+.card{
+  background:linear-gradient(135deg,rgba(6,9,15,.95),rgba(10,15,24,.9));
+  border:1px solid var(--b1);border-radius:8px;
+  overflow:hidden;cursor:pointer;
+  transition:border-color .2s,box-shadow .2s,transform .15s;
+  animation:slideUp .35s ease both;
+  position:relative}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;
+  width:3px;background:var(--accent,var(--dim));
+  transition:width .2s,box-shadow .2s}
+.card:hover{border-color:var(--b2);transform:translateX(2px)}
+.card:hover::before{width:4px;box-shadow:0 0 12px var(--accent,var(--dim))}
+.card.open{border-color:var(--b2)}
+.card.open::before{width:4px;box-shadow:0 0 10px var(--accent,var(--dim))}
+
+/* CARD MAIN ROW */
+.c-main{display:flex;align-items:center;gap:10px;padding:11px 16px 11px 20px}
+.c-rank{font-family:var(--mono);font-size:11px;color:var(--dim);min-width:20px;
+  text-align:right;flex-shrink:0;font-weight:500}
+.c-sym-wrap{min-width:68px;flex-shrink:0}
+.c-sym{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--white);
+  letter-spacing:-.5px;line-height:1}
+.c-ex{display:flex;gap:3px;margin-top:3px}
+.eb{font-family:var(--mono);font-size:7px;font-weight:600;padding:1px 5px;
+  border-radius:3px;border:1px solid;letter-spacing:.5px}
+.eb-bn{color:#f0b90b;border-color:rgba(240,185,11,.3);background:rgba(240,185,11,.06)}
+.eb-bb{color:#ff6b35;border-color:rgba(255,107,53,.3);background:rgba(255,107,53,.06)}
+.eb-wb{color:var(--g);border-color:rgba(0,229,160,.25);background:rgba(0,229,160,.04)}
+.eb-p{color:var(--p);border-color:rgba(168,85,247,.3);background:rgba(168,85,247,.06)}
+
+.c-score-wrap{min-width:90px;flex-shrink:0}
+.c-score-num{font-family:var(--mono);font-size:20px;font-weight:700;line-height:1;
+  letter-spacing:-1px}
+.c-score-bar{width:80px;height:2px;background:rgba(255,255,255,.08);
+  border-radius:1px;overflow:hidden;margin-top:5px;position:relative}
+.c-score-fill{height:100%;border-radius:1px;transition:width 1s ease}
+
+.c-verdict-wrap{min-width:100px;flex-shrink:0;display:flex;flex-direction:column;gap:4px}
+.vbadge{font-family:var(--mono);font-size:9px;font-weight:800;letter-spacing:2px;
+  text-transform:uppercase;padding:5px 12px;border-radius:4px;border:1px solid;
+  display:inline-block;white-space:nowrap;transition:all .2s}
+.card:hover .vbadge{box-shadow:0 0 12px var(--vglow,transparent)}
+.vb-long{color:var(--g);border-color:rgba(0,229,160,.35);background:rgba(0,229,160,.08);--vglow:rgba(0,229,160,.3)}
+.vb-short{color:var(--r);border-color:rgba(255,51,85,.35);background:rgba(255,51,85,.08);--vglow:rgba(255,51,85,.3)}
+.vb-spot{color:var(--bl);border-color:rgba(45,142,255,.35);background:rgba(45,142,255,.08);--vglow:rgba(45,142,255,.3)}
+.vb-reduce{color:var(--a);border-color:rgba(255,170,0,.35);background:rgba(255,170,0,.08);--vglow:rgba(255,170,0,.3)}
+.vb-nt{color:var(--dim);border-color:var(--b2);background:transparent}
+.c-conv{font-family:var(--mono);font-size:8px;letter-spacing:1px;text-transform:uppercase;
+  display:flex;align-items:center;gap:4px}
+.conv-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+
+.c-stats{display:flex;gap:18px;flex:1;flex-wrap:wrap;align-items:center}
 .stat{display:flex;flex-direction:column;gap:1px}
 .sv{font-family:var(--mono);font-size:11px;font-weight:500}
-.sl{font-family:var(--mono);font-size:8px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim)}
+.sl{font-family:var(--mono);font-size:7px;letter-spacing:.5px;text-transform:uppercase;color:var(--dim)}
 .pos{color:var(--g)}.neg{color:var(--r)}.neu{color:var(--dim)}
-.dots{display:flex;gap:3px;align-items:center}
-.dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--b2)}
-.dot-pass{background:var(--g);border-color:var(--g)}
+
+.c-dots{display:flex;gap:4px;align-items:center;margin-left:auto}
+.dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--b2);
+  transition:all .2s;flex-shrink:0}
+.dot-pass{background:var(--g);border-color:var(--g);box-shadow:0 0 6px rgba(0,229,160,.4)}
 .dot-part{background:var(--a);border-color:var(--a)}
-.dot-fail{background:var(--rd);border-color:rgba(255,61,90,.3)}
-.dot-gate{background:var(--r);border-color:var(--r)}
-.c-arr{font-size:11px;color:var(--dim);padding:0 2px;transition:transform .2s;flex-shrink:0}
-.card.open .c-arr{transform:rotate(180deg)}
-.card-detail{overflow:hidden;max-height:0;opacity:0;transition:max-height .35s ease,opacity .25s ease}
-.card.open .card-detail{max-height:700px;opacity:1}
-.d-inner{padding:0 16px 14px;border-top:1px solid var(--b1)}
-.steps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin:10px 0}
-.sc{background:var(--s2);border:1px solid var(--b1);border-radius:4px;padding:10px 12px}
-.sc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
-.sc-name{font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
-.sc-pts{font-family:var(--mono);font-size:10px;font-weight:600}
-.sbadge{font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:2px 7px;border-radius:2px;border:1px solid;display:inline-block;margin-bottom:4px}
-.sb-pass{color:var(--g);border-color:rgba(0,229,160,.3);background:rgba(0,229,160,.07)}
-.sb-part{color:var(--a);border-color:rgba(255,176,32,.3);background:rgba(255,176,32,.07)}
-.sb-fail{color:var(--r);border-color:rgba(255,61,90,.3);background:rgba(255,61,90,.07)}
-.sb-gate{color:var(--r);border-color:rgba(255,61,90,.5);background:rgba(255,61,90,.14);font-weight:800}
+.dot-fail{background:rgba(255,51,85,.2);border-color:rgba(255,51,85,.3)}
+.dot-gate{background:var(--r);border-color:var(--r);box-shadow:0 0 6px rgba(255,51,85,.4)}
+.c-arrow{font-size:10px;color:var(--dim);padding:0 4px;transition:transform .25s ease;
+  flex-shrink:0;margin-left:4px}
+.card.open .c-arrow{transform:rotate(180deg)}
+
+/* EXPANDED DETAIL */
+.c-detail{overflow:hidden;max-height:0;opacity:0;
+  transition:max-height .4s cubic-bezier(.4,0,.2,1),opacity .25s ease}
+.card.open .c-detail{max-height:800px;opacity:1}
+.d-body{padding:0 20px 16px;border-top:1px solid var(--b1)}
+
+.steps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px;margin:12px 0}
+.step-tile{background:rgba(10,15,24,.8);border:1px solid var(--b1);border-radius:6px;
+  padding:10px 12px;position:relative;overflow:hidden}
+.step-tile::before{content:"";position:absolute;left:0;top:0;bottom:0;
+  width:2px;background:var(--step-color,var(--dim))}
+.st-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.st-name{font-family:var(--mono);font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim)}
+.st-score{font-family:var(--mono);font-size:10px;font-weight:700}
+.sbadge{font-family:var(--mono);font-size:7px;font-weight:700;letter-spacing:1px;
+  text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid;
+  display:inline-block;margin-bottom:5px}
+.sb-pass{color:var(--g);border-color:rgba(0,229,160,.35);background:rgba(0,229,160,.08)}
+.sb-part{color:var(--a);border-color:rgba(255,170,0,.35);background:rgba(255,170,0,.08)}
+.sb-fail{color:var(--r);border-color:rgba(255,51,85,.3);background:rgba(255,51,85,.07)}
+.sb-gate{color:var(--r);border-color:rgba(255,51,85,.5);background:rgba(255,51,85,.15);font-weight:900}
 .sb-na{color:var(--dim);border-color:var(--b2)}
-.sc-det{font-size:11px;color:var(--tx);line-height:1.4;margin-bottom:3px}
-.sc-rsn{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.5}
-.d-footer{display:flex;align-items:center;gap:12px;padding-top:8px;border-top:1px solid var(--b1);flex-wrap:wrap}
-.d-track{flex:1;height:5px;background:var(--b2);border-radius:3px;overflow:hidden;min-width:80px}
-.d-fill{height:100%;border-radius:3px}
-.d-snum{font-family:var(--mono);font-size:12px;font-weight:600;white-space:nowrap}
-.lvls{display:flex;gap:12px;flex-wrap:wrap}
-.lv{display:flex;flex-direction:column;gap:1px}
-.lv-l{font-family:var(--mono);font-size:8px;text-transform:uppercase;letter-spacing:.5px;color:var(--dim)}
-.lv-v{font-family:var(--mono);font-size:11px;font-weight:500}
-.lv-e{color:var(--bl)}.lv-t{color:var(--g)}.lv-s{color:var(--r)}
-.gate-txt{font-family:var(--mono);font-size:9px;color:var(--r);flex:1}
-.empty{padding:40px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:11px;line-height:2}
-.spinner{width:12px;height:12px;border:2px solid var(--b2);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
-.tg-panel{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:14px 20px;margin-top:14px}
-.tg-title{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:10px}
-.tg-title::after{content:"";flex:1;height:1px;background:var(--b1)}
+.st-det{font-size:11px;color:var(--tx);line-height:1.4;margin-bottom:3px}
+.st-rsn{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.5}
+
+.d-footer{display:flex;align-items:center;gap:14px;padding-top:10px;
+  border-top:1px solid var(--b1);flex-wrap:wrap}
+.d-score-bar{flex:1;height:4px;background:rgba(255,255,255,.06);
+  border-radius:2px;overflow:hidden;min-width:80px}
+.d-score-fill{height:100%;border-radius:2px}
+.d-score-num{font-family:var(--mono);font-size:13px;font-weight:700;white-space:nowrap}
+.d-gate{font-family:var(--mono);font-size:9px;color:var(--r);flex:1}
+.d-no{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.d-levels{display:flex;gap:14px;flex-wrap:wrap}
+.dlv{display:flex;flex-direction:column;gap:2px}
+.dlv-l{font-family:var(--mono);font-size:7px;text-transform:uppercase;letter-spacing:1px;color:var(--dim)}
+.dlv-v{font-family:var(--mono);font-size:12px;font-weight:600}
+.dlv-e{color:var(--bl)}.dlv-t{color:var(--g)}.dlv-s{color:var(--r)}
+
+.manual-flags{margin-top:10px;padding:10px 12px;
+  background:rgba(255,170,0,.04);border:1px solid rgba(255,170,0,.15);
+  border-radius:5px}
+.mf-title{font-family:var(--mono);font-size:8px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--a);margin-bottom:6px}
+.mf-item{font-family:var(--mono);font-size:9px;color:var(--tx);line-height:1.6;
+  display:flex;align-items:flex-start;gap:6px}
+.mf-icon{color:var(--a);flex-shrink:0}
+
+.empty{padding:48px 20px;text-align:center;color:var(--dim);
+  font-family:var(--mono);font-size:11px;line-height:2.2}
+.empty strong{color:var(--tx)}
+.spinner{width:11px;height:11px;border:2px solid var(--b2);border-top-color:var(--g);
+  border-radius:50%;animation:spin .65s linear infinite;
+  display:inline-block;vertical-align:middle;margin-right:6px}
+
+/* TELEGRAM */
+.tg-card{background:rgba(6,9,15,.9);border:1px solid var(--b1);border-radius:10px;
+  padding:16px 22px;margin-top:14px}
+.tg-head{font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--dim);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.tg-head::after{content:"";flex:1;height:1px;background:var(--b1)}
 .tg-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.tg-inp{font-family:var(--mono);font-size:11px;background:var(--s2);border:1px solid var(--b2);border-radius:3px;color:var(--br);padding:5px 9px;outline:none;min-width:150px;transition:border-color .15s}
-.tg-inp:focus{border-color:var(--g)}
+.tg-inp{font-family:var(--mono);font-size:11px;background:var(--s2);
+  border:1px solid var(--b2);border-radius:5px;color:var(--white);
+  padding:7px 11px;outline:none;min-width:150px;transition:border-color .15s}
+.tg-inp:focus{border-color:var(--g);background:rgba(10,15,24,.8)}
 .tg-inp::placeholder{color:var(--dim)}
-.tg-note{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:6px}
-.tg-st{font-family:var(--mono);font-size:10px;color:var(--dim)}
-.tg-st.ok{color:var(--g)}.tg-st.err{color:var(--r)}
-@media(max-width:640px){.c-stats .stat:nth-child(n+3){display:none}.prog-steps{flex-wrap:wrap}.pstep{flex:none;width:50%}}
+.btn-sm{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;
+  background:none;border:1px solid var(--b2);color:var(--dim);
+  border-radius:4px;padding:6px 12px;cursor:pointer;transition:all .15s}
+.btn-sm:hover{border-color:var(--g);color:var(--g)}
+.tg-status{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.tg-status.ok{color:var(--g)}.tg-status.err{color:var(--r)}
+.tg-note{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:8px}
+
+@media(max-width:680px){
+  .c-stats .stat:nth-child(n+3){display:none}
+  .prog-steps{flex-wrap:wrap}.pst{flex:none;width:50%}
+  .scan-top{flex-direction:column}.scan-actions{align-items:flex-start}
+}
+
 </style>
 </head>
 <body>
-
 <div class="hdr">
-  <div class="logo"><span class="logo-dot"></span>SIGNAL INTELLIGENCE</div>
-  <div class="hdr-r">
-    <a href="index.html" class="back">&#x2190; Suite</a>
-    <span style="color:var(--b2)">|</span><span>XVI</span>
-    <span style="color:var(--b2)">|</span>
-    <span style="color:var(--g);font-family:var(--mono);font-size:10px" id="clk">--:--:--</span>
+  <div class="hdr-logo">
+    <div class="logo-mark">SI</div>
+    <div>
+      <div class="logo-text">Signal Intelligence</div>
+      <div class="logo-sub">Acress Biz &middot; Tool XVI</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-stat"><span class="live-dot"></span><span id="scan-time">Ready</span></div>
+    <div class="hdr-stat" id="clk" style="color:var(--g);font-family:var(--mono);font-size:10px">--:--:--</div>
+    <a href="index.html" class="back-link">&#x2190; Suite</a>
   </div>
 </div>
-
 <div class="wrap">
-
-  <div class="panel">
-    <div class="panel-title">Webull-Listed Coins -- Binance + Bybit Signals</div>
-    <div class="scan-row">
-      <button class="btn-scan" id="scan-btn" onclick="runScan()">&#9654; Run Scan</button>
-      <div class="scan-note">
-        188 Webull coins &#183; Cross-referenced Binance + Bybit &#183; 5-step filter &#183; Top 20 by conviction score<br>
-        No API keys required &#183; All public endpoints &#183; Click any result to see breakdown
+  <div class="scan-card">
+    <div class="scan-top">
+      <div>
+        <div class="scan-label">5-Step Filter &middot; Webull Universe</div>
+        <div class="scan-title">Multi-Exchange Signal Scanner</div>
+        <div class="scan-desc">
+          188 Webull-listed coins &middot; Binance + Bybit simultaneously &middot; L/S ratio enforced &middot; Overhead resistance checked<br>
+          Funding flip detection &middot; Volatility compression (SPOT BUY) &middot; Fear &amp; Greed (REDUCE) &middot; No API keys required
+        </div>
+      </div>
+      <div class="scan-actions">
+        <button class="btn-run" id="scan-btn" onclick="runScan()">&#9654; Run Scan</button>
       </div>
     </div>
-    <div class="ex-row" id="ex-row">
-      <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">Exchange status:</span>
-      <div class="ex-pill" id="ex-bn"><span class="ex-dot"></span>Binance --</div>
-      <div class="ex-pill" id="ex-bb"><span class="ex-dot"></span>Bybit --</div>
-      <div class="ex-pill" id="ex-wb"><span class="ex-dot"></span>Webull 188 coins</div>
+    <div class="exchange-row">
+      <div class="ex-item" id="ex-bn"><span class="ex-dot-i"></span>Binance</div>
+      <div class="ex-item" id="ex-bb"><span class="ex-dot-i"></span>Bybit</div>
+      <div class="ex-item ok-blue"><span class="ex-dot-i"></span>Webull 188 coins</div>
+      <div class="ex-item" id="ex-fg"><span class="ex-dot-i"></span>Fear &amp; Greed: --</div>
     </div>
   </div>
-
-  <div class="prog-wrap" id="prog-wrap">
-    <div class="prog-inner">
-      <div class="prog-steps">
-        <div class="pstep" id="ps1">1 &#183; Exchange Data</div>
-        <div class="pstep" id="ps2">2 &#183; Structure</div>
-        <div class="pstep" id="ps3">3 &#183; Positioning</div>
-        <div class="pstep" id="ps4">4 &#183; Resolution</div>
-        <div class="pstep" id="ps5">5 &#183; Vol + Liquidity</div>
-      </div>
-      <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+  <div class="prog-card" id="prog-card">
+    <div class="prog-steps">
+      <div class="pst" id="pst1">1 &middot; Exchange Data</div>
+      <div class="pst" id="pst2">2 &middot; Structure</div>
+      <div class="pst" id="pst3">3 &middot; Positioning</div>
+      <div class="pst" id="pst4">4 &middot; Resolution</div>
+      <div class="pst" id="pst5">5 &middot; Vol + Liq</div>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div class="prog-status">
       <div class="prog-msg" id="prog-msg">Initialising...</div>
+      <div class="prog-count" id="prog-count"></div>
     </div>
   </div>
-
-  <div class="summary" id="summary" style="display:none"></div>
+  <div class="summary-row" id="summary" style="display:none"></div>
   <div class="cards" id="cards">
     <div class="empty">
-      <strong>188 Webull coins queued for analysis.</strong><br>
-      Data pulled from Binance and Bybit simultaneously.<br>
-      Top 20 by conviction score shown. Click any card to expand.
+      <strong>188 Webull coins ready for analysis.</strong><br>
+      Binance + Bybit data fetched simultaneously.<br>
+      5 mandatory filters &middot; Score minimum 7.0/10 &middot; L/S ratio enforced &middot; Price up + OI up = NO TRADE<br>
+      Top 20 by conviction score. Click any card to expand the step breakdown.
     </div>
   </div>
-
-  <div class="tg-panel">
-    <div class="tg-title">Telegram -- HIGH conviction alerts only</div>
+  <div class="tg-card">
+    <div class="tg-head">Telegram Alerts &mdash; HIGH conviction only</div>
     <div class="tg-row">
       <input class="tg-inp" type="password" id="tg-tok" placeholder="Bot token (from @BotFather)">
       <input class="tg-inp" type="text" id="tg-cid" placeholder="Chat ID">
-      <button class="btn-s" onclick="saveTG()">Save</button>
-      <button class="btn-s" onclick="testTG()">Test</button>
-      <span class="tg-st" id="tg-st">Not configured</span>
+      <button class="btn-sm" onclick="saveTG()">Save</button>
+      <button class="btn-sm" onclick="testTG()">Test</button>
+      <span class="tg-status" id="tg-st">Not configured</span>
     </div>
-    <div class="tg-note">No exchange API keys needed -- all data uses public endpoints only</div>
+    <div class="tg-note">No exchange API keys needed anywhere &mdash; all endpoints are public</div>
   </div>
-
 </div>
-
 <script>
-// ---- 188 WEBULL COINS (hardcoded from your exchange master list) ----
+
 var WEBULL_COINS = ["BCH", "BTC", "DASH", "ETC", "ETH", "FIL", "LINK", "LTC", "QNT", "VET", "XTZ", "ZEC", "ADA", "ALGO", "APT", "ARB", "ATOM", "AVAX", "BERA", "CRO", "DOT", "EGLD", "FLR", "HBAR", "ICP", "IMX", "NEAR", "ONDO", "OP", "POL", "S", "SEI", "SOL", "STRK", "SUI", "XLM", "XRP", "ZK", "1INCH", "AAVE", "AERO", "ALCX", "BAL", "COMP", "COW", "CRV", "CVX", "ENA", "ETHFI", "FARM", "FIDA", "INJ", "LDO", "LQTY", "PENDLE", "SNX", "SUSHI", "SYRUP", "UNI", "YFI", "ZRX", "AIOZ", "ARKM", "BICO", "FET", "GRT", "IO", "KAITO", "TAO", "ALICE", "APE", "AXS", "BIGTIME", "FLOW", "GODS", "HIGH", "ILV", "MAGIC", "MANA", "PENGU", "RONIN", "SAND", "BONK", "DOGE", "FARTCOIN", "FLOKI", "GIGA", "MOODENG", "PEPE", "PNUT", "POPCAT", "PUMP", "SHIB", "TRUMP", "WIF", "ABT", "ACH", "ACX", "AERGO", "AGLD", "AKT", "ALEPH", "ALT", "AMP", "ANKR", "API3", "ARPA", "AUCTION", "AUDIO", "AXL", "BADGER", "BAND", "BAT", "BLAST", "BLUR", "BNT", "C98", "CELR", "CHZ", "COTI", "CTSI", "CVC", "DEXT", "DIA", "DRIFT", "EDGE", "EIGEN", "ENS", "FIS", "FORTH", "GLM", "GMT", "GNO", "GTC", "HFT", "HNT", "IOTX", "IP", "JASMY", "JTO", "KERNEL", "KSM", "LPT", "LRC", "MASK", "ME", "MINA", "RED", "REZ", "ROSE", "SKY", "SPK", "STX", "SXT", "TIA", "WLD", "WLFI", "ZRO"];
+var bnTickers={}, bnFunding={}, bbTickers={}, bbFunding={};
+var prevFunding={};
+var fearGreed=50;
+var scanResults=[];
+var scanCount=0;
 
-var bnTickers = {};
-var bnFunding = {};
-var bbTickers = {};
-var bbFunding = {};
-var scanResults = [];
-
-// ---- PROGRESS ----
-function setStep(n, msg) {
-  ["ps1","ps2","ps3","ps4","ps5"].forEach(function(id,i){
-    document.getElementById(id).className="pstep"+(i+1<n?" done":i+1===n?" on":"");
-  });
-  document.getElementById("prog-fill").style.width=((n-1)/5*100)+"%";
-  document.getElementById("prog-msg").textContent=msg;
-}
-function finishProg() {
-  ["ps1","ps2","ps3","ps4","ps5"].forEach(function(id){document.getElementById(id).className="pstep done";});
-  document.getElementById("prog-fill").style.width="100%";
-}
-function setEx(id, ok, label) {
-  var el=document.getElementById(id);
-  el.className="ex-pill"+(ok?" ok":"");
-  el.innerHTML='<span class="ex-dot"></span>'+label;
-}
-
-// ---- FORMATTERS ----
+// ---- UTILS ----
 function fP(n){
   if(!n||n===0) return "--";
   if(n>=1000) return "$"+n.toLocaleString(undefined,{maximumFractionDigits:0});
@@ -252,424 +380,675 @@ function fV(n){
   if(n>=1e3) return "$"+(n/1e3).toFixed(0)+"K";
   return "$"+Math.round(n);
 }
+function setStep(n,msg,cnt){
+  ["pst1","pst2","pst3","pst4","pst5"].forEach(function(id,i){
+    document.getElementById(id).className="pst"+(i+1<n?" done":i+1===n?" on":"");
+  });
+  document.getElementById("prog-fill").style.width=((n-1)/5*100)+"%";
+  document.getElementById("prog-msg").textContent=msg;
+  if(cnt!==undefined) document.getElementById("prog-count").textContent=cnt+" found";
+}
+function finishProg(){
+  ["pst1","pst2","pst3","pst4","pst5"].forEach(function(id){
+    document.getElementById(id).className="pst done";
+  });
+  document.getElementById("prog-fill").style.width="100%";
+}
+function setEx(id,cls,txt){
+  var el=document.getElementById(id);
+  el.className="ex-item "+cls;
+  el.querySelector(".ex-dot-i").parentNode.lastChild.nodeValue=" "+txt;
+}
 
-// ---- STEP 1: STRUCTURE (Binance klines, Bybit fallback) ----
-async function step1(sym) {
-  var c = null;
-  // Try Binance first
-  try {
-    var r = await fetch("https://api.binance.com/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30",{signal:AbortSignal.timeout(10000)});
-    if(r.ok) c = await r.json();
-  } catch(e){}
-  // Bybit fallback
-  if(!c || !c.length) {
-    try {
-      var r2 = await fetch("https://api.bybit.com/v5/market/kline?category=spot&symbol="+sym+"USDT&interval=D&limit=30",{signal:AbortSignal.timeout(10000)});
-      var d2 = await r2.json();
-      if(d2.result && d2.result.list && d2.result.list.length) {
-        // Bybit format: [startTime, open, high, low, close, volume, turnover]
-        c = d2.result.list.reverse().map(function(x){return [0,x[1],x[2],x[3],x[4],x[5],0,x[6]];});
+// ---- STEP 1: STRUCTURE + VOLATILITY ----
+async function step1(sym){
+  var c=null;
+  try{
+    var r=await fetch("https://api.binance.com/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30",{signal:AbortSignal.timeout(10000)});
+    if(r.ok) c=await r.json();
+  }catch(e){}
+  if(!c||!c.length){
+    try{
+      var r2=await fetch("https://api.bybit.com/v5/market/kline?category=spot&symbol="+sym+"USDT&interval=D&limit=30",{signal:AbortSignal.timeout(10000)});
+      var d2=await r2.json();
+      if(d2.result&&d2.result.list&&d2.result.list.length){
+        c=d2.result.list.reverse().map(function(x){return [0,x[1],x[2],x[3],x[4],x[5],0,x[6]];});
       }
-    } catch(e){}
+    }catch(e){}
   }
-  if(!c || c.length < 5) throw new Error("No kline data from Binance or Bybit");
+  if(!c||c.length<10) throw new Error("No kline data");
 
   var h30=Math.max.apply(null,c.map(function(x){return parseFloat(x[2]);}));
   var l30=Math.min.apply(null,c.map(function(x){return parseFloat(x[3]);}));
   var price=parseFloat(c[c.length-1][4]);
   var avgVol7d=c.slice(-7).map(function(x){return parseFloat(x[7])||0;}).reduce(function(a,b){return a+b;},0)/7;
+
+  // Volatility compression: compare 7d avg range to prior 7d avg range
+  var recentRanges=c.slice(-7).map(function(x){
+    var h=parseFloat(x[2]),lo=parseFloat(x[3]),cl=parseFloat(x[4]);
+    return cl>0?(h-lo)/cl:0;
+  });
+  var priorRanges=c.slice(-14,-7).map(function(x){
+    var h=parseFloat(x[2]),lo=parseFloat(x[3]),cl=parseFloat(x[4]);
+    return cl>0?(h-lo)/cl:0;
+  });
+  var recentAvgRange=recentRanges.reduce(function(a,b){return a+b;},0)/recentRanges.length;
+  var priorAvgRange=priorRanges.length?priorRanges.reduce(function(a,b){return a+b;},0)/priorRanges.length:recentAvgRange;
+  var volCompressed=priorAvgRange>0&&(recentAvgRange/priorAvgRange)<0.75;
+
   var pos=h30>l30?(price-l30)/(h30-l30):0.5;
+  var overhead5pct=h30>0?(h30-price)/price*100:0; // actual overhead to 30d high
 
   var o={score:0,status:"GATE FAIL",cls:"sb-gate",zone:"midrange",dir:"none",
-    detail:"Price at "+(pos*100).toFixed(0)+"% of 30d range -- mid-range.",
-    reason:"No structural anchor. NO TRADE enforced.",
-    pos:pos,h30:h30,l30:l30,price:price,avgVol7d:avgVol7d,gatePass:false,max:2.0};
-  if(pos<=0.20){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="support";o.dir="long";o.gatePass=true;o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep support zone.";o.reason="Near lower boundary. Strong structural anchor for LONG.";}
-  else if(pos<=0.32){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="support";o.dir="long";o.gatePass=true;o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching support.";o.reason="Near support. Confirmation from other steps critical.";}
-  else if(pos>=0.80){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="resistance";o.dir="short";o.gatePass=true;o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep resistance zone.";o.reason="At upper boundary. Where overleveraged longs accumulate.";}
-  else if(pos>=0.68){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="resistance";o.dir="short";o.gatePass=true;o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching resistance.";o.reason="Approaching resistance. Watch for stall or rejection.";}
+    detail:"Price at "+(pos*100).toFixed(0)+"% of 30d range -- mid-range. No structural edge.",
+    reason:"Price has no structural anchor. NO TRADE enforced.",
+    pos:pos,h30:h30,l30:l30,price:price,avgVol7d:avgVol7d,
+    volCompressed:volCompressed,recentAvgRange:(recentAvgRange*100).toFixed(2),
+    priorAvgRange:(priorAvgRange*100).toFixed(2),
+    overhead5pct:overhead5pct,gatePass:false,max:2.0};
+
+  if(pos<=0.20){
+    o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="support";o.dir="long";o.gatePass=true;
+    o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep support zone.";
+    o.reason="Near lower boundary of range. Strong structural anchor for LONG.";
+  } else if(pos<=0.32){
+    o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="support";o.dir="long";o.gatePass=true;
+    o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching support.";
+    o.reason="Near but not fully at support. Confirmation from other steps is critical.";
+  } else if(pos>=0.80){
+    o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="resistance";o.dir="short";o.gatePass=true;
+    o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep resistance zone.";
+    o.reason="At upper boundary of range. Overleveraged longs accumulate here.";
+  } else if(pos>=0.68){
+    o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="resistance";o.dir="short";o.gatePass=true;
+    o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching resistance.";
+    o.reason="Approaching resistance. Watch for stall or rejection before committing.";
+  }
   return o;
 }
 
-// ---- STEP 2: POSITIONING (Binance perp, Bybit fallback) ----
-async function step2(sym, dir) {
-  // Get funding rate -- Binance first, Bybit fallback
-  var funding = bnFunding[sym] !== undefined ? bnFunding[sym] : null;
-  if(funding === null && bbFunding[sym] !== undefined) funding = bbFunding[sym];
+// ---- STEP 2: POSITIONING ----
+// Updated: L/S ratio enforced as hard condition
+async function step2(sym,dir){
+  var funding=bnFunding[sym]!==undefined?bnFunding[sym]:null;
+  if(funding===null&&bbFunding[sym]!==undefined) funding=bbFunding[sym];
+  var prevF=prevFunding[sym];
+  var fundingFlipped=(prevF!==undefined&&funding!==null)&&
+    ((prevF<-0.01&&funding>=-0.005)||(prevF>0.01&&funding<=0.005));
 
-  var longPct = null;
-  try {
+  var longPct=null;
+  try{
     var r=await fetch("https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol="+sym+"USDT&period=1h&limit=3",{signal:AbortSignal.timeout(8000)});
     var d=await r.json();
     if(Array.isArray(d)&&d.length) longPct=parseFloat(d[d.length-1].longAccount)*100;
-  } catch(e){}
-  // Bybit L/S fallback
-  if(longPct===null) {
-    try {
+  }catch(e){}
+  if(longPct===null){
+    try{
       var r2=await fetch("https://api.bybit.com/v5/market/account-ratio?category=linear&symbol="+sym+"USDT&period=1h&limit=3",{signal:AbortSignal.timeout(8000)});
       var d2=await r2.json();
       if(d2.result&&d2.result.list&&d2.result.list.length) longPct=parseFloat(d2.result.list[0].buyRatio)*100;
-    } catch(e){}
+    }catch(e){}
   }
 
-  if(funding===null) return {score:1.0,status:"N/A",cls:"sb-na",trapped:"none",detail:"No perp market found on Binance or Bybit.",reason:"Spot-only analysis. Funding signals unavailable.",gatePass:false,max:2.0,hasFunding:false,spotOnly:true};
+  if(funding===null) return {
+    score:1.0,status:"N/A",cls:"sb-na",trapped:"none",
+    detail:"No perp market on Binance or Bybit.",
+    reason:"Spot-only. Funding and L/S signals unavailable.",
+    gatePass:false,max:2.0,hasFunding:false,spotOnly:true,
+    funding:null,longPct:longPct,fundingFlipped:false};
 
-  var lsStr=longPct!==null?" (L/S: "+longPct.toFixed(1)+"%/"+(100-longPct).toFixed(1)+"%)":" ";
-  var o={score:0.5,status:"FAIL",cls:"sb-fail",trapped:"none",detail:"Funding "+funding.toFixed(4)+"%"+lsStr+" -- no extreme positioning.",reason:"No trapped crowd.",gatePass:false,max:2.0,hasFunding:true,funding:funding,longPct:longPct,spotOnly:false};
+  var shortPct=longPct!==null?100-longPct:null;
+  var lsStr=longPct!==null?" | L/S: "+longPct.toFixed(1)+"%/"+shortPct.toFixed(1)+"%":"";
+  var flipNote=fundingFlipped?" [FUNDING FLIP DETECTED]":"";
+
+  var o={score:0.5,status:"FAIL",cls:"sb-fail",trapped:"none",
+    detail:"Funding "+funding.toFixed(4)+"%"+lsStr+" -- no extreme positioning.",
+    reason:"No trapped crowd. No mechanical catalyst.",
+    gatePass:false,max:2.0,hasFunding:true,funding:funding,
+    longPct:longPct,spotOnly:false,fundingFlipped:fundingFlipped};
 
   if(dir==="long"){
-    if(funding<=-0.04){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.trapped="shorts";o.gatePass=true;o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts heavily trapped.";o.reason="Extreme negative funding. Shorts paying longs every 8h. One catalyst triggers forced covering cascade.";}
-    else if(funding<=-0.02){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.trapped="shorts";o.gatePass=true;o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts overcrowded.";o.reason="Negative funding confirms short bias. Setup developing.";}
-    else if(funding>=0.05){o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.trapped="longs";o.gatePass=false;o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs crowded at support.";o.reason="Positive funding at support = no squeeze fuel. LONG gate fails.";}
+    // Require: funding <= -0.02% AND (L/S ratio confirms if available)
+    var lsConfirms=longPct===null||(longPct<=45); // L/S ratio <=0.7 means longPct<=41%, using 45% as buffer
+    if(funding<=-0.04&&lsConfirms){
+      o.score=2.0;o.status="PASS";o.cls="sb-pass";o.trapped="shorts";o.gatePass=true;
+      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts heavily trapped."+flipNote;
+      o.reason="Extreme negative funding + short-biased L/S. Shorts paying longs every 8h. Cascade trigger ready.";
+    } else if(funding<=-0.02&&lsConfirms){
+      o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.trapped="shorts";o.gatePass=true;
+      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts overcrowded."+flipNote;
+      o.reason="Negative funding with short bias confirmed. Setup developing.";
+    } else if(funding<=-0.02&&!lsConfirms&&longPct!==null){
+      // Funding says long but L/S contradicts -- GATE FAIL
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.trapped="none";o.gatePass=false;
+      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- L/S CONTRADICTS funding.";
+      o.reason="Negative funding but longs still dominate L/S ratio. Signal conflict. Gate fails.";
+    } else if(funding>=0.05){
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.trapped="longs";o.gatePass=false;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs crowded at support.";
+      o.reason="Positive funding at support = no squeeze fuel. LONG gate fails.";
+    }
   } else {
-    if(funding>=0.08){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.trapped="longs";o.gatePass=true;o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs heavily trapped.";o.reason="Extreme positive funding. Longs paying shorts every 8h. Any weakness cascades into liquidations.";}
-    else if(funding>=0.05){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.trapped="longs";o.gatePass=true;o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs crowded.";o.reason="Positive funding confirms long crowding. SHORT setup developing.";}
-    else if(funding<=-0.03){o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.trapped="shorts";o.gatePass=false;o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts at resistance.";o.reason="Negative funding at resistance = no trapped longs. SHORT gate fails.";}
+    var lsConfirmsShort=longPct===null||(longPct>=55); // more longs = good for short setup
+    if(funding>=0.08&&lsConfirmsShort){
+      o.score=2.0;o.status="PASS";o.cls="sb-pass";o.trapped="longs";o.gatePass=true;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs heavily trapped."+flipNote;
+      o.reason="Extreme positive funding + long-biased L/S. Any weakness triggers liquidation cascade.";
+    } else if(funding>=0.05&&lsConfirmsShort){
+      o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.trapped="longs";o.gatePass=true;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs crowded."+flipNote;
+      o.reason="Positive funding with long bias confirmed. SHORT setup developing.";
+    } else if(funding>=0.05&&!lsConfirmsShort&&longPct!==null){
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.gatePass=false;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- L/S contradicts funding.";
+      o.reason="Positive funding but shorts dominate L/S. Signal conflict. Gate fails.";
+    } else if(funding<=-0.03){
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.gatePass=false;
+      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts at resistance.";
+      o.reason="Negative funding at resistance = no trapped longs to flush. SHORT gate fails.";
+    }
   }
   return o;
 }
 
-// ---- STEP 3: RESOLUTION (OI trend vs price) ----
-async function step3(sym, dir) {
-  var oiChange=0, hasOI=false, pChg=0;
-  // Binance OI
-  try {
+// ---- STEP 3: RESOLUTION ----
+// Updated: Price up + OI up = GATE FAIL (not partial)
+async function step3(sym,dir){
+  var oiChange=0,hasOI=false,pChg=0;
+  try{
     var r=await fetch("https://fapi.binance.com/futures/data/openInterestHist?symbol="+sym+"USDT&period=4h&limit=8",{signal:AbortSignal.timeout(8000)});
     var d=await r.json();
-    if(Array.isArray(d)&&d.length>=2){hasOI=true;oiChange=(parseFloat(d[d.length-1].sumOpenInterest)-parseFloat(d[0].sumOpenInterest))/parseFloat(d[0].sumOpenInterest)*100;}
-  } catch(e){}
-  // Bybit OI fallback
-  if(!hasOI) {
-    try {
+    if(Array.isArray(d)&&d.length>=2){
+      hasOI=true;
+      oiChange=(parseFloat(d[d.length-1].sumOpenInterest)-parseFloat(d[0].sumOpenInterest))/parseFloat(d[0].sumOpenInterest)*100;
+    }
+  }catch(e){}
+  if(!hasOI){
+    try{
       var r2=await fetch("https://api.bybit.com/v5/market/open-interest?category=linear&symbol="+sym+"USDT&intervalTime=4h&limit=8",{signal:AbortSignal.timeout(8000)});
       var d2=await r2.json();
       if(d2.result&&d2.result.list&&d2.result.list.length>=2){
         var lst=d2.result.list;
-        var latestOI=parseFloat(lst[0].openInterest),oldOI=parseFloat(lst[lst.length-1].openInterest);
-        if(oldOI>0){hasOI=true;oiChange=(latestOI-oldOI)/oldOI*100;}
+        var lat=parseFloat(lst[0].openInterest),old=parseFloat(lst[lst.length-1].openInterest);
+        if(old>0){hasOI=true;oiChange=(lat-old)/old*100;}
       }
-    } catch(e){}
+    }catch(e){}
   }
-
-  // Price change -- try Binance ticker first, Bybit fallback
   var bt=bnTickers[sym+"USDT"];
   if(bt) pChg=parseFloat(bt.priceChangePercent)||0;
-  else {
-    var bbt=bbTickers[sym+"USDT"];
-    if(bbt) pChg=(parseFloat(bbt.price24hPcnt)||0)*100;
-  }
+  else{var bbt=bbTickers[sym+"USDT"];if(bbt) pChg=(parseFloat(bbt.price24hPcnt)||0)*100;}
 
-  if(!hasOI) return {score:0.5,status:"PARTIAL",cls:"sb-part",signal:"unknown",detail:"OI data unavailable. Price 24h: "+(pChg>=0?"+":"")+pChg.toFixed(2)+"%",reason:"Cannot confirm resolution without OI data.",oiChange:0,pChg:pChg,gatePass:false,max:2.0};
+  if(!hasOI) return {score:0.5,status:"PARTIAL",cls:"sb-part",signal:"unknown",
+    detail:"OI data unavailable. Price 24h: "+(pChg>=0?"+":"")+pChg.toFixed(2)+"%",
+    reason:"Cannot confirm trap resolution. Lower conviction.",
+    oiChange:0,pChg:pChg,gatePass:false,max:2.0};
 
   var pUp=pChg>0.5,pDn=pChg<-0.5,oiDn=oiChange<-1,oiUp=oiChange>1;
-  var oStr=(oiChange>=0?"+":"")+oiChange.toFixed(1)+"%",pStr=(pChg>=0?"+":"")+pChg.toFixed(2)+"%";
-  var o={score:0,status:"GATE FAIL",cls:"sb-gate",signal:"conflict",detail:"Price "+pStr+" vs OI "+oStr+" -- conflict.",reason:"Resolution gate fails.",oiChange:oiChange,pChg:pChg,gatePass:false,max:2.0};
+  var oStr=(oiChange>=0?"+":"")+oiChange.toFixed(1)+"%";
+  var pStr=(pChg>=0?"+":"")+pChg.toFixed(2)+"%";
+  var o={score:0,status:"GATE FAIL",cls:"sb-gate",signal:"conflict",
+    detail:"Price "+pStr+" vs OI "+oStr+" -- directional conflict.",
+    reason:"Signals conflict. Gate fails.",
+    oiChange:oiChange,pChg:pChg,gatePass:false,max:2.0};
 
   if(dir==="long"){
-    if(pUp&&oiDn){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.signal="bullish";o.gatePass=true;o.detail="Price "+pStr+" | OI "+oStr+" -- shorts covering.";o.reason="Price up + OI down = mechanical short squeeze resolving upward. Highest conviction pattern.";}
-    else if(pUp&&!oiDn&&!oiUp){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.signal="weak_bull";o.gatePass=true;o.detail="Price "+pStr+" | OI "+oStr+" -- recovering.";o.reason="Price recovering without full OI confirmation. Developing.";}
-    else if(pUp&&oiUp){o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.signal="continuation";o.gatePass=false;o.detail="Price "+pStr+" | OI "+oStr+" -- new longs entering.";o.reason="New longs entering = not a squeeze. Less mechanical certainty.";}
-    else if(pDn&&oiDn){o.score=0.5;o.status="FAIL";o.cls="sb-fail";o.signal="liq";o.gatePass=false;o.detail="Price "+pStr+" | OI "+oStr+" -- longs liquidating.";o.reason="Wrong timing for long. Wait for capitulation to exhaust.";}
-    else{o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.signal="bearish";o.gatePass=false;o.detail="Price "+pStr+" | OI "+oStr+" -- bearish pressure.";o.reason="Price down + OI up = new shorts entering. LONG gate fails.";}
+    if(pUp&&oiDn){
+      o.score=2.0;o.status="PASS";o.cls="sb-pass";o.signal="squeeze";o.gatePass=true;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- shorts covering.";
+      o.reason="Price up + OI down = mechanical short squeeze resolving. Highest conviction pattern.";
+    } else if(pUp&&!oiDn&&!oiUp){
+      o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.signal="weak_bull";o.gatePass=true;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- recovering, OI neutral.";
+      o.reason="Price recovering without OI confirmation. Developing -- requires volume confirmation.";
+    } else if(pUp&&oiUp){
+      // GATE FAIL: ambiguous continuation vs trap (framework: route to NO TRADE)
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.signal="ambiguous";o.gatePass=false;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- AMBIGUOUS: new longs or trap building.";
+      o.reason="Price up + OI up = cannot distinguish genuine trend from long trap. Gate fails per framework.";
+    } else if(pDn&&oiDn){
+      o.score=0.5;o.status="FAIL";o.cls="sb-fail";o.signal="liq";o.gatePass=false;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- longs liquidating.";
+      o.reason="Wrong timing for long. Wait for capitulation to fully exhaust.";
+    } else {
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.signal="bearish";o.gatePass=false;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- bearish pressure building.";
+      o.reason="Price down + OI up = new shorts entering. LONG gate fails.";
+    }
   } else {
-    if(pDn&&oiUp){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.signal="bearish";o.gatePass=true;o.detail="Price "+pStr+" | OI "+oStr+" -- shorts building.";o.reason="Price down + OI up = new short positions added. Bearish conviction building.";}
-    else if(pDn&&!oiUp&&!oiDn){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.signal="weak_bear";o.gatePass=true;o.detail="Price "+pStr+" | OI "+oStr+" -- declining.";o.reason="Price declining but OI not confirming. Developing short setup.";}
-    else if(pDn&&oiDn){o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.signal="liq";o.gatePass=false;o.detail="Price "+pStr+" | OI "+oStr+" -- longs liquidating.";o.reason="Mechanical liquidation -- will exhaust. Not ideal short entry.";}
-    else{o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.signal="bullish";o.gatePass=false;o.detail="Price "+pStr+" | OI "+oStr+" -- recovering.";o.reason="Price up at resistance. SHORT gate fails.";}
+    if(pDn&&oiUp){
+      o.score=2.0;o.status="PASS";o.cls="sb-pass";o.signal="shorts_building";o.gatePass=true;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- new shorts building.";
+      o.reason="Price down + OI up = new short positions added mechanically. Bearish conviction confirmed.";
+    } else if(pDn&&!oiUp&&!oiDn){
+      o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.signal="weak_bear";o.gatePass=true;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- declining, OI neutral.";
+      o.reason="Price declining but OI not yet confirming. Developing short setup.";
+    } else if(pDn&&oiDn){
+      o.score=0.5;o.status="FAIL";o.cls="sb-fail";o.signal="liq";o.gatePass=false;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- longs liquidating mechanically.";
+      o.reason="Mechanical long liquidation. Will exhaust. Not a quality short entry.";
+    } else {
+      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.signal="bullish";o.gatePass=false;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- price recovering at resistance.";
+      o.reason="Price rising at resistance. SHORT resolution gate fails.";
+    }
   }
   return o;
 }
 
 // ---- STEP 4: VOLUME ----
-async function step4(sym, avgVol7d, pChg, dir) {
+async function step4(sym,avgVol7d,pChg,dir){
   var vol=0;
   var bt=bnTickers[sym+"USDT"];
   if(bt) vol=parseFloat(bt.quoteVolume)||0;
-  if(!vol) {
-    var bbt=bbTickers[sym+"USDT"];
-    if(bbt) vol=parseFloat(bbt.turnover24h)||0;
-  }
+  if(!vol){var bbt=bbTickers[sym+"USDT"];if(bbt) vol=parseFloat(bbt.turnover24h)||0;}
   var ratio=avgVol7d>0?vol/avgVol7d:0;
   var pUp=pChg>0.5,pDn=pChg<-0.5;
   var rStr=ratio.toFixed(2)+"x",vStr=fV(vol);
-  var o={score:0.5,status:"FAIL",cls:"sb-fail",detail:vStr+" ("+rStr+" 7d avg) -- volume not confirming.",reason:"Volume below threshold.",vol:vol,ratio:ratio,gatePass:true,max:2.0};
+  var o={score:0.5,status:"FAIL",cls:"sb-fail",
+    detail:vStr+" ("+rStr+" 7d avg) -- volume below threshold.",
+    reason:"Insufficient volume. Direction not confirmed.",
+    vol:vol,ratio:ratio,gatePass:true,max:2.0};
   if(dir==="long"){
-    if(ratio>=3&&pUp){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- major volume surge + price up.";o.reason="Volume "+rStr+" above average with rising price. Institutional-grade confirmation.";}
-    else if(ratio>=1.5&&pUp){o.score=1.5;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- elevated volume, price rising.";o.reason="Above-average volume with rising price. Buyers active and participating.";}
-    else if(ratio>=2&&Math.abs(pChg)<1.5){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.detail=vStr+" ("+rStr+" avg) -- high volume, flat price.";o.reason="Stealth accumulation pattern -- large buyers absorbing supply quietly.";}
-    else if(ratio>=1){o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.detail=vStr+" ("+rStr+" avg) -- moderate volume.";o.reason="Above average but not conclusive.";}
-    else if(ratio<0.6&&pUp){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail=vStr+" ("+rStr+" avg) -- price up on LOW volume.";o.reason="Low volume on rising price = high reversal risk.";}
+    if(ratio>=3&&pUp){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- major surge, price rising.";o.reason=rStr+" above 7d average with rising price. Institutional-grade confirmation.";}
+    else if(ratio>=1.5&&pUp){o.score=1.5;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- elevated volume, price rising.";o.reason="Above-average volume with rising price. Active buyer participation confirmed.";}
+    else if(ratio>=2&&Math.abs(pChg)<1.5){o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.detail=vStr+" ("+rStr+" avg) -- high volume, flat price.";o.reason="Stealth accumulation signature -- large buyers absorbing supply without moving price.";}
+    else if(ratio>=1){o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.detail=vStr+" ("+rStr+" avg) -- moderate volume.";o.reason="Slightly above average. Weak confirmation only.";}
+    else if(ratio<0.6&&pUp){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail=vStr+" ("+rStr+" avg) -- price up on LOW volume.";o.reason="Rising price on weak volume = likely illiquid move. High reversal risk.";}
   } else {
-    if(ratio>=3&&pDn){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- major volume, price falling.";o.reason="Heavy volume sell-off confirms bearish conviction.";}
+    if(ratio>=3&&pDn){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- major volume, price falling.";o.reason="Heavy volume sell-off confirms bearish conviction. Sellers are aggressive.";}
     else if(ratio>=1.5&&pDn){o.score=1.5;o.status="PASS";o.cls="sb-pass";o.detail=vStr+" ("+rStr+" avg) -- elevated volume, price falling.";o.reason="Above-average volume with falling price. Sellers in control.";}
-    else if(ratio<0.6&&pDn){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail=vStr+" ("+rStr+" avg) -- falling on low volume.";o.reason="LOW conviction downside. SHORT lacks fuel.";}
+    else if(ratio<0.6&&pDn){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail=vStr+" ("+rStr+" avg) -- falling on low volume.";o.reason="Low conviction downside. SHORT lacks fuel.";}
+    else{o.score=0.5;o.detail=vStr+" ("+rStr+" avg) -- volume not confirming.";o.reason="Volume does not confirm the short direction.";}
   }
   return o;
 }
 
-// ---- STEP 5: LIQUIDITY (Binance order book, Bybit fallback) ----
-async function step5(sym, dir) {
+// ---- STEP 5: LIQUIDITY + OVERHEAD CHECK ----
+// Updated: checks if strong resistance sits within 5% overhead (LONG) or 5% below (SHORT)
+async function step5(sym,dir,s1){
   var bidD=0,askD=0;
-  try {
+  try{
     var r=await fetch("https://api.binance.com/api/v3/depth?symbol="+sym+"USDT&limit=20",{signal:AbortSignal.timeout(8000)});
     var d=await r.json();
     askD=(d.asks||[]).slice(0,10).reduce(function(s,a){return s+parseFloat(a[0])*parseFloat(a[1]);},0);
     bidD=(d.bids||[]).slice(0,10).reduce(function(s,b){return s+parseFloat(b[0])*parseFloat(b[1]);},0);
-  } catch(e){}
-  if(!bidD&&!askD) {
-    try {
+  }catch(e){}
+  if(!bidD&&!askD){
+    try{
       var r2=await fetch("https://api.bybit.com/v5/market/orderbook?category=spot&symbol="+sym+"USDT&limit=20",{signal:AbortSignal.timeout(8000)});
       var d2=await r2.json();
       if(d2.result){
         askD=(d2.result.a||[]).slice(0,10).reduce(function(s,a){return s+parseFloat(a[0])*parseFloat(a[1]);},0);
         bidD=(d2.result.b||[]).slice(0,10).reduce(function(s,b){return s+parseFloat(b[0])*parseFloat(b[1]);},0);
       }
-    } catch(e){}
+    }catch(e){}
   }
-  if(!bidD&&!askD) return {score:0.5,status:"N/A",cls:"sb-na",detail:"Order book unavailable on both exchanges.",reason:"Cannot assess liquidity.",gatePass:true,max:2.0};
-  var ratio=askD>0?bidD/askD:1,bS=fV(bidD),aS=fV(askD),rS=ratio.toFixed(2)+"x";
-  var o={score:1.0,status:"PARTIAL",cls:"sb-part",detail:"Bids "+bS+" vs asks "+aS+" ("+rS+") -- balanced.",reason:"No liquidity advantage in either direction.",gatePass:true,max:2.0};
+  if(!bidD&&!askD) return {score:0.5,status:"N/A",cls:"sb-na",
+    detail:"Order book data unavailable on both exchanges.",
+    reason:"Cannot assess liquidity path.",gatePass:true,max:2.0};
+
+  var ratio=askD>0?bidD/askD:1;
+  var bS=fV(bidD),aS=fV(askD),rS=ratio.toFixed(2)+"x";
+  // Overhead check: if price is near 30d low, check if 30d high is within 5%
+  var overheadClear=true;
+  if(s1&&s1.price>0&&s1.h30>0){
+    var overheadPct=(s1.h30-s1.price)/s1.price*100;
+    overheadClear=dir==="long"?overheadPct>5:true; // LONG needs >5% to 30d high
+  }
+  var o={score:1.0,status:"PARTIAL",cls:"sb-part",
+    detail:"Bids "+bS+" vs asks "+aS+" ("+rS+") -- balanced.",
+    reason:"No liquidity edge in either direction.",
+    gatePass:true,max:2.0,overheadClear:overheadClear};
   if(dir==="long"){
-    if(ratio>=1.8){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail="Bids "+bS+" vs asks "+aS+" ("+rS+") -- bid-heavy.";o.reason="Strong bid support. Path upward relatively unobstructed.";}
-    else if(ratio>=1.3){o.score=1.5;o.status="PASS";o.cls="sb-pass";o.detail="Bids "+bS+" vs asks "+aS+" ("+rS+") -- slight bid dominance.";o.reason="Moderate bid advantage.";}
-    else if(ratio<0.67){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail="Asks "+aS+" vs bids "+bS+" ("+rS+") -- heavy sell wall.";o.reason="Heavy sell wall above. Structural resistance reduces LONG probability.";}
+    if(!overheadClear){
+      o.score=0.5;o.status="FAIL";o.cls="sb-fail";
+      o.detail="Bids "+bS+" vs asks "+aS+" -- resistance within 5% overhead.";
+      o.reason="30-day high is within 5% above entry. Upside is structurally capped. Reduces LONG quality.";
+    } else if(ratio>=1.8){
+      o.score=2.0;o.status="PASS";o.cls="sb-pass";
+      o.detail="Bids "+bS+" vs asks "+aS+" ("+rS+") -- bid-heavy, path clear.";
+      o.reason="Strong bid support + no major overhead resistance within 5%. Clean LONG path.";
+    } else if(ratio>=1.3){
+      o.score=1.5;o.status="PASS";o.cls="sb-pass";
+      o.detail="Bids "+bS+" vs asks "+aS+" ("+rS+") -- slight bid dominance.";
+      o.reason="Moderate bid advantage with acceptable overhead clearance.";
+    } else if(ratio<0.67){
+      o.score=0;o.status="FAIL";o.cls="sb-fail";
+      o.detail="Asks "+aS+" vs bids "+bS+" ("+rS+") -- heavy sell wall above.";
+      o.reason="Structural resistance in order book. Significantly reduces LONG probability.";
+    }
   } else {
-    if(ratio<=0.55){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail="Asks "+aS+" vs bids "+bS+" -- ask-heavy.";o.reason="Thin bids below. Path downward unobstructed.";}
-    else if(ratio<=0.77){o.score=1.5;o.status="PASS";o.cls="sb-pass";o.detail="Asks "+aS+" vs bids "+bS+" ("+rS+") -- slight ask dominance.";o.reason="Some structural advantage downward.";}
-    else if(ratio>1.25){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail="Bids "+bS+" vs asks "+aS+" ("+rS+") -- bid floor.";o.reason="Thick bid wall acts as floor. SHORT path obstructed.";}
+    if(ratio<=0.55){o.score=2.0;o.status="PASS";o.cls="sb-pass";o.detail="Asks "+aS+" vs bids "+bS+" -- ask-heavy, path clear.";o.reason="Thin bids below with ask pressure. Path downward unobstructed.";}
+    else if(ratio<=0.77){o.score=1.5;o.status="PASS";o.cls="sb-pass";o.detail="Asks "+aS+" vs bids "+bS+" ("+rS+") -- slight ask dominance.";o.reason="Moderate structural advantage to the downside.";}
+    else if(ratio>1.25){o.score=0;o.status="FAIL";o.cls="sb-fail";o.detail="Bids "+bS+" vs asks "+aS+" -- bid floor below.";o.reason="Thick bid wall acts as a floor. SHORT path structurally obstructed.";}
   }
   return o;
 }
 
 // ---- VERDICT ----
-function verdict(s1,s2,s3,s4,s5) {
+// Updated: REDUCE uses Fear&Greed, funding flip detection; SPOT BUY checks volatility compression
+function computeVerdict(s1,s2,s3,s4,s5){
   var total=s1.score+s2.score+s3.score+s4.score+s5.score;
   var fails=[];
-  if(!s1.gatePass) fails.push("Step 1: no structural anchor");
+  if(!s1.gatePass) fails.push("Structure: no anchor");
   if(s2.spotOnly){
-    if(s1.gatePass&&s4.score>=1.0&&total>=5.5) return {v:"SPOT BUY",vc:"vb-spot",conv:"MED",cc:"var(--bl)",total:total,fails:[],noReason:""};
-    return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:["Spot-only: insufficient signals"],noReason:"No perp data + weak spot signals."};
+    // SPOT BUY path
+    var spotScore=s1.score+s4.score+s5.score;
+    if(s1.gatePass&&s4.score>=1.5&&s1.volCompressed&&spotScore>=4.5){
+      return {v:"SPOT BUY",vc:"vb-spot",conv:"MED",cc:"var(--bl)",total:total,fails:[],noReason:"",
+        manualChecks:true};
+    }
+    if(s1.gatePass&&s4.score>=1.0&&spotScore>=3.5){
+      return {v:"SPOT BUY",vc:"vb-spot",conv:"LOW",cc:"var(--bl)",total:total,fails:[],noReason:"",
+        manualChecks:true};
+    }
+    return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,
+      fails:["Spot-only: insufficient signals"],noReason:"No perp data + weak spot signals."};
   }
-  if(!s2.gatePass) fails.push("Step 2: no trapped crowd");
-  if(!s3.gatePass) fails.push("Step 3: trap not resolving");
+  if(!s2.gatePass) fails.push("Positioning: no trapped crowd");
+  if(!s3.gatePass) fails.push("Resolution: trap not resolving");
   if(fails.length>0) return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:fails,noReason:"Hard gate failure."};
-  if(total<7.0) return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:[],noReason:"Score "+total.toFixed(1)+"/10 below minimum 7.0."};
+  if(total<7.0) return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:[],
+    noReason:"Score "+total.toFixed(1)+"/10 below minimum 7.0."};
+
+  // REDUCE check: funding flip + price extended + declining volume + greed
+  if((s2.fundingFlipped||s5.score<1.0)&&s4.ratio<0.8&&fearGreed>=70&&s1.pos>0.6){
+    var conv2=total>=8.5?"HIGH":"MED";
+    var cc2=total>=8.5?"var(--a)":"var(--a)";
+    return {v:"REDUCE",vc:"vb-reduce",conv:conv2,cc:cc2,total:total,fails:[],noReason:""};
+  }
+
   var conv=total>=9.0?"HIGH":total>=8.0?"MED":"LOW";
   var cc=total>=9.0?"var(--g)":total>=8.0?"var(--a)":"var(--bl)";
-  var v=s1.dir==="long"?"LONG":"SHORT",vc=s1.dir==="long"?"vb-long":"vb-short";
+  var v=s1.dir==="long"?"LONG":"SHORT";
+  var vc=s1.dir==="long"?"vb-long":"vb-short";
   return {v:v,vc:vc,conv:conv,cc:cc,total:total,fails:[],noReason:""};
 }
 
-function computeLevels(verd,price,s1) {
+function computeLevels(verd,price,s1){
   if(!price||verd==="NO TRADE") return null;
   var rng=s1.h30-s1.l30;
-  if(verd==="LONG"||verd==="SPOT BUY") return {entry:price,target:Math.min(s1.h30*.95,price+rng*.13),stop:Math.max(s1.l30*1.01,price-rng*.06)};
+  if(verd==="LONG"||verd==="SPOT BUY") return {entry:price,target:Math.min(s1.h30*.96,price+rng*.13),stop:Math.max(s1.l30*1.01,price-rng*.06)};
   if(verd==="SHORT") return {entry:price,target:Math.max(s1.l30*1.05,price-rng*.13),stop:Math.min(s1.h30*.99,price+rng*.06)};
+  if(verd==="REDUCE") return {entry:price,target:price,stop:null};
   return null;
 }
 
 // ---- MAIN SCAN ----
-async function runScan() {
+async function runScan(){
   if(document.getElementById("scan-btn").disabled) return;
   document.getElementById("scan-btn").disabled=true;
-  document.getElementById("prog-wrap").classList.add("show");
+  document.getElementById("prog-card").classList.add("show");
   document.getElementById("summary").style.display="none";
-  document.getElementById("cards").innerHTML='<div class="empty"><span class="spinner"></span>Fetching exchange data...</div>';
-  scanResults=[];
-  bnTickers={};bnFunding={};bbTickers={};bbFunding={};
+  document.getElementById("cards").innerHTML='<div class="empty"><span class="spinner"></span>Fetching Binance + Bybit data simultaneously...</div>';
 
-  // STEP 1: Fetch all bulk data from both exchanges simultaneously
-  setStep(1,"Fetching Binance + Bybit bulk data...");
+  // Save previous funding for flip detection
+  prevFunding={};
+  Object.keys(bnFunding).forEach(function(k){prevFunding[k]=bnFunding[k];});
+
+  scanResults=[];bnTickers={};bnFunding={};bbTickers={};bbFunding={};
+
+  setStep(1,"Fetching exchange data...",0);
   await Promise.all([
-    // Binance 24hr tickers
     fetch("https://api.binance.com/api/v3/ticker/24hr",{signal:AbortSignal.timeout(12000)})
       .then(function(r){return r.json();})
-      .then(function(d){d.forEach(function(t){bnTickers[t.symbol]=t;});setEx("ex-bn",true,"Binance "+Object.keys(bnTickers).length+" pairs");})
-      .catch(function(){setEx("ex-bn",false,"Binance: unavailable");}),
-    // Binance funding
+      .then(function(d){d.forEach(function(t){bnTickers[t.symbol]=t;});
+        setEx("ex-bn","ok-green","Binance "+Object.keys(bnTickers).length+" pairs");})
+      .catch(function(){setEx("ex-bn","","Binance unavailable");}),
     fetch("https://fapi.binance.com/fapi/v1/premiumIndex",{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json();})
       .then(function(d){d.forEach(function(f){var s=f.symbol.replace("USDT","").replace("BUSD","");bnFunding[s]=parseFloat(f.lastFundingRate)*100;});})
       .catch(function(){}),
-    // Bybit 24hr tickers
     fetch("https://api.bybit.com/v5/market/tickers?category=spot&limit=500",{signal:AbortSignal.timeout(12000)})
       .then(function(r){return r.json();})
-      .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});setEx("ex-bb",true,"Bybit "+Object.keys(bbTickers).length+" pairs");})
-      .catch(function(){setEx("ex-bb",false,"Bybit: unavailable");}),
-    // Bybit funding rates
+      .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});
+        setEx("ex-bb","ok-orange","Bybit "+Object.keys(bbTickers).length+" pairs");})
+      .catch(function(){setEx("ex-bb","","Bybit unavailable");}),
     fetch("https://api.bybit.com/v5/market/tickers?category=linear&limit=500",{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json();})
       .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){var s=t.symbol.replace("USDT","");bbFunding[s]=parseFloat(t.fundingRate||0)*100;});})
+      .catch(function(){}),
+    // Fear & Greed
+    fetch("https://api.alternative.me/fng/?limit=1",{signal:AbortSignal.timeout(8000)})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.data&&d.data.length) fearGreed=parseInt(d.data[0].value);})
       .catch(function(){})
   ]);
 
-  // Filter Webull coins to those found on either exchange
-  var coins = WEBULL_COINS.filter(function(sym){
-    return bnTickers[sym+"USDT"] || bbTickers[sym+"USDT"];
+  var coins=WEBULL_COINS.filter(function(sym){
+    return bnTickers[sym+"USDT"]||bbTickers[sym+"USDT"];
   });
-  document.getElementById("prog-msg").textContent="Found "+coins.length+"/"+WEBULL_COINS.length+" Webull coins on Binance/Bybit. Running analysis...";
+  document.getElementById("prog-msg").textContent=coins.length+"/"+WEBULL_COINS.length+" Webull coins found on exchanges. Analysing...";
 
-  // STEP 2-5: Per coin analysis
+  var found=0;
   var BATCH=4;
   for(var i=0;i<coins.length;i++){
     var sym=coins[i];
-    var pct=Math.round(10+(i/coins.length*88));
+    var pct=Math.round(8+(i/coins.length*90));
     document.getElementById("prog-fill").style.width=pct+"%";
-    var sn=Math.floor((i/coins.length)*4)+2;
-    if(sn<=5) setStep(sn,["","","Structure","Positioning","Resolution","Vol+Liq"][sn]+" -- "+sym+" ("+(i+1)+"/"+coins.length+")");
+    var sn=Math.floor(i/coins.length*4)+2;
+    if(sn>=2&&sn<=5) setStep(sn,["","","30d Structure","Positioning","Resolution","Vol + Liquidity"][sn]+" -- "+sym,found);
     document.getElementById("prog-msg").textContent="Analysing "+sym+" ("+(i+1)+"/"+coins.length+")";
 
     try{
       var S1=await step1(sym);
       var res=await Promise.all([step2(sym,S1.dir),step3(sym,S1.dir)]);
       var S2=res[0],S3=res[1];
-      var res2=await Promise.all([step4(sym,S1.avgVol7d,S3.pChg||0,S1.dir),step5(sym,S1.dir)]);
+      var res2=await Promise.all([step4(sym,S1.avgVol7d,S3.pChg||0,S1.dir),step5(sym,S1.dir,S1)]);
       var S4=res2[0],S5=res2[1];
-      var vd=verdict(S1,S2,S3,S4,S5);
+      var vd=computeVerdict(S1,S2,S3,S4,S5);
       var lvl=computeLevels(vd.v,S1.price,S1);
-      var onBN=!!bnTickers[sym+"USDT"],onBB=!!bbTickers[sym+"USDT"];
-      var hasBNPerp=bnFunding[sym]!==undefined,hasBBPerp=bbFunding[sym]!==undefined;
+      if(vd.v!=="NO TRADE") found++;
       scanResults.push({sym:sym,S1:S1,S2:S2,S3:S3,S4:S4,S5:S5,vd:vd,lvl:lvl,
         price:S1.price,chg24:S3.pChg||0,vol:S4.vol||0,
-        onBN:onBN,onBB:onBB,hasBNPerp:hasBNPerp,hasBBPerp:hasBBPerp});
+        onBN:!!bnTickers[sym+"USDT"],onBB:!!bbTickers[sym+"USDT"],
+        hasBNPerp:bnFunding[sym]!==undefined,hasBBPerp:bbFunding[sym]!==undefined});
     }catch(e){
-      scanResults.push({sym:sym,error:e.message,vd:{v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:0,fails:[],noReason:e.message},price:0,chg24:0,vol:0});
+      scanResults.push({sym:sym,error:e.message,
+        vd:{v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:0,fails:[],noReason:e.message},
+        price:0,chg24:0,vol:0});
     }
-    if(i%BATCH===BATCH-1&&i<coins.length-1) await new Promise(function(r){setTimeout(r,250);});
+    if(i%BATCH===BATCH-1&&i<coins.length-1) await new Promise(function(r){setTimeout(r,200);});
   }
 
   finishProg();
+  scanCount++;
+  document.getElementById("scan-time").textContent="Last scan: "+new Date().toLocaleTimeString();
   renderTop20(coins.length);
   sendAlerts();
   document.getElementById("scan-btn").disabled=false;
 }
 
-// ---- RENDER TOP 20 ----
-function renderTop20(scanned) {
+// ---- RENDER ----
+function renderTop20(scanned){
   var sorted=scanResults.slice().sort(function(a,b){return b.vd.total-a.vd.total;});
   var top20=sorted.slice(0,20);
   var counts={LONG:0,SHORT:0,"SPOT BUY":0,REDUCE:0,"NO TRADE":0};
   scanResults.forEach(function(r){counts[r.vd.v]=(counts[r.vd.v]||0)+1;});
-  var actionable=(counts.LONG||0)+(counts.SHORT||0)+(counts["SPOT BUY"]||0)+(counts.REDUCE||0);
-
+  var act=(counts.LONG||0)+(counts.SHORT||0)+(counts["SPOT BUY"]||0)+(counts.REDUCE||0);
   var sumEl=document.getElementById("summary");
   sumEl.style.display="flex";
   sumEl.innerHTML=
-    '<span class="sum-pill sp-dim">'+scanned+' scanned</span>'+
-    (counts.LONG?'<span class="sum-pill sp-long">'+counts.LONG+' LONG</span>':"")+
-    (counts.SHORT?'<span class="sum-pill sp-short">'+counts.SHORT+' SHORT</span>':"")+
-    (counts["SPOT BUY"]?'<span class="sum-pill sp-spot">'+counts["SPOT BUY"]+' SPOT BUY</span>':"")+
-    (counts.REDUCE?'<span class="sum-pill sp-reduce">'+counts.REDUCE+' REDUCE</span>':"")+
-    '<span class="sum-note">'+actionable+' actionable | top 20 shown | click to expand</span>';
-
+    '<span class="s-pill sp-total">'+scanned+' scanned</span>'+
+    (counts.LONG?'<span class="s-pill sp-long">'+counts.LONG+' LONG</span>':"")+
+    (counts.SHORT?'<span class="s-pill sp-short">'+counts.SHORT+' SHORT</span>':"")+
+    (counts["SPOT BUY"]?'<span class="s-pill sp-spot">'+counts["SPOT BUY"]+' SPOT BUY</span>':"")+
+    (counts.REDUCE?'<span class="s-pill sp-reduce">'+counts.REDUCE+' REDUCE</span>':"")+
+    '<span class="sp-note">F&G: '+fearGreed+'/100 | '+act+' actionable | top 20 shown</span>';
   document.getElementById("cards").innerHTML=top20.map(function(r,i){return buildCard(r,i);}).join("");
 }
 
-function dotCls(s){
+function dotC(s){
   if(!s) return "dot";
-  if(s.status==="PASS") return "dot dot-pass";
-  if(s.status==="PARTIAL") return "dot dot-part";
-  if(s.status==="GATE FAIL") return "dot dot-gate";
-  return "dot dot-fail";
+  var m={"PASS":"dot dot-pass","PARTIAL":"dot dot-part","GATE FAIL":"dot dot-gate","FAIL":"dot dot-fail","N/A":"dot"};
+  return m[s.status]||"dot";
+}
+
+function accentColor(v){
+  var m={"LONG":"var(--g)","SHORT":"var(--r)","SPOT BUY":"var(--bl)","REDUCE":"var(--a)"};
+  return m[v]||"var(--dim)";
 }
 
 function buildCard(r,idx){
   var v=r.vd,isNT=v.v==="NO TRADE";
+  var acc=accentColor(v.v);
   var sc=v.total>=9?"var(--g)":v.total>=7?"var(--a)":v.total>=5?"var(--bl)":"var(--r)";
   var chgCls=r.chg24>0?"pos":r.chg24<0?"neg":"neu";
-  var accent=v.v==="LONG"?"var(--g)":v.v==="SHORT"?"var(--r)":v.v==="SPOT BUY"?"var(--bl)":v.v==="REDUCE"?"var(--a)":"var(--dim)";
-  var dots=r.S1?('<div class="dots">'+
-    '<span class="'+dotCls(r.S1)+'" title="Structure"></span>'+
-    '<span class="'+dotCls(r.S2)+'" title="Positioning"></span>'+
-    '<span class="'+dotCls(r.S3)+'" title="Resolution"></span>'+
-    '<span class="'+dotCls(r.S4)+'" title="Volume"></span>'+
-    '<span class="'+dotCls(r.S5)+'" title="Liquidity"></span>'+
-    '</div>'):"";
-  var exBadges='';
-  if(r.onBN) exBadges+='<span class="ex-badge ex-bn">BN'+(r.hasBNPerp?"+P":"")+'</span>';
-  if(r.onBB) exBadges+='<span class="ex-badge ex-bb">BB'+(r.hasBBPerp?"+P":"")+'</span>';
-  exBadges+='<span class="ex-badge ex-wb">WB</span>';
+  var convColor=v.conv==="HIGH"?"var(--g)":v.conv==="MED"?"var(--a)":"var(--bl)";
 
-  var mainRow='<div class="card-main">'+
-    '<div class="c-rank">'+(idx+1)+'</div>'+
-    '<div class="c-sym"><div class="sym-n">'+r.sym+'</div><div class="sym-ex">'+exBadges+'</div></div>'+
-    '<div class="c-score"><span class="sc-n" style="color:'+sc+'">'+v.total.toFixed(1)+'</span><div class="sc-bar"><div class="sc-fill" style="width:'+(v.total/10*100)+'%;background:'+sc+'"></div></div></div>'+
-    '<div class="c-verdict"><span class="vbadge '+v.vc+'">'+v.v+'</span>'+(v.conv?'<span class="c-conv" style="color:'+v.cc+'">'+v.conv+' conviction</span>':"")+'</div>'+
-    '<div class="c-stats">'+
-      (r.price?'<div class="stat"><div class="sv" style="color:var(--br)">'+fP(r.price)+'</div><div class="sl">Price</div></div>':"")+
-      '<div class="stat"><div class="sv '+chgCls+'">'+(r.chg24>=0?"+":"")+r.chg24.toFixed(2)+'%</div><div class="sl">24h</div></div>'+
-      (r.vol?'<div class="stat"><div class="sv" style="color:var(--dim)">'+fV(r.vol)+'</div><div class="sl">Volume</div></div>':"")+
-      dots+
-    '</div>'+
-    '<div class="c-arr">&#x25BE;</div>'+
-    '</div>';
+  var exB="";
+  if(r.onBN) exB+='<span class="eb eb-bn">BN'+(r.hasBNPerp?"+P":"")+"</span>";
+  if(r.onBB) exB+='<span class="eb eb-bb">BB'+(r.hasBBPerp?"+P":"")+"</span>";
+  exB+='<span class="eb eb-wb">WB</span>';
 
-  var detail='<div class="card-detail"><div class="d-inner">'+buildDetail(r)+'</div></div>';
-  return '<div class="card'+(isNT?" dim-card":"")+ '" id="card-'+idx+'" onclick="toggleCard('+idx+')" style="animation-delay:'+(idx*0.04)+'s;border-left:3px solid '+accent+'">'+mainRow+detail+'</div>';
+  var dots=r.S1?('<div class="c-dots">'+
+    ['<span class="'+dotC(r.S1)+'" title="1-Structure"></span>',
+     '<span class="'+dotC(r.S2)+'" title="2-Positioning"></span>',
+     '<span class="'+dotC(r.S3)+'" title="3-Resolution"></span>',
+     '<span class="'+dotC(r.S4)+'" title="4-Volume"></span>',
+     '<span class="'+dotC(r.S5)+'" title="5-Liquidity"></span>'].join("")+
+    "</div>"):"";
+
+  var main='<div class="c-main">'
+    +'<div class="c-rank">'+(idx+1)+'</div>'
+    +'<div class="c-sym-wrap"><div class="c-sym">'+r.sym+'</div><div class="c-ex">'+exB+'</div></div>'
+    +'<div class="c-score-wrap">'
+      +'<div class="c-score-num" style="color:'+sc+'">'+v.total.toFixed(1)+'</div>'
+      +'<div class="c-score-bar"><div class="c-score-fill" style="width:'+(v.total/10*100)+'%;background:'+sc+'"></div></div>'
+    +'</div>'
+    +'<div class="c-verdict-wrap">'
+      +'<span class="vbadge '+v.vc+'">'+v.v+'</span>'
+      +(v.conv?'<div class="c-conv" style="color:'+convColor+'"><span class="conv-dot" style="background:'+convColor+'"></span>'+v.conv+'</div>':"")
+    +'</div>'
+    +'<div class="c-stats">'
+      +(r.price?'<div class="stat"><div class="sv" style="color:var(--white)">'+fP(r.price)+'</div><div class="sl">Price</div></div>':"")
+      +'<div class="stat"><div class="sv '+chgCls+'">'+(r.chg24>=0?"+":"")+r.chg24.toFixed(2)+'%</div><div class="sl">24h</div></div>'
+      +(r.vol?'<div class="stat"><div class="sv" style="color:var(--dim)">'+fV(r.vol)+'</div><div class="sl">Vol</div></div>':"")
+    +'</div>'
+    +dots
+    +'<div class="c-arrow">&#x25BE;</div>'
+    +'</div>';
+
+  var detail='<div class="c-detail"><div class="d-body">'+buildDetail(r)+'</div></div>';
+  return '<div class="card'+(isNT?" dim":"")+'" id="card-'+idx+'" onclick="toggleCard('+idx+')" '
+    +'style="animation-delay:'+(idx*.04)+'s;--accent:'+acc+'">'
+    +main+detail+'</div>';
 }
 
 function buildDetail(r){
-  if(!r.S1) return '<div style="font-family:var(--mono);font-size:10px;color:var(--r);padding:8px 0">'+(r.error||"Error")+'</div>';
-  var v=r.vd,sc=v.total>=9?"var(--g)":v.total>=7?"var(--a)":v.total>=5?"var(--bl)":"var(--r)";
-  var steps=[{n:"1",name:"Structure",s:r.S1},{n:"2",name:"Positioning",s:r.S2},{n:"3",name:"Resolution",s:r.S3},{n:"4",name:"Volume",s:r.S4},{n:"5",name:"Liquidity",s:r.S5}];
+  if(!r.S1) return '<div style="font-family:var(--mono);font-size:10px;color:var(--r);padding:10px 0">'+(r.error||"Error")+'</div>';
+  var v=r.vd;
+  var sc=v.total>=9?"var(--g)":v.total>=7?"var(--a)":v.total>=5?"var(--bl)":"var(--r)";
+  var steps=[
+    {n:"1",name:"Structure",s:r.S1,color:r.S1.gatePass?"var(--g)":r.S1.score>0?"var(--a)":"var(--r)"},
+    {n:"2",name:"Positioning",s:r.S2,color:r.S2.gatePass?"var(--g)":r.S2.score>0?"var(--a)":"var(--r)"},
+    {n:"3",name:"Resolution",s:r.S3,color:r.S3.gatePass?"var(--g)":r.S3.score>0?"var(--a)":"var(--r)"},
+    {n:"4",name:"Volume",s:r.S4,color:r.S4.score>=1.5?"var(--g)":r.S4.score>=1?"var(--a)":"var(--r)"},
+    {n:"5",name:"Liquidity",s:r.S5,color:r.S5.score>=1.5?"var(--g)":r.S5.score>=1?"var(--a)":"var(--r)"}
+  ];
   var html='<div class="steps-grid">'+steps.map(function(st){
     var ptC=st.s.score>=1.8?"var(--g)":st.s.score>=1.2?"var(--a)":st.s.score>=0.5?"var(--bl)":"var(--r)";
-    return '<div class="sc"><div class="sc-head"><span class="sc-name">'+st.n+' &middot; '+st.name+'</span><span class="sc-pts" style="color:'+ptC+'">'+st.s.score+' / '+st.s.max+'</span></div><span class="sbadge '+st.s.cls+'">'+st.s.status+'</span><div class="sc-det">'+st.s.detail+'</div><div class="sc-rsn">'+st.s.reason+'</div></div>';
+    return '<div class="step-tile" style="--step-color:'+st.color+'">'
+      +'<div class="st-head"><span class="st-name">'+st.n+' &middot; '+st.name+'</span><span class="st-score" style="color:'+ptC+'">'+st.s.score+' / '+st.s.max+'</span></div>'
+      +'<span class="sbadge '+st.s.cls+'">'+st.s.status+'</span>'
+      +'<div class="st-det">'+st.s.detail+'</div>'
+      +'<div class="st-rsn">'+st.s.reason+'</div>'
+    +'</div>';
   }).join("")+'</div>';
+
   html+='<div class="d-footer">';
-  html+='<div class="d-track"><div class="d-fill" style="width:'+(v.total/10*100)+'%;background:'+sc+'"></div></div>';
-  html+='<span class="d-snum" style="color:'+sc+'">'+v.total.toFixed(1)+'/10</span>';
-  if(v.fails&&v.fails.length) html+='<span class="gate-txt">Gate fail: '+v.fails.join(" / ")+'</span>';
-  if(v.noReason) html+='<span class="gate-txt">'+v.noReason+'</span>';
-  if(r.lvl) html+='<div class="lvls"><div class="lv"><div class="lv-l">Entry</div><div class="lv-v lv-e">'+fP(r.lvl.entry)+'</div></div><div class="lv"><div class="lv-l">Target</div><div class="lv-v lv-t">'+fP(r.lvl.target)+'</div></div><div class="lv"><div class="lv-l">Stop</div><div class="lv-v lv-s">'+fP(r.lvl.stop)+'</div></div></div>';
+  html+='<div class="d-score-bar"><div class="d-score-fill" style="width:'+(v.total/10*100)+'%;background:'+sc+'"></div></div>';
+  html+='<span class="d-score-num" style="color:'+sc+'">'+v.total.toFixed(1)+' / 10</span>';
+  if(v.fails&&v.fails.length) html+='<span class="d-gate">Gate fail: '+v.fails.join(" / ")+'</span>';
+  if(v.noReason) html+='<span class="d-no">'+v.noReason+'</span>';
+  if(r.lvl){
+    html+='<div class="d-levels">';
+    html+='<div class="dlv"><div class="dlv-l">Entry</div><div class="dlv-v dlv-e">'+fP(r.lvl.entry)+'</div></div>';
+    html+='<div class="dlv"><div class="dlv-l">Target</div><div class="dlv-v dlv-t">'+fP(r.lvl.target)+'</div></div>';
+    if(r.lvl.stop) html+='<div class="dlv"><div class="dlv-l">Stop</div><div class="dlv-v dlv-s">'+fP(r.lvl.stop)+'</div></div>';
+    html+='</div>';
+  }
   html+='</div>';
+
+  // Manual checks for SPOT BUY
+  if(v.v==="SPOT BUY"||v.manualChecks){
+    html+='<div class="manual-flags">';
+    html+='<div class="mf-title">Manual Checks Required (free tools)</div>';
+    var flags=[
+      ["tokenunlocks.app","Check token unlock schedule -- any major unlock in next 14 days invalidates SPOT BUY"],
+      ["coinglass.com","Verify no major OI spike or funding anomaly that the tool may have missed"],
+      ["arkham.xyz","Check large wallet activity -- heavy distribution by top holders negates accumulation signal"],
+      ["twitter.com/"+r.sym,"Confirm team activity -- last official post within 2 weeks?"]
+    ];
+    flags.forEach(function(f){
+      html+='<div class="mf-item"><span class="mf-icon">&#x21E8;</span><span>'+f[0]+" -- "+f[1]+'</span></div>';
+    });
+    html+='</div>';
+  }
+
   return html;
 }
 
 function toggleCard(idx){
   var card=document.getElementById("card-"+idx);
   if(!card) return;
-  var isOpen=card.classList.contains("open");
+  var wasOpen=card.classList.contains("open");
   document.querySelectorAll(".card.open").forEach(function(c){c.classList.remove("open");});
-  if(!isOpen) card.classList.add("open");
+  if(!wasOpen) card.classList.add("open");
 }
 
 // ---- TELEGRAM ----
 async function sendAlerts(){
-  var tok=localStorage.getItem("si5_tok"),cid=localStorage.getItem("si5_cid");
+  var tok=localStorage.getItem("si6_tok"),cid=localStorage.getItem("si6_cid");
   if(!tok||!cid) return;
   var high=scanResults.filter(function(r){return r.vd&&r.vd.conv==="HIGH"&&r.vd.v!=="NO TRADE";});
   if(!high.length) return;
-  var lines=high.map(function(r){return "["+r.vd.v+"] "+r.sym+" Score: "+r.vd.total.toFixed(1)+"/10 | "+fP(r.price)+" | "+(r.chg24>=0?"+":"")+r.chg24.toFixed(2)+"%";});
-  var msg="SIGNAL INTELLIGENCE - HIGH CONVICTION\n\n"+lines.join("\n\n")+"\n\nTime: "+new Date().toLocaleTimeString();
-  try{await fetch("https://api.telegram.org/bot"+tok+"/sendMessage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:cid,text:msg})});}catch(e){}
+  var lines=high.map(function(r){
+    return "["+r.vd.v+"] "+r.sym+" | Score: "+r.vd.total.toFixed(1)+"/10"
+      +" | "+fP(r.price)+" | "+(r.chg24>=0?"+":"")+r.chg24.toFixed(2)+"% | Vol: "+fV(r.vol);
+  });
+  var msg="SIGNAL INTELLIGENCE - HIGH CONVICTION\n"+"F&G: "+fearGreed+"/100\n\n"+lines.join("\n\n")+"\n\nTime: "+new Date().toLocaleTimeString();
+  try{
+    await fetch("https://api.telegram.org/bot"+tok+"/sendMessage",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({chat_id:cid,text:msg})});
+  }catch(e){}
 }
 async function testTG(){
-  var tok=document.getElementById("tg-tok").value.trim()||localStorage.getItem("si5_tok");
-  var cid=document.getElementById("tg-cid").value.trim()||localStorage.getItem("si5_cid");
+  var tok=document.getElementById("tg-tok").value.trim()||localStorage.getItem("si6_tok");
+  var cid=document.getElementById("tg-cid").value.trim()||localStorage.getItem("si6_cid");
   if(!tok||!cid){alert("Save config first");return;}
   try{
-    var r=await fetch("https://api.telegram.org/bot"+tok+"/sendMessage",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:cid,text:"Signal Intelligence connected. "+new Date().toLocaleTimeString()})});
+    var r=await fetch("https://api.telegram.org/bot"+tok+"/sendMessage",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({chat_id:cid,text:"Signal Intelligence v6 connected | "+new Date().toLocaleTimeString()})});
     var d=await r.json();
     document.getElementById("tg-st").textContent=d.ok?"Connected OK":"Error: "+d.description;
-    document.getElementById("tg-st").className="tg-st "+(d.ok?"ok":"err");
-  }catch(e){document.getElementById("tg-st").textContent="ERROR: "+e.message;document.getElementById("tg-st").className="tg-st err";}
+    document.getElementById("tg-st").className="tg-status "+(d.ok?"ok":"err");
+  }catch(e){
+    document.getElementById("tg-st").textContent="Error: "+e.message;
+    document.getElementById("tg-st").className="tg-status err";
+  }
 }
 function saveTG(){
-  var tok=document.getElementById("tg-tok").value.trim(),cid=document.getElementById("tg-cid").value.trim();
+  var tok=document.getElementById("tg-tok").value.trim();
+  var cid=document.getElementById("tg-cid").value.trim();
   if(!tok||!cid){alert("Enter both values");return;}
-  localStorage.setItem("si5_tok",tok);localStorage.setItem("si5_cid",cid);
-  document.getElementById("tg-st").textContent="Saved";document.getElementById("tg-st").className="tg-st ok";
+  localStorage.setItem("si6_tok",tok);localStorage.setItem("si6_cid",cid);
+  document.getElementById("tg-st").textContent="Saved";
+  document.getElementById("tg-st").className="tg-status ok";
 }
 
 // ---- INIT ----
 setInterval(function(){document.getElementById("clk").textContent=new Date().toLocaleTimeString();},1000);
 window.addEventListener("load",function(){
-  var tok=localStorage.getItem("si5_tok"),cid=localStorage.getItem("si5_cid");
+  var tok=localStorage.getItem("si6_tok"),cid=localStorage.getItem("si6_cid");
   if(tok)document.getElementById("tg-tok").value=tok;
   if(cid)document.getElementById("tg-cid").value=cid;
-  if(tok&&cid){document.getElementById("tg-st").textContent="Configured";document.getElementById("tg-st").className="tg-st ok";}
+  if(tok&&cid){document.getElementById("tg-st").textContent="Configured";document.getElementById("tg-st").className="tg-status ok";}
 });
+
 </script>
 </body>
 </html>
