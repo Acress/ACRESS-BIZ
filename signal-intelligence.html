@@ -282,6 +282,33 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
   .scan-top{flex-direction:column}.scan-actions{align-items:flex-start}
 }
 
+
+/* TIME HORIZON */
+.hz-badge{font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:1.5px;
+  text-transform:uppercase;padding:3px 9px;border-radius:3px;border:1px solid;
+  white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.hz-imm{color:#ff3355;border-color:rgba(255,51,85,.4);background:rgba(255,51,85,.1)}
+.hz-short{color:#ffaa00;border-color:rgba(255,170,0,.4);background:rgba(255,170,0,.1)}
+.hz-med{color:#2d8eff;border-color:rgba(45,142,255,.4);background:rgba(45,142,255,.1)}
+.hz-watch{color:var(--dim);border-color:var(--b2)}
+.hz-loading{color:var(--dim);border-color:var(--b1);background:transparent;animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.hz-panel{margin-top:10px;padding:12px 14px;border-radius:6px;
+  background:rgba(255,255,255,.02);border:1px solid var(--b1)}
+.hz-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.hz-label{font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+.hz-timeframe{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--white)}
+.hz-section{margin-top:8px}
+.hz-section-lbl{font-family:var(--mono);font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+.hz-section-txt{font-size:11px;color:var(--tx);line-height:1.5}
+.hz-news{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.hz-news-item{font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.4;
+  padding:4px 8px;background:rgba(255,255,255,.02);border-radius:3px;
+  border-left:2px solid var(--b2);display:flex;align-items:flex-start;gap:6px}
+.hz-news-dot{width:5px;height:5px;border-radius:50%;background:var(--dim);flex-shrink:0;margin-top:3px}
+.hz-conf{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px;
+  background:rgba(255,255,255,.04);color:var(--dim);border:1px solid var(--b1);margin-left:auto}
+
 </style>
 </head>
 <body>
@@ -812,7 +839,14 @@ async function runScan(){
     // Fear & Greed
     fetch("https://api.alternative.me/fng/?limit=1",{signal:AbortSignal.timeout(8000)})
       .then(function(r){return r.json();})
-      .then(function(d){if(d.data&&d.data.length) fearGreed=parseInt(d.data[0].value);})
+      
+    .then(function(d){if(d.data&&d.data.length){fearGreed=parseInt(d.data[0].value);
+      var fgEl=document.getElementById("ex-fg");
+      if(fgEl){
+        var fgCls=fearGreed>=70?"ok-green":fearGreed<=30?"ok-orange":"";
+        fgEl.className="ex-item "+fgCls;
+        fgEl.innerHTML='<span class="ex-dot-i"></span>F&G: '+fearGreed+'/100';
+      }}})
       .catch(function(){})
   ]);
 
@@ -877,6 +911,9 @@ function renderTop20(scanned){
     (counts.REDUCE?'<span class="s-pill sp-reduce">'+counts.REDUCE+' REDUCE</span>':"")+
     '<span class="sp-note">F&G: '+fearGreed+'/100 | '+act+' actionable | top 20 shown</span>';
   document.getElementById("cards").innerHTML=top20.map(function(r,i){return buildCard(r,i);}).join("");
+  // Enrich with time horizon in background (non-blocking)
+  var actionableIdx=top20.map(function(r,i){return i;}).filter(function(i){return top20[i].vd.v!=="NO TRADE";});
+  if(actionableIdx.length) enrichWithHorizon(actionableIdx);
 }
 
 function dotC(s){
@@ -891,6 +928,7 @@ function accentColor(v){
 }
 
 function buildCard(r,idx){
+  r._idx=idx; // store for horizon detail binding
   var v=r.vd,isNT=v.v==="NO TRADE";
   var acc=accentColor(v.v);
   var sc=v.total>=9?"var(--g)":v.total>=7?"var(--a)":v.total>=5?"var(--bl)":"var(--r)";
@@ -927,6 +965,7 @@ function buildCard(r,idx){
       +(r.vol?'<div class="stat"><div class="sv" style="color:var(--dim)">'+fV(r.vol)+'</div><div class="sl">Vol</div></div>':"")
     +'</div>'
     +dots
+    +'<div id="hz-'+idx+'" style="flex-shrink:0"></div>'
     +'<div class="c-arrow">&#x25BE;</div>'
     +'</div>';
 
@@ -971,6 +1010,9 @@ function buildDetail(r){
   }
   html+='</div>';
 
+  // Horizon detail (populated async after scan)
+  html += '<div id="hzd-'+r._idx+'"></div>';
+
   // Manual checks for SPOT BUY
   if(v.v==="SPOT BUY"||v.manualChecks){
     html+='<div class="manual-flags">';
@@ -996,6 +1038,210 @@ function toggleCard(idx){
   var wasOpen=card.classList.contains("open");
   document.querySelectorAll(".card.open").forEach(function(c){c.classList.remove("open");});
   if(!wasOpen) card.classList.add("open");
+}
+
+
+// ---- TIME HORIZON + NEWS INTELLIGENCE ----
+// Runs AFTER main scan on actionable coins only (async, non-blocking)
+async function fetchNewsForCoin(sym) {
+  var headlines = [];
+  try {
+    var cats = sym + ",Cryptocurrency";
+    var r = await fetch(
+      "https://min-api.cryptocompare.com/data/v2/news/?categories=" + cats + "&lang=EN&limit=5&sortOrder=latest",
+      {signal: AbortSignal.timeout(8000)}
+    );
+    var d = await r.json();
+    if(d.Data && d.Data.length) {
+      headlines = d.Data.slice(0,5).map(function(n) { return n.title; });
+    }
+  } catch(e) {}
+  if(!headlines.length) {
+    try {
+      var r2 = await fetch(
+        "https://min-api.cryptocompare.com/data/v2/news/?categories=Cryptocurrency&lang=EN&limit=5&sortOrder=latest",
+        {signal: AbortSignal.timeout(8000)}
+      );
+      var d2 = await r2.json();
+      if(d2.Data && d2.Data.length) {
+        headlines = d2.Data.slice(0,5).map(function(n) { return n.title; });
+      }
+    } catch(e) {}
+  }
+  return headlines;
+}
+
+async function fetchHorizon(sym, result) {
+  var v = result.vd, S1 = result.S1, S2 = result.S2, S3 = result.S3, S4 = result.S4;
+  if(!S1 || v.v === "NO TRADE") return null;
+
+  var headlines = await fetchNewsForCoin(sym);
+
+  var signalSummary = [
+    "Coin: " + sym,
+    "Verdict: " + v.v + " | Score: " + v.total.toFixed(1) + "/10 | Conviction: " + (v.conv||"N/A"),
+    "Structure: " + S1.zone + " | Price at " + (S1.pos*100).toFixed(0) + "% of 30d range",
+    "Funding: " + (S2.funding !== null ? S2.funding.toFixed(4) + "%" : "N/A (spot)") +
+      (S2.longPct !== null ? " | L/S: " + S2.longPct.toFixed(1) + "% longs" : ""),
+    "OI Change (4h): " + (S3.oiChange !== undefined ? (S3.oiChange >= 0 ? "+" : "") + S3.oiChange.toFixed(1) + "%" : "N/A"),
+    "Price 24h: " + (S3.pChg !== undefined ? (S3.pChg >= 0 ? "+" : "") + S3.pChg.toFixed(2) + "%" : "N/A"),
+    "Volume: " + S4.ratio.toFixed(2) + "x 7d average",
+    "Vol Compressed: " + (S1.volCompressed ? "YES (7d range " + S1.recentAvgRange + "% vs prior " + S1.priorAvgRange + "%)" : "No"),
+    "Fear & Greed: " + fearGreed + "/100",
+    S2.fundingFlipped ? "FUNDING FLIP DETECTED (signal of exhaustion)" : ""
+  ].filter(Boolean).join("\n");
+
+  var newsSection = headlines.length
+    ? "Recent news headlines for context:\n" + headlines.map(function(h,i) { return (i+1) + ". " + h; }).join("\n")
+    : "No recent news found. Base estimate on technical signals only.";
+
+  var prompt = "You are a crypto market analyst. Given the following technical signal data and news, provide a time horizon assessment.\n\n"
+    + "SIGNAL DATA:\n" + signalSummary + "\n\n"
+    + newsSection + "\n\n"
+    + "Respond ONLY with a JSON object, no markdown, no explanation outside JSON:\n"
+    + "{\n"
+    + "  \"horizon\": \"IMMINENT\" or \"SHORT\" or \"MEDIUM\" or \"WATCH\",\n"
+    + "  \"timeframe\": \"e.g. 2-6 hours\" or \"12-24 hours\" or \"1-3 days\" or \"3-7 days\",\n"
+    + "  \"catalyst\": \"One sentence: what specific condition or event will trigger the move\",\n"
+    + "  \"risk\": \"One sentence: what would invalidate this setup\",\n"
+    + "  \"news_relevance\": \"One sentence: how recent news supports or risks the setup (or none if no news)\",\n"
+    + "  \"confidence\": \"HIGH\" or \"MED\" or \"LOW\"\n"
+    + "}";
+
+  try {
+    var resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 400,
+        messages: [{role: "user", content: prompt}]
+      }),
+      signal: AbortSignal.timeout(20000)
+    });
+    var data = await resp.json();
+    var txt = data.content && data.content[0] && data.content[0].text || "";
+    var jsonMatch = txt.match(/\{[\s\S]*\}/);
+    if(jsonMatch) {
+      var hz = JSON.parse(jsonMatch[0]);
+      hz.headlines = headlines;
+      return hz;
+    }
+  } catch(e) {}
+
+  // Technical fallback if API unavailable
+  return technicalHorizon(v, S1, S2, S3, S4, headlines);
+}
+
+function technicalHorizon(v, S1, S2, S3, S4, headlines) {
+  var funding = S2.funding || 0;
+  var oiChange = S3.oiChange || 0;
+  var ratio = S4.ratio || 0;
+  var horizon, timeframe, catalyst, confidence;
+
+  var urgency = 0;
+  if(Math.abs(funding) >= 0.05) urgency += 3;
+  else if(Math.abs(funding) >= 0.03) urgency += 2;
+  else if(Math.abs(funding) >= 0.02) urgency += 1;
+  if(Math.abs(oiChange) >= 5) urgency += 2;
+  else if(Math.abs(oiChange) >= 2) urgency += 1;
+  if(ratio >= 3) urgency += 2;
+  else if(ratio >= 1.5) urgency += 1;
+  if(S1.volCompressed) urgency += 1;
+  if(S2.fundingFlipped) urgency += 2;
+
+  if(urgency >= 7) {
+    horizon = "IMMINENT"; timeframe = "2-8 hours";
+    catalyst = "Extreme funding + accelerating OI shift. Forced closures likely at next price push.";
+    confidence = "MED";
+  } else if(urgency >= 5) {
+    horizon = "SHORT"; timeframe = "8-24 hours";
+    catalyst = "Positioning is stressed. A catalyst or continued price pressure will trigger resolution.";
+    confidence = "MED";
+  } else if(urgency >= 3) {
+    horizon = "MEDIUM"; timeframe = "1-3 days";
+    catalyst = "Setup is forming. Requires a confirming catalyst or further positioning extreme.";
+    confidence = "LOW";
+  } else {
+    horizon = "WATCH"; timeframe = "3-7 days";
+    catalyst = "Early stage setup. Monitor for increasing funding stress and volume confirmation.";
+    confidence = "LOW";
+  }
+
+  return {
+    horizon: horizon, timeframe: timeframe,
+    catalyst: catalyst,
+    risk: v.v === "LONG"
+      ? "Price breaks below the 30d low invalidates the support thesis."
+      : "Price breaks above the 30d high invalidates the resistance thesis.",
+    news_relevance: headlines.length ? "See recent headlines below for context." : "No recent news found.",
+    confidence: confidence,
+    headlines: headlines,
+    isFallback: true
+  };
+}
+
+function horizonCls(hz) {
+  var m = {"IMMINENT": "hz-imm", "SHORT": "hz-short", "MEDIUM": "hz-med", "WATCH": "hz-watch"};
+  return m[hz] || "hz-watch";
+}
+
+// Enrich actionable results with horizon data after main scan
+async function enrichWithHorizon(top20Indices) {
+  for(var i = 0; i < top20Indices.length; i++) {
+    var idx = top20Indices[i];
+    var result = scanResults[idx];
+    if(!result || result.vd.v === "NO TRADE") continue;
+
+    // Show loading state on card
+    var hzEl = document.getElementById("hz-" + idx);
+    if(hzEl) hzEl.innerHTML = '<span class="hz-badge hz-loading">Analysing...</span>';
+
+    var hz = await fetchHorizon(result.sym, result);
+    result.horizon = hz;
+
+    if(hzEl && hz) {
+      hzEl.innerHTML = '<span class="hz-badge ' + horizonCls(hz.horizon) + '">'
+        + hz.horizon + ' &middot; ' + hz.timeframe
+        + '</span>';
+    }
+
+    // Update expanded detail if open
+    var hzDetailEl = document.getElementById("hzd-" + idx);
+    if(hzDetailEl && hz) {
+      hzDetailEl.innerHTML = buildHorizonDetail(hz);
+    }
+
+    // Small delay between API calls
+    if(i < top20Indices.length - 1) await new Promise(function(r) { setTimeout(r, 300); });
+  }
+}
+
+function buildHorizonDetail(hz) {
+  if(!hz) return "";
+  var cls = horizonCls(hz.horizon);
+  var confColor = hz.confidence === "HIGH" ? "var(--g)" : hz.confidence === "MED" ? "var(--a)" : "var(--dim)";
+  var html = '<div class="hz-panel">';
+  html += '<div class="hz-top">';
+  html += '<span class="hz-badge ' + cls + '">' + hz.horizon + '</span>';
+  html += '<span class="hz-timeframe">' + hz.timeframe + '</span>';
+  html += '<span class="hz-conf" style="color:' + confColor + '">' + hz.confidence + ' confidence</span>';
+  if(hz.isFallback) html += '<span style="font-family:var(--mono);font-size:8px;color:var(--dim)">(technical estimate)</span>';
+  html += '</div>';
+  html += '<div class="hz-section"><div class="hz-section-lbl">Catalyst</div><div class="hz-section-txt">' + hz.catalyst + '</div></div>';
+  html += '<div class="hz-section"><div class="hz-section-lbl">Invalidation</div><div class="hz-section-txt">' + hz.risk + '</div></div>';
+  if(hz.news_relevance && hz.news_relevance !== "No recent news found.") {
+    html += '<div class="hz-section"><div class="hz-section-lbl">News Context</div><div class="hz-section-txt">' + hz.news_relevance + '</div></div>';
+  }
+  if(hz.headlines && hz.headlines.length) {
+    html += '<div class="hz-news">';
+    hz.headlines.forEach(function(h) {
+      html += '<div class="hz-news-item"><span class="hz-news-dot"></span><span>' + h + '</span></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
 }
 
 // ---- TELEGRAM ----
