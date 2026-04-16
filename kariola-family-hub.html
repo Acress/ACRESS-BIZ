@@ -282,133 +282,202 @@ function parseCSV(text,bank){
 
 
 // ═══════════════════════════════ PDF PARSER ══════════════════════════════════
-// Uses position-based row reconstruction — groups text items by Y coordinate
-// so each visual line in the PDF stays together, regardless of column layout.
 
 async function parsePDF(file) {
   try {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+    const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
     const bank = file.name.replace(/\.pdf$/i,'');
-    const allTxns = [];
 
+    // Extract all text lines using position-based row grouping
+    let allLines = [];
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
-      const textContent = await page.getTextContent();
-      const rows = buildRows(textContent.items);
-      const txns = parseRows(rows, bank);
-      allTxns.push(...txns);
+      const tc = await page.getTextContent();
+      allLines = allLines.concat(buildRows(tc.items));
     }
 
-    // Deduplicate by date+amount+desc
-    const seen = new Set();
-    return allTxns.filter(t => {
-      const key = t.date + t.amount + t.desc.slice(0,15);
-      if (seen.has(key)) return false;
-      seen.add(key); return true;
-    });
+    // Detect year from statement header
+    let stmtYear = new Date().getFullYear();
+    let stmtStartMonth = 1;
+    for (const line of allLines) {
+      const m = line.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d+,?\s+(\d{4})/i);
+      if (m) {
+        stmtYear = parseInt(m[2]);
+        const mo = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+        stmtStartMonth = mo[m[1].toLowerCase()] || 1;
+        break;
+      }
+    }
+
+    // Detect bank
+    const fullText = allLines.join(' ').toUpperCase();
+    if (fullText.includes('JPMORGAN') || fullText.includes('CHASE TOTAL') || fullText.includes('CHASE SAVINGS')) {
+      return parseChasePDF(allLines, stmtYear, stmtStartMonth, bank);
+    }
+    return parseGenericPDF(allLines, stmtYear, bank);
+
   } catch(e) {
-    console.error('PDF parse error:', e);
-    alert('Could not read PDF: ' + e.message + '. Try downloading a CSV from your bank instead — it works more reliably.');
+    console.error('PDF error:', e);
+    alert('PDF read error: ' + e.message + '\n\nTip: Download a CSV from chase.com instead — it works better.');
     return [];
   }
 }
 
-// Group PDF text items into visual rows by Y position (within 3px tolerance)
+// Group PDF text items into visual rows by Y position (3px tolerance)
 function buildRows(items) {
   const rows = [];
   items.forEach(item => {
-    if (!item.str.trim()) return;
+    const t = item.str.trim();
+    if (!t) return;
     const y = Math.round(item.transform[5]);
     const x = item.transform[4];
     const existing = rows.find(r => Math.abs(r.y - y) <= 3);
-    if (existing) {
-      existing.items.push({x, text: item.str.trim()});
-    } else {
-      rows.push({y, items: [{x, text: item.str.trim()}]});
-    }
+    if (existing) existing.items.push({x, text: t});
+    else rows.push({y, items: [{x, text: t}]});
   });
-  // Sort rows top-to-bottom, items left-to-right within each row
-  rows.sort((a,b) => b.y - a.y);
-  rows.forEach(r => r.items.sort((a,b) => a.x - b.x));
-  // Convert to plain text lines
-  return rows.map(r => r.items.map(i => i.text).join(' '));
+  rows.sort((a,b) => b.y - a.y); // top to bottom
+  rows.forEach(r => r.items.sort((a,b) => a.x - b.x)); // left to right
+  return rows.map(r => r.items.map(i => i.text).join(' ').replace(/\s+/g,' ').trim()).filter(l=>l.length>1);
 }
 
-// Parse reconstructed rows into transactions
-function parseRows(lines, bank) {
+// ── CHASE PARSER ─────────────────────────────────────────────────────────────
+// STEP 1: Merge multi-line transactions into single strings.
+//   Chase sometimes wraps long descriptions across 2-3 lines.
+//   A new transaction always starts with MM/DD.
+//   Continuation lines (no leading MM/DD) belong to the previous transaction.
+// STEP 2: Parse each merged transaction string.
+
+function parseChasePDF(lines, year, startMonth, bank) {
+  const SKIP_LINE = /\*(?:start|end)\*|\bpage\s+\d+\s+of\b|^\d{12,}|^jpmorgan|^p o box|^customer service|^web site|^service center|^para espa|^international|^we accept|^in case of errors|^call us at|^for personal|^for business|^annual percentage|^your monthly|^your account|^you were not charged|^for more information|^this page intentionally|primary account|account number:/i;
+  const TX_SKIP = /beginning balance|ending balance|^\s*total\b|^assets\b|^checking & savings/i;
+
+  // Step 1: Merge continuation lines
+  const merged = [];
+  for (const line of lines) {
+    if (SKIP_LINE.test(line)) continue;
+    if (/^\d{2}\/\d{2}\s/.test(line)) {
+      // New transaction line
+      merged.push(line);
+    } else if (merged.length > 0) {
+      // Continuation — append to the last transaction
+      merged[merged.length-1] += ' ' + line;
+    }
+  }
+
+  // Step 2: Parse each merged transaction
   const txns = [];
-  const DATE_RE = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s*\d{1,2},?\s*\d{4})/i;
-  const AMT_RE  = /\$?([\d,]{1,10}\.\d{2})/g;
+  const NUM_RE = /-?[\d,]+\.\d{2}/g;
 
-  lines.forEach((line, idx) => {
-    // Must contain a date
-    const dm = line.match(DATE_RE);
-    if (!dm) return;
+  for (const line of merged) {
+    const dm = line.match(/^(\d{2})\/(\d{2})\s+(.*)/s);
+    if (!dm) continue;
+    const [, mm, dd, rest] = dm;
+    if (TX_SKIP.test(rest)) continue;
 
-    // Parse the date
-    let date = '';
-    const ds = dm[1];
-    if (/\d{4}-\d{2}-\d{2}/.test(ds)) {
-      date = ds;
-    } else if (/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(ds)) {
-      const sep = ds.includes('/') ? '/' : '-';
-      const [mo,dy,yr] = ds.split(sep);
-      date = `${yr.length===2?'20'+yr:yr}-${mo.padStart(2,'0')}-${dy.padStart(2,'0')}`;
-    } else {
-      try { const d = new Date(ds); if(!isNaN(d)) date = d.toISOString().slice(0,10); } catch(e){}
-    }
-    if (!date) return;
-
-    // Collect all dollar amounts in this line
-    const amounts = [];
+    // Find all dollar amounts in the rest of the line
+    const nums = [];
     let m;
-    const ar = /\$?([\d,]{1,10}\.\d{2})/g;
-    while ((m = ar.exec(line)) !== null) {
-      const v = parseFloat(m[1].replace(/,/g,''));
-      if (v > 0.01 && v < 50000) amounts.push(v);
+    const re = /-?[\d,]+\.\d{2}/g;
+    while ((m = re.exec(rest)) !== null) {
+      nums.push({ val: parseFloat(m[0].replace(/,/g,'')), idx: m.index, raw: m[0] });
     }
-    if (amounts.length === 0) return;
+    if (nums.length === 0) continue;
 
-    // Use the last amount (usually the transaction amount in bank statements)
-    const amount = amounts[amounts.length - 1];
+    // AMOUNT = second-to-last number (last = running balance)
+    const amtEntry = nums.length >= 2 ? nums[nums.length-2] : nums[0];
+    const amount = amtEntry.val;
+    if (amount === 0 || isNaN(amount) || Math.abs(amount) > 50000) continue;
 
-    // Description = line minus date and all dollar values, cleaned
-    let desc = line
-      .replace(dm[0], '')
-      .replace(/\$?[\d,]{1,10}\.\d{2}/g, '')
-      .replace(/\b(debit|credit|purchase|payment|pos|ach|withdrawal|deposit|transfer)\b/gi, '')
+    // Description = text before the amount, cleaned up
+    let desc = rest.substring(0, amtEntry.idx)
+      .replace(/-?[\d,]+\.\d{2}/g, '')
+      .replace(/\bCard\s+\d{4}\b/gi, '')
+      .replace(/\bPPD\s+ID:\s*\S+/gi, '')
+      .replace(/\bWeb\s+ID:\s*\S+/gi, '')
+      .replace(/\bCCD\s+ID:\s*\S+/gi, '')
+      .replace(/\bTransaction#:\s*\S+/gi, '')
+      .replace(/\bReference#:\s*\S+/gi, '')
+      .replace(/\bClaimid:\s*\S*/gi, '')
       .replace(/\s{2,}/g, ' ')
-      .trim();
+      .trim()
+      .substring(0, 60);
 
-    // If description is too short, peek at next line
-    if (desc.length < 4 && lines[idx+1]) {
-      const next = lines[idx+1];
-      if (!DATE_RE.test(next) && !/\$?[\d,]+\.\d{2}/.test(next)) {
-        desc = next.trim().substring(0, 60);
-      }
-    }
+    if (desc.length < 2) continue;
+    if (TX_SKIP.test(desc)) continue;
+    // Reject descriptions containing PDF structural markers or long numeric codes
+    if (/\*(?:start|end)\*|\bPage\s+\d+\s+of\b/.test(desc)) continue;
+    if (/^\d{8,}/.test(desc.trim())) continue; // long account/transaction number codes
 
-    desc = desc.replace(/^[\s\-\*\.]+|[\s\-\*\.]+$/g, '').substring(0, 60);
-    if (desc.length < 2) return;
+    // Year logic for statements spanning year boundary
+    const month = parseInt(mm);
+    let txYear = year;
+    if (startMonth > 6 && month < 6) txYear = year + 1;
 
-    // Skip lines that look like running balances or totals
-    const lower = line.toLowerCase();
-    if (/\b(balance|total|subtotal|opening|closing|brought forward|carried forward)\b/.test(lower)) return;
-
+    const date = `${txYear}-${mm}-${dd}`;
+    const isDebit = amount < 0;
+    const absAmount = Math.abs(amount);
     const q = quickCat(desc);
+
+    // Positive amounts are credits (income) unless it's a clear expense merchant
+    const isIncome = amount > 0 && q.group !== 'Debt' && q.group !== 'Giving';
+
     txns.push({
       id: Date.now() + Math.random(),
-      date, desc, amount,
-      type: q.group === 'Income' ? 'income' : 'expense',
-      cat: q.cat, group: q.group,
+      date, desc,
+      amount: absAmount,
+      type: isIncome ? 'income' : 'expense',
+      cat: isIncome ? 'Income' : q.cat,
+      group: isIncome ? 'Income' : q.group,
       bank: bank + ' (PDF)',
-      isNew: q.group === 'Uncategorized',
-      flag: q.flag || null,
+      isNew: !isIncome && q.group === 'Uncategorized',
+      flag: !isIncome ? q.flag || null : null,
     });
+  }
+
+  // Deduplicate
+  const seen = new Set();
+  return txns.filter(t => {
+    const key = t.date + t.amount.toFixed(2) + t.desc.substring(0,12);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
   });
-  return txns;
+}
+
+// ── GENERIC FALLBACK ──────────────────────────────────────────────────────────
+function parseGenericPDF(lines, year, bank) {
+  const txns = [];
+  const DATE_RE = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2})/;
+  const SKIP = /beginning balance|ending balance|total|opening|closing/i;
+
+  lines.forEach(line => {
+    if (SKIP.test(line)) return;
+    const dm = line.match(DATE_RE);
+    if (!dm) return;
+    let date = '';
+    const ds = dm[1];
+    if (/\d{4}-\d{2}-\d{2}/.test(ds)) { date = ds; }
+    else {
+      const sep = ds.includes('/') ? '/' : '-';
+      const parts = ds.split(sep);
+      if (parts.length === 3) {
+        const [mo,dy,yr] = parts;
+        date = `${yr.length===2?'20'+yr:yr}-${mo.padStart(2,'0')}-${dy.padStart(2,'0')}`;
+      }
+    }
+    if (!date) return;
+    const nums = [...line.matchAll(/-?[\d,]+\.\d{2}/g)].map(m=>parseFloat(m[0].replace(/,/g,'')));
+    if (!nums.length) return;
+    const amount = Math.abs(nums.length>1 ? nums[nums.length-2] : nums[0]);
+    if (!amount || amount>50000) return;
+    let desc = line.replace(dm[0],'').replace(/-?[\d,]+\.\d{2}/g,'').replace(/\s+/g,' ').trim().substring(0,60);
+    if (desc.length<2||SKIP.test(desc)) return;
+    const q = quickCat(desc);
+    txns.push({id:Date.now()+Math.random(),date,desc,amount,type:q.group==='Income'?'income':'expense',cat:q.cat,group:q.group,bank:bank+' (PDF)',isNew:q.group==='Uncategorized',flag:q.flag||null});
+  });
+  const seen = new Set();
+  return txns.filter(t=>{const k=t.date+t.amount.toFixed(2)+t.desc.substring(0,12);if(seen.has(k))return false;seen.add(k);return true;});
 }
 
 // ═══════════════════════════════════════ INTELLIGENCE ════════════════════════
@@ -463,6 +532,13 @@ function renderNav(){
 function goTo(t){S.tab=t;save();renderNav();renderPage();document.getElementById('main').scrollTop=0;}
 
 // ═══════════════════════════════════════ PAGES ═══════════════════════════════
+function clearAllTx(){
+  if(!confirm('Delete ALL transactions? This cannot be undone.')) return;
+  S.transactions = [];
+  save();
+  alert('All transactions cleared.');
+  renderPage();
+}
 function renderPage(){
   const M={dashboard:pDashboard,import:pImport,transactions:pTransactions,budget:pBudget,analytics:pAnalytics,insights:pInsights,chat:pChat,debts:pDebts,sinking:pSinking,yearend:pYearEnd,settings:pSettings};
   document.getElementById('main').innerHTML=M[S.tab]?M[S.tab]():pDashboard();
@@ -594,7 +670,7 @@ function pTransactions(){
   const tExp=S.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
   const tInc=S.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   return`<div class="ph"><div class="ph-left"><h2>Transactions</h2><p>Tap any group to expand and see itemized entries.</p></div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="bdn bg">Income ${fmt(tInc)}</span><span class="bdn br">Expenses ${fmt(tExp)}</span><button class="btn xs dan" onclick="if(confirm('Delete ALL transactions?')){S.transactions=[];save();renderPage();}">Clear all</button></div></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="bdn bg">Income ${fmt(tInc)}</span><span class="bdn br">Expenses ${fmt(tExp)}</span><button class="btn xs dan" onclick="clearAllTx()">Clear all</button></div></div>
   ${unc.length>0?`<div class="sec" style="border-color:var(--a);margin-bottom:14px"><div class="stt" style="color:var(--a)">⚠️ Uncategorized (${unc.length}) — assign categories or add to budget</div>
   ${unc.slice(0,5).map(t=>`<div class="tx-item"><div class="tx-av" style="background:#fef3dc">❓</div><div class="tx-inf"><div class="tx-nm">${t.desc}${t.flag?`<span class="bdn br" style="font-size:9px;margin-left:5px">${t.flag}</span>`:''}</div><div class="tx-mt">${t.date} · ${t.bank||'Manual'}</div></div><div class="tx-am r">${fmt(t.amount)}</div>
   <select style="width:130px;padding:4px 7px;font-size:12px" onchange="reCat(${t.id},this.value)"><option value="">Assign…</option>${allCats.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
