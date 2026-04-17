@@ -1000,6 +1000,22 @@ function computeLevels(verd,price,s1){
 }
 
 // ---- MAIN SCAN ----
+// Global retry-safe fetch — creates fresh AbortSignal on each attempt
+async function safeFetch(url, timeoutMs) {
+  var lastErr;
+  for(var i=0; i<3; i++) {
+    try {
+      var r = await fetch(url, {signal: AbortSignal.timeout(timeoutMs||12000)});
+      if(r.ok) return r;
+      throw new Error("HTTP "+r.status);
+    } catch(e) {
+      lastErr = e;
+      if(i<2) await new Promise(function(res){setTimeout(res,2000);});
+    }
+  }
+  throw lastErr;
+}
+
 async function runScan(){
   if(document.getElementById("scan-btn").disabled) return;
   document.getElementById("scan-btn").disabled=true;
@@ -1015,24 +1031,11 @@ async function runScan(){
 
   setStep(1,"Fetching exchange data...",0);
 
-  // Fetch with retry helper
-  async function fetchWithRetry(url, opts, retries) {
-    for(var attempt=0; attempt<=retries; attempt++) {
-      try {
-        var r = await fetch(url, opts);
-        if(r.ok) return r;
-        throw new Error("HTTP "+r.status);
-      } catch(e) {
-        if(attempt===retries) throw e;
-        await new Promise(function(res){setTimeout(res,1500);});
-      }
-    }
-  }
-
   var bnOk=false, bbOk=false;
   await Promise.all([
-    // Binance tickers (2 retries)
-    fetchWithRetry("https://api.binance.com/api/v3/ticker/24hr",{signal:AbortSignal.timeout(14000)},2)
+    // Binance tickers — try main API, fallback to Vision CDN
+    safeFetch("https://api.binance.com/api/v3/ticker/24hr", 14000)
+      .catch(function(){ return safeFetch("https://data-api.binance.vision/api/v3/ticker/24hr", 14000); })
       .then(function(r){return r.json();})
       .then(function(d){
         d.forEach(function(t){bnTickers[t.symbol]=t;});
@@ -1040,7 +1043,7 @@ async function runScan(){
         setEx("ex-bn","ok-green","Binance "+Object.keys(bnTickers).length+" pairs");
       })
       .catch(function(e){
-        setEx("ex-bn","","Binance: "+e.message.slice(0,20));
+        setEx("ex-bn","","Binance offline");
         console.warn("Binance ticker failed:",e.message);
       }),
     // Binance funding
@@ -1049,7 +1052,7 @@ async function runScan(){
       .then(function(d){d.forEach(function(f){var s=f.symbol.replace("USDT","").replace("BUSD","");bnFunding[s]=parseFloat(f.lastFundingRate)*100;});})
       .catch(function(){}),
     // Bybit tickers (2 retries)
-    fetchWithRetry("https://api.bybit.com/v5/market/tickers?category=spot&limit=500",{signal:AbortSignal.timeout(14000)},2)
+    safeFetch("https://api.bybit.com/v5/market/tickers?category=spot&limit=500", 14000)
       .then(function(r){return r.json();})
       .then(function(d){
         (d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});
@@ -1095,10 +1098,6 @@ async function runScan(){
       return bnTickers[sym+"USDT"] || bbTickers[sym+"USDT"];
     });
   }
-
-  var coins=WEBULL_COINS.filter(function(sym){
-    return bnTickers[sym+"USDT"]||bbTickers[sym+"USDT"];
-  });
   document.getElementById("prog-msg").textContent=coins.length+"/"+WEBULL_COINS.length+" Webull coins found on exchanges. Analysing...";
 
   var found=0;
