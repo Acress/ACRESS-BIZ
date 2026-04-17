@@ -367,7 +367,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
     <div class="empty">
       <strong>188 Webull coins ready for analysis.</strong><br>
       Binance + Bybit data fetched simultaneously.<br>
-      5 mandatory filters &middot; Score minimum 7.0/10 &middot; L/S ratio enforced &middot; Price up + OI up = NO TRADE<br>
+      5-step filter &middot; Score minimum 6.5/10 &middot; Structure zones widened &middot; L/S advisory (not gate)<br>
       Top 20 by conviction score. Click any card to expand the step breakdown.
     </div>
   </div>
@@ -474,19 +474,19 @@ async function step1(sym){
     priorAvgRange:(priorAvgRange*100).toFixed(2),
     overhead5pct:overhead5pct,gatePass:false,max:2.0};
 
-  if(pos<=0.20){
+  if(pos<=0.22){
     o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="support";o.dir="long";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep support zone.";
     o.reason="Near lower boundary of range. Strong structural anchor for LONG.";
-  } else if(pos<=0.32){
+  } else if(pos<=0.38){
     o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="support";o.dir="long";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching support.";
     o.reason="Near but not fully at support. Confirmation from other steps is critical.";
-  } else if(pos>=0.80){
+  } else if(pos>=0.78){
     o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="resistance";o.dir="short";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep resistance zone.";
     o.reason="At upper boundary of range. Overleveraged longs accumulate here.";
-  } else if(pos>=0.68){
+  } else if(pos>=0.62){
     o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="resistance";o.dir="short";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching resistance.";
     o.reason="Approaching resistance. Watch for stall or rejection before committing.";
@@ -546,14 +546,23 @@ async function step2(sym,dir){
       o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts overcrowded."+flipNote;
       o.reason="Negative funding with short bias confirmed. Setup developing.";
     } else if(funding<=-0.02&&!lsConfirms&&longPct!==null){
-      // Funding says long but L/S contradicts -- GATE FAIL
-      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.trapped="none";o.gatePass=false;
-      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- L/S CONTRADICTS funding.";
-      o.reason="Negative funding but longs still dominate L/S ratio. Signal conflict. Gate fails.";
+      // L/S contradicts funding -- downgrade to partial, don't gate-fail
+      // L/S data is often stale or manipulated; funding rate is more reliable
+      o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.trapped="shorts";o.gatePass=true;
+      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- L/S contradicts but funding confirms.";
+      o.reason="Negative funding but longs still above 45% in L/S. Funding is more reliable; treat as developing setup.";
+    } else if(funding>=-0.01&&funding<0){
+      o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.trapped="none";o.gatePass=true;
+      o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- mildly negative, building."+flipNote;
+      o.reason="Slightly negative funding. Not extreme but directional short bias forming. Developing setup.";
     } else if(funding>=0.05){
       o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.trapped="longs";o.gatePass=false;
       o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs crowded at support.";
       o.reason="Positive funding at support = no squeeze fuel. LONG gate fails.";
+    } else if(funding>=0&&funding<0.05){
+      o.score=0.8;o.status="PARTIAL";o.cls="sb-part";o.trapped="none";o.gatePass=true;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- slightly positive at support.";
+      o.reason="Slightly positive funding at support. Crowd not aggressively short but setup may still form.";
     }
   } else {
     var lsConfirmsShort=longPct===null||(longPct>=55); // more longs = good for short setup
@@ -566,9 +575,13 @@ async function step2(sym,dir){
       o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- longs crowded."+flipNote;
       o.reason="Positive funding with long bias confirmed. SHORT setup developing.";
     } else if(funding>=0.05&&!lsConfirmsShort&&longPct!==null){
-      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.gatePass=false;
-      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- L/S contradicts funding.";
-      o.reason="Positive funding but shorts dominate L/S. Signal conflict. Gate fails.";
+      o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.trapped="longs";o.gatePass=true;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- L/S contradicts but funding confirms.";
+      o.reason="Positive funding but shorts still above 45%. Funding is primary; treat as developing short setup.";
+    } else if(funding>=0&&funding<0.05){
+      o.score=0.8;o.status="PARTIAL";o.cls="sb-part";o.trapped="none";o.gatePass=true;
+      o.detail="Funding +"+funding.toFixed(4)+"%"+lsStr+" -- slightly positive, building."+flipNote;
+      o.reason="Slightly positive funding at resistance. Longs not yet extreme but setup may develop.";
     } else if(funding<=-0.03){
       o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.gatePass=false;
       o.detail="Funding "+funding.toFixed(4)+"%"+lsStr+" -- shorts at resistance.";
@@ -605,10 +618,16 @@ async function step3(sym,dir){
   if(bt) pChg=parseFloat(bt.priceChangePercent)||0;
   else{var bbt=bbTickers[sym+"USDT"];if(bbt) pChg=(parseFloat(bbt.price24hPcnt)||0)*100;}
 
-  if(!hasOI) return {score:0.5,status:"PARTIAL",cls:"sb-part",signal:"unknown",
-    detail:"OI data unavailable. Price 24h: "+(pChg>=0?"+":"")+pChg.toFixed(2)+"%",
-    reason:"Cannot confirm trap resolution. Lower conviction.",
-    oiChange:0,pChg:pChg,gatePass:false,max:2.0};
+  if(!hasOI){
+    // No OI data (coin has no perp market) -- use price direction alone
+    var noOiScore=0.5, noOiGate=false, noOiSts="FAIL", noOiCls="sb-fail";
+    if(dir==="long"&&pChg>0.5){noOiScore=1.2;noOiGate=true;noOiSts="PARTIAL";noOiCls="sb-part";}
+    else if(dir==="short"&&pChg<-0.5){noOiScore=1.2;noOiGate=true;noOiSts="PARTIAL";noOiCls="sb-part";}
+    return {score:noOiScore,status:noOiSts,cls:noOiCls,signal:"price_only",
+      detail:"No OI data (no perp market). Price 24h: "+(pChg>=0?"+":"")+pChg.toFixed(2)+"%.",
+      reason:"OI unavailable -- cannot confirm trap resolution. Price direction used as partial signal only.",
+      oiChange:0,pChg:pChg,gatePass:noOiGate,max:2.0};
+  }
 
   var pUp=pChg>0.5,pDn=pChg<-0.5,oiDn=oiChange<-1,oiUp=oiChange>1;
   var oStr=(oiChange>=0?"+":"")+oiChange.toFixed(1)+"%";
@@ -628,10 +647,10 @@ async function step3(sym,dir){
       o.detail="Price "+pStr+" | OI "+oStr+" -- recovering, OI neutral.";
       o.reason="Price recovering without OI confirmation. Developing -- requires volume confirmation.";
     } else if(pUp&&oiUp){
-      // GATE FAIL: ambiguous continuation vs trap (framework: route to NO TRADE)
-      o.score=0;o.status="GATE FAIL";o.cls="sb-gate";o.signal="ambiguous";o.gatePass=false;
-      o.detail="Price "+pStr+" | OI "+oStr+" -- AMBIGUOUS: new longs or trap building.";
-      o.reason="Price up + OI up = cannot distinguish genuine trend from long trap. Gate fails per framework.";
+      // Downgraded to PARTIAL (not gate fail) - common in early recoveries
+      o.score=1.0;o.status="PARTIAL";o.cls="sb-part";o.signal="continuation";o.gatePass=false;
+      o.detail="Price "+pStr+" | OI "+oStr+" -- new longs entering (ambiguous).";
+      o.reason="Price up + OI up = could be genuine buyers OR longs getting trapped. Does not confirm squeeze. Reduces conviction.";
     } else if(pDn&&oiDn){
       o.score=0.5;o.status="FAIL";o.cls="sb-fail";o.signal="liq";o.gatePass=false;
       o.detail="Price "+pStr+" | OI "+oStr+" -- longs liquidating.";
@@ -776,8 +795,8 @@ function computeVerdict(s1,s2,s3,s4,s5){
   if(!s2.gatePass) fails.push("Positioning: no trapped crowd");
   if(!s3.gatePass) fails.push("Resolution: trap not resolving");
   if(fails.length>0) return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:fails,noReason:"Hard gate failure."};
-  if(total<7.0) return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:[],
-    noReason:"Score "+total.toFixed(1)+"/10 below minimum 7.0."};
+  if(total<6.5) return {v:"NO TRADE",vc:"vb-nt",conv:null,cc:"var(--dim)",total:total,fails:[],
+    noReason:"Score "+total.toFixed(1)+"/10 below minimum 6.5."};
 
   // REDUCE check: funding flip + price extended + declining volume + greed
   if((s2.fundingFlipped||s5.score<1.0)&&s4.ratio<0.8&&fearGreed>=70&&s1.pos>0.6){
@@ -786,8 +805,8 @@ function computeVerdict(s1,s2,s3,s4,s5){
     return {v:"REDUCE",vc:"vb-reduce",conv:conv2,cc:cc2,total:total,fails:[],noReason:""};
   }
 
-  var conv=total>=9.0?"HIGH":total>=8.0?"MED":"LOW";
-  var cc=total>=9.0?"var(--g)":total>=8.0?"var(--a)":"var(--bl)";
+  var conv=total>=9.0?"HIGH":total>=8.0?"MED":total>=7.0?"LOW":"DEVELOPING";
+  var cc=total>=9.0?"var(--g)":total>=8.0?"var(--a)":total>=7.0?"var(--bl)":"var(--p)";
   var v=s1.dir==="long"?"LONG":"SHORT";
   var vc=s1.dir==="long"?"vb-long":"vb-short";
   return {v:v,vc:vc,conv:conv,cc:cc,total:total,fails:[],noReason:""};
