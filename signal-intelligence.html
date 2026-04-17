@@ -488,6 +488,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
       <div class="ex-item" id="ex-bn"><span class="ex-dot-i"></span>Binance</div>
       <div class="ex-item" id="ex-bb"><span class="ex-dot-i"></span>Bybit</div>
       <div class="ex-item ok-blue"><span class="ex-dot-i"></span>Webull 188 coins</div>
+      <div class="ex-item" id="ex-cb"><span class="ex-dot-i"></span>Coinbase --</div>
       <div class="ex-item" id="ex-fg"><span class="ex-dot-i"></span>Fear &amp; Greed: --</div>
     </div>
   </div>
@@ -563,6 +564,8 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
 <script>
 
 var WEBULL_COINS = ["BCH", "BTC", "DASH", "ETC", "ETH", "FIL", "LINK", "LTC", "QNT", "VET", "XTZ", "ZEC", "ADA", "ALGO", "APT", "ARB", "ATOM", "AVAX", "BERA", "CRO", "DOT", "EGLD", "FLR", "HBAR", "ICP", "IMX", "NEAR", "ONDO", "OP", "POL", "S", "SEI", "SOL", "STRK", "SUI", "XLM", "XRP", "ZK", "1INCH", "AAVE", "AERO", "ALCX", "BAL", "COMP", "COW", "CRV", "CVX", "ENA", "ETHFI", "FARM", "FIDA", "INJ", "LDO", "LQTY", "PENDLE", "SNX", "SUSHI", "SYRUP", "UNI", "YFI", "ZRX", "AIOZ", "ARKM", "BICO", "FET", "GRT", "IO", "KAITO", "TAO", "ALICE", "APE", "AXS", "BIGTIME", "FLOW", "GODS", "HIGH", "ILV", "MAGIC", "MANA", "PENGU", "RONIN", "SAND", "BONK", "DOGE", "FARTCOIN", "FLOKI", "GIGA", "MOODENG", "PEPE", "PNUT", "POPCAT", "PUMP", "SHIB", "TRUMP", "WIF", "ABT", "ACH", "ACX", "AERGO", "AGLD", "AKT", "ALEPH", "ALT", "AMP", "ANKR", "API3", "ARPA", "AUCTION", "AUDIO", "AXL", "BADGER", "BAND", "BAT", "BLAST", "BLUR", "BNT", "C98", "CELR", "CHZ", "COTI", "CTSI", "CVC", "DEXT", "DIA", "DRIFT", "EDGE", "EIGEN", "ENS", "FIS", "FORTH", "GLM", "GMT", "GNO", "GTC", "HFT", "HNT", "IOTX", "IP", "JASMY", "JTO", "KERNEL", "KSM", "LPT", "LRC", "MASK", "ME", "MINA", "RED", "REZ", "ROSE", "SKY", "SPK", "STX", "SXT", "TIA", "WLD", "WLFI", "ZRO"];
+var COINBASE_ONLY = ["CRO", "FLR", "AERO", "BAL", "AIOZ", "GODS", "FARTCOIN", "GIGA", "MOODENG", "POPCAT", "ABT", "AERGO", "AKT", "ALEPH", "BADGER", "BLAST", "DEXT", "DRIFT", "FIS", "HNT", "IP", "VVV"];
+var cbTickers={}; // Coinbase spot tickers, fetched per-coin during scan
 var bnTickers={}, bnFunding={}, bbTickers={}, bbFunding={};
 var prevFunding={};
 var fearGreed=50;
@@ -626,6 +629,41 @@ async function step1(sym){
       var d2=await r2.json();
       if(d2.result&&d2.result.list&&d2.result.list.length){
         c=d2.result.list.reverse().map(function(x){return [0,x[1],x[2],x[3],x[4],x[5],0,x[6]||0];});
+      }
+    }catch(e){}
+  }
+  // Binance FUTURES klines — for perp-only coins (Binance Alpha, perp-without-spot)
+  if(!c || c.length < 5){
+    if(bnFunding[sym] !== undefined){
+      try{
+        var rf=await safeFetch("https://fapi.binance.com/fapi/v1/klines?symbol="+sym+"USDT&interval=1D&limit=30",10000);
+        var df=await rf.json();
+        if(Array.isArray(df)&&df.length>=5) c=df; // same OHLCV format as spot
+      }catch(e){}
+    }
+  }
+  // Bybit futures klines fallback
+  if(!c || c.length < 5){
+    if(bbFunding[sym] !== undefined){
+      try{
+        var rbf=await safeFetch("https://api.bybit.com/v5/market/kline?category=linear&symbol="+sym+"USDT&interval=D&limit=30",10000);
+        var dbf=await rbf.json();
+        if(dbf.result&&dbf.result.list&&dbf.result.list.length){
+          c=dbf.result.list.reverse().map(function(x){return [0,x[1],x[2],x[3],x[4],x[5],0,x[6]||0];});
+        }
+      }catch(e){}
+    }
+  }
+  // Coinbase klines — for Coinbase-only coins
+  if(!c || c.length < 5){
+    try{
+      var rc=await safeFetch("https://api.exchange.coinbase.com/products/"+sym+"-USD/candles?granularity=86400",12000);
+      var dc=await rc.json();
+      if(Array.isArray(dc)&&dc.length>=5){
+        // Coinbase: [time, low, high, open, close, volume] newest-first
+        c=dc.slice().reverse().slice(-30).map(function(x){
+          return [x[0]*1000,parseFloat(x[3]),parseFloat(x[2]),parseFloat(x[1]),parseFloat(x[4]),parseFloat(x[5]),0,parseFloat(x[5])*parseFloat(x[4])];
+        });
       }
     }catch(e){}
   }
@@ -874,6 +912,14 @@ async function step4(sym,avgVol7d,pChg,dir){
   var bt=bnTickers[sym+"USDT"];
   if(bt) vol=parseFloat(bt.quoteVolume)||0;
   if(!vol){var bbt=bbTickers[sym+"USDT"];if(bbt) vol=parseFloat(bbt.turnover24h)||0;}
+  // Coinbase volume
+  if(!vol && COINBASE_ONLY.indexOf(sym)!==-1){
+    try{
+      var cr=await safeFetch("https://api.exchange.coinbase.com/products/"+sym+"-USD/stats",8000);
+      var cd=await cr.json();
+      if(cd.volume&&cd.last) vol=parseFloat(cd.volume)*parseFloat(cd.last);
+    }catch(e){}
+  }
   var ratio=avgVol7d>0?vol/avgVol7d:0;
   var pUp=pChg>0.5,pDn=pChg<-0.5;
   var rStr=ratio.toFixed(2)+"x",vStr=fV(vol);
@@ -916,9 +962,17 @@ async function step5(sym,dir,s1){
       }
     }catch(e){}
   }
+  if(!bidD&&!askD && COINBASE_ONLY.indexOf(sym)!==-1){
+    try{
+      var cr=await safeFetch("https://api.exchange.coinbase.com/products/"+sym+"-USD/book?level=2",8000);
+      var cd=await cr.json();
+      askD=(cd.asks||[]).slice(0,10).reduce(function(s,a){return s+parseFloat(a[0])*parseFloat(a[1]);},0);
+      bidD=(cd.bids||[]).slice(0,10).reduce(function(s,b){return s+parseFloat(b[0])*parseFloat(b[1]);},0);
+    }catch(e){}
+  }
   if(!bidD&&!askD) return {score:0.5,status:"N/A",cls:"sb-na",
-    detail:"Order book data unavailable on both exchanges.",
-    reason:"Cannot assess liquidity path.",gatePass:true,max:2.0};
+    detail:"Order book unavailable.",
+    reason:"Cannot assess liquidity.",gatePass:true,max:2.0};
 
   var ratio=askD>0?bidD/askD:1;
   var bS=fV(bidD),aS=fV(askD),rS=ratio.toFixed(2)+"x";
@@ -1101,19 +1155,29 @@ async function runScan(){
       .catch(function(){})
   ]);
 
-  // KEY FIX: If both exchanges failed, scan the Webull list directly anyway.
-  // step1() will throw if a coin doesn't exist on either exchange — those get caught
-  // and stored as errors, so no harm done. This prevents 0-result scans on API blips.
+  // Build coin list: Binance/Bybit coins + Coinbase-only coins
   var coins;
   if(!bnOk && !bbOk) {
-    setEx("ex-bn","","Binance: retrying per-coin");
-    setEx("ex-bb","","Bybit: retrying per-coin");
-    document.getElementById("prog-msg").textContent="Exchange bulk fetch failed — scanning Webull coins directly (slower)...";
-    coins = WEBULL_COINS.slice(); // scan all, errors caught per-coin
+    coins = WEBULL_COINS.slice(); // all coins, errors caught per-coin
+    document.getElementById("prog-msg").textContent="Both exchanges failed — scanning all Webull coins directly...";
   } else {
-    coins = WEBULL_COINS.filter(function(sym){
-      return bnTickers[sym+"USDT"] || bbTickers[sym+"USDT"];
+    var onExchanges = WEBULL_COINS.filter(function(sym){
+      // Include if: on Binance spot, Bybit spot, Binance perp-only, or Bybit perp-only
+      return bnTickers[sym+"USDT"]     // Binance spot
+          || bbTickers[sym+"USDT"]     // Bybit spot
+          || bnFunding[sym]!==undefined // Binance perp (covers Alpha + perp-only coins)
+          || bbFunding[sym]!==undefined;// Bybit perp
     });
+    // Add Coinbase-only coins that aren't already found above
+    var cbExtra = COINBASE_ONLY.filter(function(sym){
+      return onExchanges.indexOf(sym) === -1;
+    });
+    coins = onExchanges.concat(cbExtra);
+    if(cbExtra.length) {
+      document.getElementById("ex-fg").style.marginLeft = "0";
+      var cbEl = document.getElementById("ex-cb");
+      if(cbEl) { cbEl.className="ex-item ok-blue"; cbEl.innerHTML='<span class="ex-dot-i"></span>Coinbase +'+cbExtra.length+' coins'; }
+    }
   }
   document.getElementById("prog-msg").textContent=coins.length+"/"+WEBULL_COINS.length+" Webull coins found on exchanges. Analysing...";
 
@@ -1178,6 +1242,7 @@ async function runScan(){
       scanResults.push({sym:sym,S1:S1,S2:S2,S3:S3,S4:S4,S5:S5,vd:vd,lvl:lvl,
         price:S1.price,chg24:S3.pChg||0,vol:S4.vol||0,
         onBN:!!bnTickers[sym+"USDT"],onBB:!!bbTickers[sym+"USDT"],
+        onCB:COINBASE_ONLY.indexOf(sym)!==-1,
         hasBNPerp:bnFunding[sym]!==undefined,hasBBPerp:bbFunding[sym]!==undefined});
     }catch(e){
       scanResults.push({sym:sym,error:e.message,
@@ -1618,7 +1683,8 @@ async function runSpotlight() {
     // Check coin exists on either exchange
     var onBN = !!bnTickers[sym+"USDT"];
     var onBB = !!bbTickers[sym+"USDT"];
-    if(!onBN && !onBB) {
+    var onCB = COINBASE_ONLY.indexOf(sym) !== -1;
+    if(!onBN && !onBB && !onCB) {
       card.innerHTML = '<div class="spot-loading" style="color:var(--r)">&#x26D4; <strong>'+sym+'</strong> not found on Binance or Bybit. Check the symbol and try again.</div>';
       btn.disabled = false;
       return;
@@ -1636,6 +1702,7 @@ async function runSpotlight() {
     var lvl = computeLevels(vd.v, S1.price, S1);
     var hasBNPerp = bnFunding[sym] !== undefined;
     var hasBBPerp = bbFunding[sym] !== undefined;
+    var onCBspot = onCB || (!onBN && !onBB);
     var tk = bnTickers[sym+"USDT"] || {};
     var chg24 = parseFloat(tk.priceChangePercent) || S3.pChg || 0;
     var vol = S4.vol || 0;
@@ -1643,7 +1710,7 @@ async function runSpotlight() {
     var spotResult = {
       sym:sym, S1:S1, S2:S2, S3:S3, S4:S4, S5:S5, vd:vd, lvl:lvl,
       price:S1.price, chg24:chg24, vol:vol,
-      onBN:onBN, onBB:onBB, hasBNPerp:hasBNPerp, hasBBPerp:hasBBPerp,
+      onBN:onBN, onBB:onBB, onCB:onCB, hasBNPerp:hasBNPerp, hasBBPerp:hasBBPerp,
       _idx:"spot"
     };
     top20Results["spot"] = spotResult;
@@ -1674,8 +1741,9 @@ function buildSpotlightCard(r) {
   var convColor = v.conv==="HIGH"?"var(--g)":v.conv==="MED"?"var(--a)":"var(--bl)";
 
   var exB = "";
-  if(r.onBN) exB += '<span class="eb eb-bn">BN'+(r.hasBNPerp?"+P":"")+"</span> ";
-  if(r.onBB) exB += '<span class="eb eb-bb">BB'+(r.hasBBPerp?"+P":"")+"</span> ";
+  if(r.onBN||r.hasBNPerp) exB += '<span class="eb eb-bn">'+(r.onBN&&r.hasBNPerp?"BN+P":r.onBN?"BN":"P only")+"</span> ";
+  if(r.onBB||r.hasBBPerp) exB += '<span class="eb eb-bb">'+(r.onBB&&r.hasBBPerp?"BB+P":r.onBB?"BB":"P only")+"</span> ";
+  if(r.onCB||(!r.onBN&&!r.onBB)) exB += '<span class="eb" style="color:#0052ff;border-color:rgba(0,82,255,.3);background:rgba(0,82,255,.06)">CB</span> ';
   exB += '<span class="eb eb-wb">WB</span>';
 
   var dots = '<div class="dots" style="gap:5px">'
