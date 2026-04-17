@@ -513,7 +513,7 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
     <div class="empty">
       <strong>188 Webull coins ready for analysis.</strong><br>
       Binance + Bybit data fetched simultaneously.<br>
-      5-step filter &middot; Score minimum 6.5/10 &middot; Structure zones widened &middot; L/S advisory (not gate)<br>
+      5-step filter &middot; Score min 6.5/10 &middot; Support/resistance zones &middot; L/S advisory<br>
       Top 20 by conviction score. Click any card to expand the step breakdown.
     </div>
   </div>
@@ -652,19 +652,19 @@ async function step1(sym){
     priorAvgRange:(priorAvgRange*100).toFixed(2),
     overhead5pct:overhead5pct,gatePass:false,max:2.0};
 
-  if(pos<=0.22){
+  if(pos<=0.25){
     o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="support";o.dir="long";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep support zone.";
     o.reason="Near lower boundary of range. Strong structural anchor for LONG.";
-  } else if(pos<=0.38){
+  } else if(pos<=0.47){
     o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="support";o.dir="long";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching support.";
     o.reason="Near but not fully at support. Confirmation from other steps is critical.";
-  } else if(pos>=0.78){
+  } else if(pos>=0.75){
     o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="resistance";o.dir="short";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep resistance zone.";
     o.reason="At upper boundary of range. Overleveraged longs accumulate here.";
-  } else if(pos>=0.62){
+  } else if(pos>=0.53){
     o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="resistance";o.dir="short";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching resistance.";
     o.reason="Approaching resistance. Watch for stall or rejection before committing.";
@@ -1051,22 +1051,31 @@ async function runScan(){
       .then(function(r){return r.json();})
       .then(function(d){d.forEach(function(f){var s=f.symbol.replace("USDT","").replace("BUSD","");bnFunding[s]=parseFloat(f.lastFundingRate)*100;});})
       .catch(function(){}),
-    // Bybit tickers (2 retries)
-    safeFetch("https://api.bybit.com/v5/market/tickers?category=spot&limit=500", 14000)
+    // Bybit tickers — try direct, fallback to allorigins proxy if CORS blocks
+    safeFetch("https://api.bybit.com/v5/market/tickers?category=spot", 14000)
+      .catch(function(){
+        // CORS proxy fallback
+        return safeFetch("https://api.allorigins.win/raw?url="+encodeURIComponent("https://api.bybit.com/v5/market/tickers?category=spot"), 16000);
+      })
       .then(function(r){return r.json();})
       .then(function(d){
-        (d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});
+        var list = d.result ? d.result.list : (d.contents ? JSON.parse(d.contents).result.list : []);
+        (list||[]).forEach(function(t){bbTickers[t.symbol]=t;});
         bbOk=true;
         setEx("ex-bb","ok-orange","Bybit "+Object.keys(bbTickers).length+" pairs");
       })
       .catch(function(e){
-        setEx("ex-bb","","Bybit: "+e.message.slice(0,20));
-        console.warn("Bybit ticker failed:",e.message);
+        setEx("ex-bb","","Bybit offline - Binance only");
+        console.warn("Bybit spot failed:",e.message);
       }),
     // Bybit funding
-    fetch("https://api.bybit.com/v5/market/tickers?category=linear&limit=500",{signal:AbortSignal.timeout(10000)})
+    safeFetch("https://api.bybit.com/v5/market/tickers?category=linear", 10000)
+      .catch(function(){return safeFetch("https://api.allorigins.win/raw?url="+encodeURIComponent("https://api.bybit.com/v5/market/tickers?category=linear"),14000);})
       .then(function(r){return r.json();})
-      .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){var s=t.symbol.replace("USDT","");bbFunding[s]=parseFloat(t.fundingRate||0)*100;});})
+      .then(function(d){
+        var list=d.result?d.result.list:(d.contents?JSON.parse(d.contents).result.list:[]);
+        (list||[]).forEach(function(t){var s=t.symbol.replace("USDT","");bbFunding[s]=parseFloat(t.fundingRate||0)*100;});
+      })
       .catch(function(){}),
     // Fear & Greed
     fetch("https://api.alternative.me/fng/?limit=1",{signal:AbortSignal.timeout(8000)})
@@ -1123,7 +1132,11 @@ async function runScan(){
 
   // Filter to only coins at support or resistance
   var passedS1=coins.filter(function(sym){ return s1Results[sym]&&s1Results[sym].gatePass; });
-  document.getElementById("prog-msg").textContent=passedS1.length+" of "+coins.length+" coins at support/resistance. Running full analysis...";
+  if(passedS1.length===0){
+    document.getElementById("prog-msg").textContent="0 coins at support/resistance out of "+coins.length+" scanned. Market in mid-range consolidation. Try again later or check individual coins with Deep Analyse.";
+  } else {
+    document.getElementById("prog-msg").textContent=passedS1.length+" of "+coins.length+" coins at support/resistance. Running full 5-step analysis...";
+  }
   setStep(3,"Pass 2/2 -- deep analysis on "+passedS1.length+" coins",0);
 
   // Coins that failed Step 1 get stored as NO TRADE immediately
