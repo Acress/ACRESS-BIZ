@@ -283,6 +283,46 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
 }
 
 
+
+/* SINGLE COIN SPOTLIGHT */
+.spot-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:12px;
+  border-top:1px solid var(--b1);flex-wrap:wrap}
+.spot-label{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--dim);white-space:nowrap}
+.spot-input{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:1px;
+  text-transform:uppercase;background:var(--s2);
+  border:1px solid var(--b2);border-radius:6px;color:var(--white);
+  padding:8px 14px;outline:none;width:110px;transition:all .2s}
+.spot-input:focus{border-color:var(--g);background:rgba(10,15,24,.9);
+  box-shadow:0 0 0 3px rgba(0,229,160,.1)}
+.spot-input::placeholder{color:var(--dim);font-weight:400;font-size:11px;text-transform:none}
+.btn-spot{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:1.5px;
+  text-transform:uppercase;background:none;border:1px solid var(--g);color:var(--g);
+  border-radius:6px;padding:8px 18px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-spot:hover:not(:disabled){background:var(--g);color:#000}
+.btn-spot:disabled{opacity:.3;cursor:not-allowed}
+.spot-hint{font-family:var(--mono);font-size:9px;color:var(--dim)}
+
+/* SPOTLIGHT RESULT CARD */
+.spotlight-wrap{margin-bottom:14px;display:none}
+.spotlight-wrap.show{display:block}
+.spotlight-card{
+  background:linear-gradient(135deg,rgba(0,229,160,.04),rgba(45,142,255,.04));
+  border:1px solid rgba(0,229,160,.2);border-radius:10px;overflow:hidden;
+  position:relative}
+.spotlight-card::before{content:"SPOTLIGHT";position:absolute;top:10px;right:14px;
+  font-family:var(--mono);font-size:8px;letter-spacing:3px;font-weight:700;
+  color:rgba(0,229,160,.3);text-transform:uppercase}
+.spot-header{display:flex;align-items:center;gap:14px;padding:14px 18px 12px;
+  border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap}
+.spot-sym-big{font-family:var(--mono);font-size:28px;font-weight:800;color:var(--white);
+  letter-spacing:-1px;line-height:1}
+.spot-score-big{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1}
+.spot-meta{display:flex;flex-direction:column;gap:5px;flex:1}
+.spot-meta-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.spot-body{padding:14px 18px}
+.spot-loading{padding:24px 18px;text-align:center;font-family:var(--mono);font-size:10px;color:var(--dim)}
+
 /* TIME HORIZON */
 .hz-badge{font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:1.5px;
   text-transform:uppercase;padding:3px 9px;border-radius:3px;border:1px solid;
@@ -309,6 +349,93 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
 .hz-conf{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px;
   background:rgba(255,255,255,.04);color:var(--dim);border:1px solid var(--b1);margin-left:auto}
 
+
+/* ── TABS ── */
+.tab-bar{display:flex;align-items:center;gap:2px;padding:0 24px;
+  background:rgba(2,4,8,.96);border-bottom:1px solid var(--b1);height:38px}
+.tab-btn{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:2px;
+  text-transform:uppercase;background:none;border:none;
+  color:var(--dim);cursor:pointer;padding:0 16px;height:38px;
+  border-bottom:2px solid transparent;transition:all .2s;position:relative;top:1px}
+.tab-btn:hover{color:var(--tx)}
+.tab-btn.active{color:var(--g);border-bottom-color:var(--g)}
+.tab-count{font-family:var(--mono);font-size:8px;padding:1px 5px;border-radius:10px;
+  background:var(--gd);color:var(--g);margin-left:5px;display:none}
+.tab-count.show{display:inline}
+.tab-view{display:none}.tab-view.active{display:block}
+
+/* ── TRACKER LAYOUT ── */
+.trk-wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px}
+
+/* STAT CARDS */
+.trk-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:16px}
+.trk-stat{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:14px 16px;
+  position:relative;overflow:hidden;transition:border-color .2s}
+.trk-stat:hover{border-color:var(--b2)}
+.trk-stat-accent{position:absolute;left:0;top:0;bottom:0;width:3px}
+.trk-stat-lbl{font-family:var(--mono);font-size:8px;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.trk-stat-val{font-family:var(--mono);font-size:22px;font-weight:700;
+  color:var(--white);line-height:1;letter-spacing:-1px}
+.trk-stat-sub{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:4px}
+.trk-stat-bar{height:2px;background:var(--b2);border-radius:1px;overflow:hidden;margin-top:8px}
+.trk-stat-bar-fill{height:100%;border-radius:1px}
+
+/* WIN RATE BREAKDOWN */
+.trk-breakdown{background:var(--s1);border:1px solid var(--b1);border-radius:8px;
+  padding:14px 16px;margin-bottom:14px}
+.trk-breakdown-title{font-family:var(--mono);font-size:8px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--dim);margin-bottom:12px;
+  display:flex;align-items:center;gap:10px}
+.trk-breakdown-title::after{content:"";flex:1;height:1px;background:var(--b1)}
+.trk-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.trk-vrow{padding:10px 12px;background:var(--s2);border:1px solid var(--b1);border-radius:5px}
+.trk-vrow-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.trk-vrow-name{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1px}
+.trk-vrow-wr{font-family:var(--mono);font-size:13px;font-weight:700}
+.trk-vrow-bar{height:3px;background:var(--b2);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.trk-vrow-fill{height:100%;border-radius:2px}
+.trk-vrow-sub{font-family:var(--mono);font-size:8px;color:var(--dim)}
+
+/* SIGNAL TABLE */
+.trk-table-wrap{background:var(--s1);border:1px solid var(--b1);border-radius:8px;overflow:hidden;margin-bottom:14px}
+.trk-table-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--b1)}
+.trk-table-title{font-family:var(--mono);font-size:8px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--dim)}
+.trk-table-actions{display:flex;gap:6px}
+.trk-btn{font-family:var(--mono);font-size:8px;letter-spacing:1px;text-transform:uppercase;
+  background:none;border:1px solid var(--b2);color:var(--dim);
+  border-radius:3px;padding:4px 10px;cursor:pointer;transition:all .15s}
+.trk-btn:hover{border-color:var(--g);color:var(--g)}
+.trk-btn.danger:hover{border-color:var(--r);color:var(--r)}
+.trk-grid{display:grid;
+  grid-template-columns:110px 60px 82px 60px 70px 68px 68px 68px 72px;
+  font-family:var(--mono);font-size:9px}
+.trk-th{padding:7px 10px;color:var(--dim);letter-spacing:.5px;text-transform:uppercase;
+  font-size:8px;border-bottom:1px solid var(--b1);background:var(--s2);white-space:nowrap}
+.trk-row{display:contents}
+.trk-row > div{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.03);
+  display:flex;align-items:center;transition:background .1s}
+.trk-row:hover > div{background:rgba(255,255,255,.02)}
+.trk-row.open-row > div{background:rgba(0,229,160,.02)}
+.trk-empty{padding:32px;text-align:center;font-family:var(--mono);
+  font-size:10px;color:var(--dim);line-height:2}
+.trk-ts{color:var(--dim);font-size:8px;flex-direction:column;gap:1px;align-items:flex-start!important}
+.trk-ts-date{color:var(--tx)}
+.trk-ts-time{color:var(--dim);font-size:7px}
+.trk-pct{font-weight:600;font-size:10px}
+.trk-pct.pos{color:var(--g)}.trk-pct.neg{color:var(--r)}.trk-pct.neu{color:var(--dim)}
+.trk-outcome{display:flex;align-items:center;gap:4px}
+.outcome-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.oc-win{background:var(--g)}.oc-loss{background:var(--r)}
+.oc-open{background:var(--a)}.oc-na{background:var(--dim)}
+.outcome-lbl{font-size:8px;letter-spacing:.5px;text-transform:uppercase}
+.upd-btn{font-family:var(--mono);font-size:7px;letter-spacing:1px;
+  background:none;border:1px solid var(--b2);color:var(--dim);
+  border-radius:2px;padding:2px 6px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.upd-btn:hover{border-color:var(--g);color:var(--g)}
+
 </style>
 </head>
 <body>
@@ -326,6 +453,15 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
     <a href="index.html" class="back-link">&#x2190; Suite</a>
   </div>
 </div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-scanner" onclick="switchTab('scanner')">Scanner</button>
+  <button class="tab-btn" id="tab-tracker" onclick="switchTab('tracker')">
+    Results Tracker <span class="tab-count" id="trk-count">0</span>
+  </button>
+</div>
+
+<div id="view-scanner" class="tab-view active">
 <div class="wrap">
   <div class="scan-card">
     <div class="scan-top">
@@ -340,6 +476,13 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
       <div class="scan-actions">
         <button class="btn-run" id="scan-btn" onclick="runScan()">&#9654; Run Scan</button>
       </div>
+    </div>
+    <div class="spot-row">
+      <span class="spot-label">Analyse one coin</span>
+      <input class="spot-input" id="spot-inp" type="text" placeholder="e.g. SOL" maxlength="12"
+        onkeydown="if(event.key==='Enter')runSpotlight()">
+      <button class="btn-spot" id="spot-btn" onclick="runSpotlight()">&#9650; Deep Analyse</button>
+      <span class="spot-hint">Full 5-step breakdown + AI time horizon on any single coin</span>
     </div>
     <div class="exchange-row">
       <div class="ex-item" id="ex-bn"><span class="ex-dot-i"></span>Binance</div>
@@ -362,6 +505,9 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
       <div class="prog-count" id="prog-count"></div>
     </div>
   </div>
+  <div class="spotlight-wrap" id="spotlight-wrap">
+    <div class="spotlight-card" id="spotlight-card"></div>
+  </div>
   <div class="summary-row" id="summary" style="display:none"></div>
   <div class="cards" id="cards">
     <div class="empty">
@@ -382,6 +528,37 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
     </div>
     <div class="tg-note">No exchange API keys needed anywhere &mdash; all endpoints are public</div>
   </div>
+</div><!-- /wrap -->
+</div><!-- /view-scanner -->
+
+<!-- TRACKER VIEW -->
+<div id="view-tracker" class="tab-view">
+<div class="trk-wrap">
+  <div class="trk-stats" id="trk-stats">
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--g)"></div><div class="trk-stat-lbl">Total Logged</div><div class="trk-stat-val" id="trk-total">0</div><div class="trk-stat-sub">signals tracked</div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--g)"></div><div class="trk-stat-lbl">Win Rate 24h</div><div class="trk-stat-val" id="trk-wr24">--</div><div class="trk-stat-sub" id="trk-wr24-sub">no data yet</div><div class="trk-stat-bar"><div class="trk-stat-bar-fill" id="trk-wr24-bar" style="width:0%;background:var(--g)"></div></div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--a)"></div><div class="trk-stat-lbl">Win Rate 48h</div><div class="trk-stat-val" id="trk-wr48">--</div><div class="trk-stat-sub" id="trk-wr48-sub">no data yet</div><div class="trk-stat-bar"><div class="trk-stat-bar-fill" id="trk-wr48-bar" style="width:0%;background:var(--a)"></div></div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--bl)"></div><div class="trk-stat-lbl">Win Rate 7d</div><div class="trk-stat-val" id="trk-wr7d">--</div><div class="trk-stat-sub" id="trk-wr7d-sub">no data yet</div><div class="trk-stat-bar"><div class="trk-stat-bar-fill" id="trk-wr7d-bar" style="width:0%;background:var(--bl)"></div></div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--g)"></div><div class="trk-stat-lbl">Best Call</div><div class="trk-stat-val" id="trk-best">--</div><div class="trk-stat-sub" id="trk-best-sub">no data yet</div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--r)"></div><div class="trk-stat-lbl">Worst Call</div><div class="trk-stat-val" id="trk-worst">--</div><div class="trk-stat-sub" id="trk-worst-sub">no data yet</div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--a)"></div><div class="trk-stat-lbl">Avg Score (wins)</div><div class="trk-stat-val" id="trk-avgscore">--</div><div class="trk-stat-sub">at entry</div></div>
+    <div class="trk-stat"><div class="trk-stat-accent" style="background:var(--p)"></div><div class="trk-stat-lbl">Avg Return 24h</div><div class="trk-stat-val" id="trk-avgret">--</div><div class="trk-stat-sub">on closed signals</div></div>
+  </div>
+  <div class="trk-breakdown"><div class="trk-breakdown-title">Win Rate by Verdict Type</div><div class="trk-rows" id="trk-breakdown-rows"><div class="trk-empty" style="padding:16px">No signals logged yet. Run a scan to start tracking.</div></div></div>
+  <div class="trk-table-wrap">
+    <div class="trk-table-hdr">
+      <div class="trk-table-title">Signal History</div>
+      <div class="trk-table-actions">
+        <button class="trk-btn" onclick="refreshPrices()">&#x21BB; Refresh Prices</button>
+        <button class="trk-btn" onclick="exportCSV()">&#x2193; Export CSV</button>
+        <button class="trk-btn danger" onclick="clearTracker()">&#x2715; Clear All</button>
+      </div>
+    </div>
+    <div id="trk-table-body"><div class="trk-empty">No signals logged yet.<br>Run a scan to begin tracking.</div></div>
+  </div>
+</div>
+</div>
+
 </div>
 <script>
 
@@ -970,6 +1147,17 @@ function renderTop20(scanned){
   // Enrich with time horizon in background (non-blocking)
   var actionableCards=top20.map(function(r,i){return i;}).filter(function(i){return top20[i].vd.v!=="NO TRADE";});
   if(actionableCards.length) enrichWithHorizon(actionableCards);
+
+  // Auto-log all actionable signals to tracker
+  var logCount = autoLogSignals(scanResults.filter(function(r){
+    return r.vd && ['LONG','SHORT','SPOT BUY','REDUCE'].indexOf(r.vd.v) !== -1;
+  }));
+  if(logCount) {
+    updateTabCount();
+    // Flash tab to indicate new signals logged
+    var tabEl = document.getElementById('tab-tracker');
+    if(tabEl) { tabEl.style.color='var(--g)'; setTimeout(function(){tabEl.style.color='';},2000); }
+  }
 }
 
 function dotC(s){
@@ -1319,6 +1507,553 @@ function buildHorizonDetail(hz) {
   return html;
 }
 
+
+// ---- SINGLE COIN SPOTLIGHT ----
+async function runSpotlight() {
+  var btn = document.getElementById("spot-btn");
+  var sym = document.getElementById("spot-inp").value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(!sym) { document.getElementById("spot-inp").focus(); return; }
+  if(btn.disabled) return;
+
+  btn.disabled = true;
+  var wrap = document.getElementById("spotlight-wrap");
+  var card = document.getElementById("spotlight-card");
+  wrap.classList.add("show");
+  card.innerHTML = '<div class="spot-loading"><span class="spinner"></span>Fetching data for <strong style="color:var(--white)">'+sym+'</strong>...</div>';
+  window.scrollTo({top: wrap.offsetTop - 70, behavior:"smooth"});
+
+  try {
+    // Fetch bulk data if not already loaded
+    var needsFetch = !Object.keys(bnTickers).length;
+    if(needsFetch) {
+      card.innerHTML = '<div class="spot-loading"><span class="spinner"></span>Loading exchange data first...</div>';
+      await Promise.all([
+        fetch("https://api.binance.com/api/v3/ticker/24hr",{signal:AbortSignal.timeout(12000)})
+          .then(function(r){return r.json();})
+          .then(function(d){d.forEach(function(t){bnTickers[t.symbol]=t;});}),
+        fetch("https://fapi.binance.com/fapi/v1/premiumIndex",{signal:AbortSignal.timeout(10000)})
+          .then(function(r){return r.json();})
+          .then(function(d){d.forEach(function(f){var s=f.symbol.replace("USDT","").replace("BUSD","");bnFunding[s]=parseFloat(f.lastFundingRate)*100;});}),
+        fetch("https://api.bybit.com/v5/market/tickers?category=spot&limit=500",{signal:AbortSignal.timeout(12000)})
+          .then(function(r){return r.json();})
+          .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});}),
+        fetch("https://api.bybit.com/v5/market/tickers?category=linear&limit=500",{signal:AbortSignal.timeout(10000)})
+          .then(function(r){return r.json();})
+          .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){var s=t.symbol.replace("USDT","");bbFunding[s]=parseFloat(t.fundingRate||0)*100;});}),
+        fetch("https://api.alternative.me/fng/?limit=1",{signal:AbortSignal.timeout(8000)})
+          .then(function(r){return r.json();})
+          .then(function(d){if(d.data&&d.data.length)fearGreed=parseInt(d.data[0].value);})
+      ]);
+    }
+
+    // Check coin exists on either exchange
+    var onBN = !!bnTickers[sym+"USDT"];
+    var onBB = !!bbTickers[sym+"USDT"];
+    if(!onBN && !onBB) {
+      card.innerHTML = '<div class="spot-loading" style="color:var(--r)">&#x26D4; <strong>'+sym+'</strong> not found on Binance or Bybit. Check the symbol and try again.</div>';
+      btn.disabled = false;
+      return;
+    }
+
+    card.innerHTML = '<div class="spot-loading"><span class="spinner"></span>Running 5-step analysis on '+sym+'...</div>';
+
+    // Run all 5 steps
+    var S1 = await step1(sym);
+    var results = await Promise.all([step2(sym, S1.dir), step3(sym, S1.dir)]);
+    var S2 = results[0], S3 = results[1];
+    var results2 = await Promise.all([step4(sym, S1.avgVol7d, S3.pChg||0, S1.dir), step5(sym, S1.dir, S1)]);
+    var S4 = results2[0], S5 = results2[1];
+    var vd = computeVerdict(S1, S2, S3, S4, S5);
+    var lvl = computeLevels(vd.v, S1.price, S1);
+    var hasBNPerp = bnFunding[sym] !== undefined;
+    var hasBBPerp = bbFunding[sym] !== undefined;
+    var tk = bnTickers[sym+"USDT"] || {};
+    var chg24 = parseFloat(tk.priceChangePercent) || S3.pChg || 0;
+    var vol = S4.vol || 0;
+
+    var spotResult = {
+      sym:sym, S1:S1, S2:S2, S3:S3, S4:S4, S5:S5, vd:vd, lvl:lvl,
+      price:S1.price, chg24:chg24, vol:vol,
+      onBN:onBN, onBB:onBB, hasBNPerp:hasBNPerp, hasBBPerp:hasBBPerp,
+      _idx:"spot"
+    };
+    top20Results["spot"] = spotResult;
+
+    // Render the result
+    card.innerHTML = buildSpotlightCard(spotResult);
+
+    // Fetch horizon immediately
+    var hzEl = document.getElementById("spot-hz-badge");
+    var hzDetEl = document.getElementById("hzd-spot");
+    if(hzEl) hzEl.innerHTML = '<span class="hz-badge hz-loading">&#x23F3; analysing news...</span>';
+    var hz = await fetchHorizon(sym, spotResult);
+    spotResult.horizon = hz;
+    if(hzEl && hz) hzEl.innerHTML = '<span class="hz-badge '+horizonCls(hz.horizon)+'">'+hz.horizon+' &middot; '+hz.timeframe+'</span>';
+    if(hzDetEl && hz) hzDetEl.innerHTML = buildHorizonDetail(hz);
+
+  } catch(e) {
+    card.innerHTML = '<div class="spot-loading" style="color:var(--r)">Error analysing '+sym+': '+e.message+'</div>';
+  }
+  btn.disabled = false;
+}
+
+function buildSpotlightCard(r) {
+  var v = r.vd;
+  var acc = accentColor(v.v);
+  var sc = v.total>=9?"var(--g)":v.total>=7?"var(--a)":v.total>=5?"var(--bl)":"var(--r)";
+  var chgCls = r.chg24>0?"pos":r.chg24<0?"neg":"neu";
+  var convColor = v.conv==="HIGH"?"var(--g)":v.conv==="MED"?"var(--a)":"var(--bl)";
+
+  var exB = "";
+  if(r.onBN) exB += '<span class="eb eb-bn">BN'+(r.hasBNPerp?"+P":"")+"</span> ";
+  if(r.onBB) exB += '<span class="eb eb-bb">BB'+(r.hasBBPerp?"+P":"")+"</span> ";
+  exB += '<span class="eb eb-wb">WB</span>';
+
+  var dots = '<div class="dots" style="gap:5px">'
+    +'<span class="'+dotC(r.S1)+'" title="1-Structure" style="width:10px;height:10px"></span>'
+    +'<span class="'+dotC(r.S2)+'" title="2-Positioning" style="width:10px;height:10px"></span>'
+    +'<span class="'+dotC(r.S3)+'" title="3-Resolution" style="width:10px;height:10px"></span>'
+    +'<span class="'+dotC(r.S4)+'" title="4-Volume" style="width:10px;height:10px"></span>'
+    +'<span class="'+dotC(r.S5)+'" title="5-Liquidity" style="width:10px;height:10px"></span>'
+    +'</div>';
+
+  var html = '<div style="border-left:4px solid '+acc+'">';
+
+  // Header
+  html += '<div class="spot-header">';
+  html += '<div><div class="spot-sym-big">'+r.sym+'</div><div class="c-ex" style="margin-top:4px">'+exB+'</div></div>';
+  html += '<div><div class="spot-score-big" style="color:'+sc+'">'+v.total.toFixed(1)+'<span style="font-size:13px;font-weight:400;color:var(--dim)">/10</span></div>';
+  html += '<div class="sc-bar" style="width:100px;margin-top:6px"><div class="sc-fill" style="width:'+(v.total/10*100)+'%;background:'+sc+'"></div></div></div>';
+  html += '<div class="c-verdict-wrap">';
+  html += '<span class="vbadge '+v.vc+'" style="font-size:11px;padding:7px 16px">'+v.v+'</span>';
+  if(v.conv) html += '<div class="c-conv" style="color:'+convColor+';margin-top:5px"><span class="conv-dot" style="background:'+convColor+'"></span>'+v.conv+' conviction</div>';
+  html += '</div>';
+  html += '<div class="c-stats">';
+  if(r.price) html += '<div class="stat"><div class="sv" style="color:var(--white);font-size:15px">'+fP(r.price)+'</div><div class="sl">Price</div></div>';
+  html += '<div class="stat"><div class="sv '+chgCls+'" style="font-size:15px">'+(r.chg24>=0?"+":"")+r.chg24.toFixed(2)+'%</div><div class="sl">24h</div></div>';
+  if(r.vol) html += '<div class="stat"><div class="sv" style="color:var(--dim);font-size:13px">'+fV(r.vol)+'</div><div class="sl">Volume</div></div>';
+  html += dots;
+  html += '</div>';
+  html += '<div id="spot-hz-badge" style="flex-shrink:0;margin-left:auto"></div>';
+  html += '</div>';
+
+  // Steps grid
+  html += '<div class="spot-body">';
+  var steps = [
+    {n:"1",name:"Structure",s:r.S1},
+    {n:"2",name:"Positioning",s:r.S2},
+    {n:"3",name:"Resolution",s:r.S3},
+    {n:"4",name:"Volume",s:r.S4},
+    {n:"5",name:"Liquidity",s:r.S5}
+  ];
+  html += '<div class="steps-grid">';
+  steps.forEach(function(st){
+    var ptC = st.s.score>=1.8?"var(--g)":st.s.score>=1.2?"var(--a)":st.s.score>=0.5?"var(--bl)":"var(--r)";
+    var stColor = st.s.gatePass?"var(--g)":st.s.score>0?"var(--a)":"var(--r)";
+    html += '<div class="step-tile" style="--step-color:'+stColor+'">'
+      +'<div class="st-head"><span class="st-name">'+st.n+' &middot; '+st.name+'</span>'
+      +'<span class="st-score" style="color:'+ptC+'">'+st.s.score+' / '+st.s.max+'</span></div>'
+      +'<span class="sbadge '+st.s.cls+'">'+st.s.status+'</span>'
+      +'<div class="st-det">'+st.s.detail+'</div>'
+      +'<div class="st-rsn">'+st.s.reason+'</div>'
+      +'</div>';
+  });
+  html += '</div>';
+
+  // Footer: score bar + levels
+  html += '<div class="d-footer" style="margin-top:10px">';
+  html += '<div class="d-score-bar"><div class="d-score-fill" style="width:'+(v.total/10*100)+'%;background:'+sc+'"></div></div>';
+  html += '<span class="d-score-num" style="color:'+sc+'">'+v.total.toFixed(1)+' / 10</span>';
+  if(v.fails&&v.fails.length) html += '<span class="d-gate">Gate: '+v.fails.join(" / ")+'</span>';
+  if(v.noReason) html += '<span class="d-no">'+v.noReason+'</span>';
+  if(r.lvl){
+    html += '<div class="d-levels">';
+    html += '<div class="dlv"><div class="dlv-l">Entry</div><div class="dlv-v dlv-e">'+fP(r.lvl.entry)+'</div></div>';
+    html += '<div class="dlv"><div class="dlv-l">Target</div><div class="dlv-v dlv-t">'+fP(r.lvl.target)+'</div></div>';
+    if(r.lvl.stop) html += '<div class="dlv"><div class="dlv-l">Stop</div><div class="dlv-v dlv-s">'+fP(r.lvl.stop)+'</div></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Time Horizon section
+  html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--b1)">';
+  html += '<div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:6px">Time Horizon &amp; News Intelligence</div>';
+  html += '<div id="hzd-spot"><span style="font-family:var(--mono);font-size:9px;color:var(--dim)"><span class="spinner"></span>Fetching news &amp; analysing...</span></div>';
+  html += '</div>';
+
+  html += '</div></div>';
+  return html;
+}
+
+
+// ════════════════════════════════════════════
+// RESULTS TRACKER
+// ════════════════════════════════════════════
+var TRK_KEY = 'si_tracker_v1';
+
+function trkLoad() {
+  try { return JSON.parse(localStorage.getItem(TRK_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+function trkSave(signals) {
+  localStorage.setItem(TRK_KEY, JSON.stringify(signals));
+}
+
+// ── TAB SWITCHING ──
+function switchTab(tab) {
+  ['scanner','tracker'].forEach(function(t) {
+    document.getElementById('view-'+t).classList.toggle('active', t===tab);
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab==='tracker') renderTracker();
+}
+
+// ── AUTO LOG after scan ──
+function autoLogSignals(results) {
+  var signals = trkLoad();
+  var now = Date.now();
+  var added = 0;
+
+  results.forEach(function(r) {
+    var v = r.vd;
+    if(!v || ['NO TRADE'].indexOf(v.v) !== -1) return;
+    if(!r.price || r.price === 0) return;
+
+    // Dedup: don't re-log same symbol within 4 hours
+    var recent = signals.filter(function(s) {
+      return s.sym === r.sym && (now - s.loggedAt) < 4 * 3600 * 1000;
+    });
+    if(recent.length) return;
+
+    var sig = {
+      id: r.sym + '_' + now,
+      sym: r.sym,
+      verdict: v.v,
+      conviction: v.conv || 'N/A',
+      score: v.total,
+      entryPrice: r.price,
+      target: r.lvl ? r.lvl.target : null,
+      stop: r.lvl ? r.lvl.stop : null,
+      horizon: r.horizon ? r.horizon.horizon : null,
+      timeframe: r.horizon ? r.horizon.timeframe : null,
+      s1: r.S1 ? r.S1.score : 0,
+      s2: r.S2 ? r.S2.score : 0,
+      s3: r.S3 ? r.S3.score : 0,
+      s4: r.S4 ? r.S4.score : 0,
+      s5: r.S5 ? r.S5.score : 0,
+      loggedAt: now,
+      // Outcomes — populated by refreshPrices()
+      price24h: null, pct24h: null, result24h: null, checkedAt24h: null,
+      price48h: null, pct48h: null, result48h: null, checkedAt48h: null,
+      price7d:  null, pct7d:  null, result7d:  null, checkedAt7d:  null,
+      lastChecked: null
+    };
+    signals.unshift(sig); // newest first
+    added++;
+  });
+
+  if(added) {
+    // Keep max 200 signals
+    if(signals.length > 200) signals = signals.slice(0, 200);
+    trkSave(signals);
+    updateTabCount();
+  }
+  return added;
+}
+
+function updateTabCount() {
+  var signals = trkLoad();
+  var open = signals.filter(function(s) { return s.result7d === null; }).length;
+  var el = document.getElementById('trk-count');
+  if(el) {
+    el.textContent = signals.length;
+    el.classList.toggle('show', signals.length > 0);
+  }
+}
+
+// ── OUTCOME LOGIC ──
+function computeOutcome(sig, pct, window) {
+  if(pct === null) return null;
+  var v = sig.verdict;
+  // WIN: direction correct by >2% OR hit target
+  // LOSS: direction wrong by >3% OR hit stop
+  if(v === 'LONG' || v === 'SPOT BUY') {
+    if(sig.target && sig.entryPrice > 0) {
+      var targetPct = (sig.target - sig.entryPrice) / sig.entryPrice * 100;
+      var stopPct = sig.stop ? (sig.stop - sig.entryPrice) / sig.entryPrice * 100 : -6;
+      if(pct >= targetPct * 0.7) return 'WIN';  // reached 70% of target
+      if(pct <= stopPct) return 'LOSS';
+    }
+    if(pct >= 3) return 'WIN';
+    if(pct <= -5) return 'LOSS';
+    return 'OPEN';
+  }
+  if(v === 'SHORT') {
+    if(pct <= -3) return 'WIN';
+    if(pct >= 5) return 'LOSS';
+    return 'OPEN';
+  }
+  if(v === 'REDUCE') {
+    if(pct <= -2) return 'WIN'; // price fell after reduce signal
+    if(pct >= 8) return 'LOSS'; // price kept rising
+    return 'OPEN';
+  }
+  return 'OPEN';
+}
+
+// ── REFRESH PRICES ──
+async function refreshPrices() {
+  var btn = document.querySelector('.trk-btn');
+  if(btn) { btn.textContent = '⏳ Updating...'; btn.disabled = true; }
+
+  var signals = trkLoad();
+  var now = Date.now();
+  var updated = 0;
+
+  // Get current prices from Binance
+  var prices = {};
+  try {
+    var r = await fetch('https://api.binance.com/api/v3/ticker/price', {signal: AbortSignal.timeout(10000)});
+    var d = await r.json();
+    d.forEach(function(t) {
+      if(t.symbol.endsWith('USDT')) prices[t.symbol.replace('USDT','')] = parseFloat(t.price);
+    });
+  } catch(e) {}
+
+  signals.forEach(function(sig) {
+    var cur = prices[sig.sym];
+    if(!cur || !sig.entryPrice) return;
+
+    var age = now - sig.loggedAt; // ms since logged
+    var pct = (cur - sig.entryPrice) / sig.entryPrice * 100;
+
+    // 24h window: check after 20h, lock after 36h
+    if(age >= 20*3600*1000 && !sig.checkedAt24h) {
+      sig.price24h = cur;
+      sig.pct24h = pct;
+      sig.result24h = computeOutcome(sig, pct, '24h');
+      sig.checkedAt24h = now;
+      updated++;
+    }
+    // 48h window: check after 44h, lock after 72h
+    if(age >= 44*3600*1000 && !sig.checkedAt48h) {
+      sig.price48h = cur;
+      sig.pct48h = pct;
+      sig.result48h = computeOutcome(sig, pct, '48h');
+      sig.checkedAt48h = now;
+      updated++;
+    }
+    // 7d window: check after 6d 12h
+    if(age >= 6.5*24*3600*1000 && !sig.checkedAt7d) {
+      sig.price7d = cur;
+      sig.pct7d = pct;
+      sig.result7d = computeOutcome(sig, pct, '7d');
+      sig.checkedAt7d = now;
+      updated++;
+    }
+    // Always update current price display (not locked)
+    sig.curPrice = cur;
+    sig.curPct = pct;
+    sig.lastChecked = now;
+  });
+
+  trkSave(signals);
+  renderTracker();
+
+  if(btn) { btn.textContent = '↻ Refresh Prices'; btn.disabled = false; }
+}
+
+// ── RENDER TRACKER ──
+function renderTracker() {
+  var signals = trkLoad();
+  updateTabCount();
+  renderTrackerStats(signals);
+  renderBreakdown(signals);
+  renderSignalTable(signals);
+}
+
+function renderTrackerStats(signals) {
+  var total = signals.length;
+  document.getElementById('trk-total').textContent = total;
+
+  function winRate(window) {
+    var key = 'result' + window;
+    var closed = signals.filter(function(s) { return s[key] === 'WIN' || s[key] === 'LOSS'; });
+    if(!closed.length) return null;
+    var wins = closed.filter(function(s) { return s[key] === 'WIN'; }).length;
+    return { rate: wins/closed.length, wins: wins, total: closed.length };
+  }
+
+  function setWR(id, barId, subId, wr) {
+    if(!wr) {
+      document.getElementById(id).textContent = '--';
+      document.getElementById(subId).textContent = 'no data yet';
+      document.getElementById(barId).style.width = '0%';
+      return;
+    }
+    var pct = (wr.rate*100).toFixed(0);
+    var color = wr.rate >= 0.6 ? 'var(--g)' : wr.rate >= 0.4 ? 'var(--a)' : 'var(--r)';
+    document.getElementById(id).textContent = pct + '%';
+    document.getElementById(id).style.color = color;
+    document.getElementById(subId).textContent = wr.wins + ' wins / ' + wr.total + ' closed';
+    document.getElementById(barId).style.width = pct + '%';
+    document.getElementById(barId).style.background = color;
+  }
+
+  setWR('trk-wr24','trk-wr24-bar','trk-wr24-sub', winRate('24h'));
+  setWR('trk-wr48','trk-wr48-bar','trk-wr48-sub', winRate('48h'));
+  setWR('trk-wr7d','trk-wr7d-bar','trk-wr7d-sub', winRate('7d'));
+
+  // Best / worst by 24h pct
+  var withData = signals.filter(function(s) { return s.pct24h !== null; });
+  if(withData.length) {
+    var best = withData.reduce(function(a,b) { return b.pct24h > a.pct24h ? b : a; });
+    var worst = withData.reduce(function(a,b) { return b.pct24h < a.pct24h ? b : a; });
+    document.getElementById('trk-best').textContent = (best.pct24h >= 0 ? '+' : '') + best.pct24h.toFixed(1) + '%';
+    document.getElementById('trk-best').style.color = 'var(--g)';
+    document.getElementById('trk-best-sub').textContent = best.sym + ' (' + best.verdict + ')';
+    document.getElementById('trk-worst').textContent = (worst.pct24h >= 0 ? '+' : '') + worst.pct24h.toFixed(1) + '%';
+    document.getElementById('trk-worst').style.color = worst.pct24h < 0 ? 'var(--r)' : 'var(--g)';
+    document.getElementById('trk-worst-sub').textContent = worst.sym + ' (' + worst.verdict + ')';
+  }
+
+  // Avg score of wins
+  var wins24 = signals.filter(function(s) { return s.result24h === 'WIN'; });
+  if(wins24.length) {
+    var avgScore = wins24.reduce(function(a,b) { return a + b.score; }, 0) / wins24.length;
+    document.getElementById('trk-avgscore').textContent = avgScore.toFixed(1);
+    document.getElementById('trk-avgscore').style.color = avgScore >= 8 ? 'var(--g)' : avgScore >= 7 ? 'var(--a)' : 'var(--tx)';
+  }
+
+  // Avg return on closed 24h
+  var closed24 = signals.filter(function(s) { return s.pct24h !== null; });
+  if(closed24.length) {
+    var avgRet = closed24.reduce(function(a,b) { return a + b.pct24h; }, 0) / closed24.length;
+    document.getElementById('trk-avgret').textContent = (avgRet >= 0 ? '+' : '') + avgRet.toFixed(1) + '%';
+    document.getElementById('trk-avgret').style.color = avgRet > 0 ? 'var(--g)' : 'var(--r)';
+  }
+}
+
+function renderBreakdown(signals) {
+  var verdicts = ['LONG','SHORT','SPOT BUY','REDUCE'];
+  var colors = {'LONG':'var(--g)','SHORT':'var(--r)','SPOT BUY':'var(--bl)','REDUCE':'var(--a)'};
+  var container = document.getElementById('trk-breakdown-rows');
+  if(!container) return;
+
+  var hasAny = false;
+  var html = '';
+  verdicts.forEach(function(v) {
+    var group = signals.filter(function(s) { return s.verdict === v; });
+    if(!group.length) return;
+    hasAny = true;
+    var closed = group.filter(function(s) { return s.result24h === 'WIN' || s.result24h === 'LOSS'; });
+    var wins = closed.filter(function(s) { return s.result24h === 'WIN'; }).length;
+    var wr = closed.length ? wins/closed.length : null;
+    var wrStr = wr !== null ? (wr*100).toFixed(0) + '%' : '--';
+    var barColor = wr !== null ? (wr >= 0.6 ? 'var(--g)' : wr >= 0.4 ? 'var(--a)' : 'var(--r)') : 'var(--dim)';
+    var avgRet = closed.length ? closed.reduce(function(a,b){ return a+(b.pct24h||0); },0)/closed.length : null;
+
+    html += '<div class="trk-vrow">'
+      + '<div class="trk-vrow-top">'
+        + '<span class="trk-vrow-name" style="color:'+colors[v]+'">'+v+'</span>'
+        + '<span class="trk-vrow-wr" style="color:'+barColor+'">'+wrStr+'</span>'
+      + '</div>'
+      + '<div class="trk-vrow-bar"><div class="trk-vrow-fill" style="width:'+(wr!==null?wr*100:0)+'%;background:'+barColor+'"></div></div>'
+      + '<div class="trk-vrow-sub">'+group.length+' logged | '+closed.length+' closed'+(avgRet!==null?' | avg '+(avgRet>=0?'+':'')+avgRet.toFixed(1)+'%':'')+'</div>'
+    + '</div>';
+  });
+  container.innerHTML = hasAny ? html : '<div class="trk-empty" style="padding:16px;grid-column:1/-1">No closed signals yet. Come back after 24h.</div>';
+}
+
+function renderSignalTable(signals) {
+  var body = document.getElementById('trk-table-body');
+  if(!body) return;
+  if(!signals.length) {
+    body.innerHTML = '<div class="trk-empty">No signals logged yet.<br>Run a scan to start tracking.</div>';
+    return;
+  }
+
+  var vcColors = {'LONG':'var(--g)','SHORT':'var(--r)','SPOT BUY':'var(--bl)','REDUCE':'var(--a)'};
+
+  var header = '<div class="trk-grid">'
+    + '<div class="trk-th">Date / Time</div>'
+    + '<div class="trk-th">Coin</div>'
+    + '<div class="trk-th">Verdict</div>'
+    + '<div class="trk-th">Score</div>'
+    + '<div class="trk-th">Entry</div>'
+    + '<div class="trk-th">24h %</div>'
+    + '<div class="trk-th">48h %</div>'
+    + '<div class="trk-th">7d %</div>'
+    + '<div class="trk-th">Status</div>'
+    + '</div>';
+
+  var rows = signals.map(function(sig) {
+    var d = new Date(sig.loggedAt);
+    var dateStr = (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear().toString().slice(2);
+    var timeStr = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    var sc = sig.score >= 9 ? 'var(--g)' : sig.score >= 7 ? 'var(--a)' : 'var(--bl)';
+
+    function pctCell(pct, result) {
+      if(pct === null) return '<div class="trk-pct neu">--</div>';
+      var cls = pct > 0 ? 'pos' : pct < 0 ? 'neg' : 'neu';
+      return '<div class="trk-pct '+cls+'">'+(pct>=0?'+':'')+pct.toFixed(2)+'%</div>';
+    }
+
+    function outcomeCell(result) {
+      if(!result) return '<div class="trk-outcome"><span class="outcome-dot oc-na"></span><span class="outcome-lbl" style="color:var(--dim)">pending</span></div>';
+      var dotCls = result==='WIN'?'oc-win':result==='LOSS'?'oc-loss':result==='OPEN'?'oc-open':'oc-na';
+      var txtColor = result==='WIN'?'var(--g)':result==='LOSS'?'var(--r)':result==='OPEN'?'var(--a)':'var(--dim)';
+      return '<div class="trk-outcome"><span class="outcome-dot '+dotCls+'"></span><span class="outcome-lbl" style="color:'+txtColor+'">'+result+'</span></div>';
+    }
+
+    // Overall result (best window available)
+    var overallResult = sig.result7d || sig.result48h || sig.result24h || null;
+
+    return '<div class="trk-row'+(overallResult==='OPEN'?' open-row':'')+'">'
+      + '<div class="trk-ts"><span class="trk-ts-date">'+dateStr+'</span><span class="trk-ts-time">'+timeStr+'</span></div>'
+      + '<div style="font-weight:700;color:var(--white)">'+sig.sym+'</div>'
+      + '<div style="color:'+vcColors[sig.verdict]+'">'+sig.verdict+'</div>'
+      + '<div style="color:'+sc+'">'+sig.score.toFixed(1)+'</div>'
+      + '<div style="color:var(--dim)">'+fP(sig.entryPrice)+'</div>'
+      + pctCell(sig.pct24h, sig.result24h)
+      + pctCell(sig.pct48h, sig.result48h)
+      + pctCell(sig.pct7d, sig.result7d)
+      + outcomeCell(overallResult)
+      + '</div>';
+  }).join('');
+
+  body.innerHTML = header + rows;
+}
+
+function exportCSV() {
+  var signals = trkLoad();
+  if(!signals.length) { alert('No signals to export'); return; }
+  var headers = 'Date,Time,Symbol,Verdict,Conviction,Score,Entry,Target,Stop,Horizon,24h%,24h Result,48h%,48h Result,7d%,7d Result\n';
+  var rows = signals.map(function(s) {
+    var d = new Date(s.loggedAt);
+    return [
+      d.toLocaleDateString(), d.toLocaleTimeString(),
+      s.sym, s.verdict, s.conviction, s.score.toFixed(1),
+      s.entryPrice, s.target||'', s.stop||'', s.horizon||'',
+      s.pct24h!==null?s.pct24h.toFixed(2):'', s.result24h||'',
+      s.pct48h!==null?s.pct48h.toFixed(2):'', s.result48h||'',
+      s.pct7d!==null?s.pct7d.toFixed(2):'',  s.result7d||''
+    ].join(',');
+  }).join('\n');
+  var blob = new Blob([headers+rows], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'signal-tracker-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+function clearTracker() {
+  if(!confirm('Clear all '+trkLoad().length+' logged signals? This cannot be undone.')) return;
+  localStorage.removeItem(TRK_KEY);
+  renderTracker();
+  updateTabCount();
+}
+
 // ---- TELEGRAM ----
 async function sendAlerts(){
   var tok=localStorage.getItem("si6_tok"),cid=localStorage.getItem("si6_cid");
@@ -1364,6 +2099,7 @@ function saveTG(){
 // ---- INIT ----
 setInterval(function(){document.getElementById("clk").textContent=new Date().toLocaleTimeString();},1000);
 window.addEventListener("load",function(){
+  updateTabCount();
   var tok=localStorage.getItem("si6_tok"),cid=localStorage.getItem("si6_cid");
   if(tok)document.getElementById("tg-tok").value=tok;
   if(cid)document.getElementById("tg-cid").value=cid;
