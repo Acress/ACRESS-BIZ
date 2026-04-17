@@ -1014,21 +1014,53 @@ async function runScan(){
   scanResults=[];bnTickers={};bnFunding={};bbTickers={};bbFunding={};
 
   setStep(1,"Fetching exchange data...",0);
+
+  // Fetch with retry helper
+  async function fetchWithRetry(url, opts, retries) {
+    for(var attempt=0; attempt<=retries; attempt++) {
+      try {
+        var r = await fetch(url, opts);
+        if(r.ok) return r;
+        throw new Error("HTTP "+r.status);
+      } catch(e) {
+        if(attempt===retries) throw e;
+        await new Promise(function(res){setTimeout(res,1500);});
+      }
+    }
+  }
+
+  var bnOk=false, bbOk=false;
   await Promise.all([
-    fetch("https://api.binance.com/api/v3/ticker/24hr",{signal:AbortSignal.timeout(12000)})
+    // Binance tickers (2 retries)
+    fetchWithRetry("https://api.binance.com/api/v3/ticker/24hr",{signal:AbortSignal.timeout(14000)},2)
       .then(function(r){return r.json();})
-      .then(function(d){d.forEach(function(t){bnTickers[t.symbol]=t;});
-        setEx("ex-bn","ok-green","Binance "+Object.keys(bnTickers).length+" pairs");})
-      .catch(function(){setEx("ex-bn","","Binance unavailable");}),
+      .then(function(d){
+        d.forEach(function(t){bnTickers[t.symbol]=t;});
+        bnOk=true;
+        setEx("ex-bn","ok-green","Binance "+Object.keys(bnTickers).length+" pairs");
+      })
+      .catch(function(e){
+        setEx("ex-bn","","Binance: "+e.message.slice(0,20));
+        console.warn("Binance ticker failed:",e.message);
+      }),
+    // Binance funding
     fetch("https://fapi.binance.com/fapi/v1/premiumIndex",{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json();})
       .then(function(d){d.forEach(function(f){var s=f.symbol.replace("USDT","").replace("BUSD","");bnFunding[s]=parseFloat(f.lastFundingRate)*100;});})
       .catch(function(){}),
-    fetch("https://api.bybit.com/v5/market/tickers?category=spot&limit=500",{signal:AbortSignal.timeout(12000)})
+    // Bybit tickers (2 retries)
+    fetchWithRetry("https://api.bybit.com/v5/market/tickers?category=spot&limit=500",{signal:AbortSignal.timeout(14000)},2)
       .then(function(r){return r.json();})
-      .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});
-        setEx("ex-bb","ok-orange","Bybit "+Object.keys(bbTickers).length+" pairs");})
-      .catch(function(){setEx("ex-bb","","Bybit unavailable");}),
+      .then(function(d){
+        (d.result&&d.result.list||[]).forEach(function(t){bbTickers[t.symbol]=t;});
+        bbOk=true;
+        setEx("ex-bb","ok-orange","Bybit "+Object.keys(bbTickers).length+" pairs");
+      })
+      .catch(function(e){
+        setEx("ex-bb","","Bybit: "+e.message.slice(0,20));
+        console.warn("Bybit ticker failed:",e.message);
+      }),
+    // Bybit funding
     fetch("https://api.bybit.com/v5/market/tickers?category=linear&limit=500",{signal:AbortSignal.timeout(10000)})
       .then(function(r){return r.json();})
       .then(function(d){(d.result&&d.result.list||[]).forEach(function(t){var s=t.symbol.replace("USDT","");bbFunding[s]=parseFloat(t.fundingRate||0)*100;});})
@@ -1036,16 +1068,33 @@ async function runScan(){
     // Fear & Greed
     fetch("https://api.alternative.me/fng/?limit=1",{signal:AbortSignal.timeout(8000)})
       .then(function(r){return r.json();})
-      
-    .then(function(d){if(d.data&&d.data.length){fearGreed=parseInt(d.data[0].value);
-      var fgEl=document.getElementById("ex-fg");
-      if(fgEl){
-        var fgCls=fearGreed>=70?"ok-green":fearGreed<=30?"ok-orange":"";
-        fgEl.className="ex-item "+fgCls;
-        fgEl.innerHTML='<span class="ex-dot-i"></span>F&G: '+fearGreed+'/100';
-      }}})
+      .then(function(d){
+        if(d.data&&d.data.length){fearGreed=parseInt(d.data[0].value);
+          var fgEl=document.getElementById("ex-fg");
+          if(fgEl){
+            var fgCls=fearGreed>=70?"ok-green":fearGreed<=30?"ok-orange":"";
+            fgEl.className="ex-item "+fgCls;
+            fgEl.innerHTML="<span class=\"ex-dot-i\"></span>F&G: "+fearGreed+"/100";
+          }
+        }
+      })
       .catch(function(){})
   ]);
+
+  // KEY FIX: If both exchanges failed, scan the Webull list directly anyway.
+  // step1() will throw if a coin doesn't exist on either exchange — those get caught
+  // and stored as errors, so no harm done. This prevents 0-result scans on API blips.
+  var coins;
+  if(!bnOk && !bbOk) {
+    setEx("ex-bn","","Binance: retrying per-coin");
+    setEx("ex-bb","","Bybit: retrying per-coin");
+    document.getElementById("prog-msg").textContent="Exchange bulk fetch failed — scanning Webull coins directly (slower)...";
+    coins = WEBULL_COINS.slice(); // scan all, errors caught per-coin
+  } else {
+    coins = WEBULL_COINS.filter(function(sym){
+      return bnTickers[sym+"USDT"] || bbTickers[sym+"USDT"];
+    });
+  }
 
   var coins=WEBULL_COINS.filter(function(sym){
     return bnTickers[sym+"USDT"]||bbTickers[sym+"USDT"];
