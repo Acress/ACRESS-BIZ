@@ -610,20 +610,15 @@ async function step1(sym){
   var c=null;
   var KLINE_URL = "https://api.binance.com/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30";
   var CDN_URL   = "https://data-api.binance.vision/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30";
-  var PROXY_URL = "https://api.allorigins.win/raw?url="+encodeURIComponent(KLINE_URL);
-
-  // Try Binance main → Vision CDN → allorigins proxy → Bybit
-  var sources = [
-    function(){ return safeFetch(KLINE_URL, 12000).then(function(r){return r.json();}); },
-    function(){ return safeFetch(CDN_URL,   12000).then(function(r){return r.json();}); },
-    function(){ return safeFetch(PROXY_URL, 14000).then(function(r){return r.json();}); }
-  ];
-  for(var si=0; si<sources.length; si++){
-    try {
-      var data = await sources[si]();
-      if(Array.isArray(data) && data.length >= 5){ c = data; break; }
-    } catch(e){ /* try next */ }
-  }
+  // Race Binance main vs Vision CDN simultaneously — take whichever responds first
+  try {
+    c = await Promise.any([
+      safeFetch(KLINE_URL, 10000).then(function(r){return r.json();}),
+      safeFetch(CDN_URL,   10000).then(function(r){return r.json();})
+    ]).then(function(data){
+      return (Array.isArray(data) && data.length >= 5) ? data : Promise.reject("empty");
+    });
+  } catch(e){ c = null; }
   // Bybit fallback
   if(!c || c.length < 5){
     try{
@@ -665,19 +660,19 @@ async function step1(sym){
     priorAvgRange:(priorAvgRange*100).toFixed(2),
     overhead5pct:overhead5pct,gatePass:false,max:2.0};
 
-  if(pos<=0.25){
+  if(pos<=0.22){
     o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="support";o.dir="long";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep support zone.";
     o.reason="Near lower boundary of range. Strong structural anchor for LONG.";
-  } else if(pos<=0.47){
+  } else if(pos<=0.35){
     o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="support";o.dir="long";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching support.";
     o.reason="Near but not fully at support. Confirmation from other steps is critical.";
-  } else if(pos>=0.75){
+  } else if(pos>=0.78){
     o.score=2.0;o.status="PASS";o.cls="sb-pass";o.zone="resistance";o.dir="short";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- deep resistance zone.";
     o.reason="At upper boundary of range. Overleveraged longs accumulate here.";
-  } else if(pos>=0.53){
+  } else if(pos>=0.65){
     o.score=1.5;o.status="PARTIAL";o.cls="sb-part";o.zone="resistance";o.dir="short";o.gatePass=true;
     o.detail="Price at "+(pos*100).toFixed(0)+"% of 30d range -- approaching resistance.";
     o.reason="Approaching resistance. Watch for stall or rejection before committing.";
@@ -1128,7 +1123,7 @@ async function runScan(){
   // Pass 2 — Steps 2-5 only for coins that PASSED Step 1 (typically 10-20%)
   // This eliminates ~80% of API calls for coins that are in mid-range
 
-  var BATCH=10;
+  var BATCH=15;
   var s1Results={};
 
   setStep(2,"Pass 1/2 -- checking structure on "+coins.length+" coins...",0);
@@ -1140,7 +1135,7 @@ async function runScan(){
       var S1tmp=await step1(sym);
       s1Results[sym]=S1tmp;
     }catch(e){ s1Results[sym]={error:e.message,gatePass:false,dir:"none",score:0}; }
-    if(i%BATCH===BATCH-1&&i<coins.length-1) await new Promise(function(r){setTimeout(r,150);});
+    if(i%BATCH===BATCH-1&&i<coins.length-1) await new Promise(function(r){setTimeout(r,100);});
   }
 
   // Filter to only coins at support or resistance
