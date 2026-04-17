@@ -390,6 +390,7 @@ var bnTickers={}, bnFunding={}, bbTickers={}, bbFunding={};
 var prevFunding={};
 var fearGreed=50;
 var scanResults=[];
+var top20Results=[];
 var scanCount=0;
 
 // ---- UTILS ----
@@ -964,10 +965,11 @@ function renderTop20(scanned){
     (counts["SPOT BUY"]?'<span class="s-pill sp-spot">'+counts["SPOT BUY"]+' SPOT BUY</span>':"")+
     (counts.REDUCE?'<span class="s-pill sp-reduce">'+counts.REDUCE+' REDUCE</span>':"")+
     '<span class="sp-note">F&G: '+fearGreed+'/100 | '+act+' actionable | top 20 shown</span>';
+  top20Results=top20;
   document.getElementById("cards").innerHTML=top20.map(function(r,i){return buildCard(r,i);}).join("");
   // Enrich with time horizon in background (non-blocking)
-  var actionableIdx=top20.map(function(r,i){return i;}).filter(function(i){return top20[i].vd.v!=="NO TRADE";});
-  if(actionableIdx.length) enrichWithHorizon(actionableIdx);
+  var actionableCards=top20.map(function(r,i){return i;}).filter(function(i){return top20[i].vd.v!=="NO TRADE";});
+  if(actionableCards.length) enrichWithHorizon(actionableCards);
 }
 
 function dotC(s){
@@ -1019,7 +1021,7 @@ function buildCard(r,idx){
       +(r.vol?'<div class="stat"><div class="sv" style="color:var(--dim)">'+fV(r.vol)+'</div><div class="sl">Vol</div></div>':"")
     +'</div>'
     +dots
-    +'<div id="hz-'+idx+'" style="flex-shrink:0"></div>'
+    +(isNT?'':'<div id="hz-'+idx+'" style="flex-shrink:0;margin-left:4px"><span class="hz-badge hz-loading">&#x23F3; horizon</span></div>')
     +'<div class="c-arrow">&#x25BE;</div>'
     +'</div>';
 
@@ -1065,7 +1067,11 @@ function buildDetail(r){
   html+='</div>';
 
   // Horizon detail (populated async after scan)
-  html += '<div id="hzd-'+r._idx+'"></div>';
+  html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--b1)">';
+  html += '<div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--g);margin-bottom:6px">Time Horizon &amp; News Intelligence</div>';
+  html += '<div id="hzd-'+r._idx+'">';
+  html += (top20Results[r._idx]&&top20Results[r._idx].horizon ? buildHorizonDetail(top20Results[r._idx].horizon) : '<span style="font-family:var(--mono);font-size:9px;color:var(--dim)"><span class="hz-loading" style="display:inline-block">&#x23F3;</span> Analysing news and signals...</span>');
+  html += '</div></div>';
 
   // Manual checks for SPOT BUY
   if(v.v==="SPOT BUY"||v.manualChecks){
@@ -1091,7 +1097,15 @@ function toggleCard(idx){
   if(!card) return;
   var wasOpen=card.classList.contains("open");
   document.querySelectorAll(".card.open").forEach(function(c){c.classList.remove("open");});
-  if(!wasOpen) card.classList.add("open");
+  if(!wasOpen){
+    card.classList.add("open");
+    // Render horizon detail if data is ready
+    var result=top20Results[idx];
+    if(result&&result.horizon){
+      var hzd=document.getElementById("hzd-"+idx);
+      if(hzd&&!hzd.innerHTML.trim()) hzd.innerHTML=buildHorizonDetail(result.horizon);
+    }
+  }
 }
 
 
@@ -1165,16 +1179,23 @@ async function fetchHorizon(sym, result) {
   try {
     var resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 400,
         messages: [{role: "user", content: prompt}]
       }),
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(25000)
     });
+    if(!resp.ok) throw new Error("API " + resp.status);
     var data = await resp.json();
-    var txt = data.content && data.content[0] && data.content[0].text || "";
+    var txt = (data.content && data.content[0] && data.content[0].text) || "";
+    // Strip markdown fences if present
+    txt = txt.replace(/```json|```/g,"").trim();
     var jsonMatch = txt.match(/\{[\s\S]*\}/);
     if(jsonMatch) {
       var hz = JSON.parse(jsonMatch[0]);
@@ -1244,7 +1265,7 @@ function horizonCls(hz) {
 async function enrichWithHorizon(top20Indices) {
   for(var i = 0; i < top20Indices.length; i++) {
     var idx = top20Indices[i];
-    var result = scanResults[idx];
+    var result = top20Results[idx];
     if(!result || result.vd.v === "NO TRADE") continue;
 
     // Show loading state on card
