@@ -608,20 +608,33 @@ function setEx(id,cls,txt){
 // ---- STEP 1: STRUCTURE + VOLATILITY ----
 async function step1(sym){
   var c=null;
-  try{
-    var r=await fetch("https://api.binance.com/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30",{signal:AbortSignal.timeout(10000)});
-    if(r.ok) c=await r.json();
-  }catch(e){}
-  if(!c||!c.length){
+  var KLINE_URL = "https://api.binance.com/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30";
+  var CDN_URL   = "https://data-api.binance.vision/api/v3/klines?symbol="+sym+"USDT&interval=1d&limit=30";
+  var PROXY_URL = "https://api.allorigins.win/raw?url="+encodeURIComponent(KLINE_URL);
+
+  // Try Binance main → Vision CDN → allorigins proxy → Bybit
+  var sources = [
+    function(){ return safeFetch(KLINE_URL, 12000).then(function(r){return r.json();}); },
+    function(){ return safeFetch(CDN_URL,   12000).then(function(r){return r.json();}); },
+    function(){ return safeFetch(PROXY_URL, 14000).then(function(r){return r.json();}); }
+  ];
+  for(var si=0; si<sources.length; si++){
+    try {
+      var data = await sources[si]();
+      if(Array.isArray(data) && data.length >= 5){ c = data; break; }
+    } catch(e){ /* try next */ }
+  }
+  // Bybit fallback
+  if(!c || c.length < 5){
     try{
-      var r2=await fetch("https://api.bybit.com/v5/market/kline?category=spot&symbol="+sym+"USDT&interval=D&limit=30",{signal:AbortSignal.timeout(10000)});
+      var r2=await safeFetch("https://api.bybit.com/v5/market/kline?category=spot&symbol="+sym+"USDT&interval=D&limit=30",12000);
       var d2=await r2.json();
       if(d2.result&&d2.result.list&&d2.result.list.length){
-        c=d2.result.list.reverse().map(function(x){return [0,x[1],x[2],x[3],x[4],x[5],0,x[6]];});
+        c=d2.result.list.reverse().map(function(x){return [0,x[1],x[2],x[3],x[4],x[5],0,x[6]||0];});
       }
     }catch(e){}
   }
-  if(!c||c.length<10) throw new Error("No kline data");
+  if(!c||c.length<5) throw new Error("No kline data");
 
   var h30=Math.max.apply(null,c.map(function(x){return parseFloat(x[2]);}));
   var l30=Math.min.apply(null,c.map(function(x){return parseFloat(x[3]);}));
@@ -1127,7 +1140,7 @@ async function runScan(){
       var S1tmp=await step1(sym);
       s1Results[sym]=S1tmp;
     }catch(e){ s1Results[sym]={error:e.message,gatePass:false,dir:"none",score:0}; }
-    if(i%BATCH===BATCH-1&&i<coins.length-1) await new Promise(function(r){setTimeout(r,80);});
+    if(i%BATCH===BATCH-1&&i<coins.length-1) await new Promise(function(r){setTimeout(r,150);});
   }
 
   // Filter to only coins at support or resistance
