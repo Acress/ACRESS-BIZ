@@ -350,6 +350,43 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
   background:rgba(255,255,255,.04);color:var(--dim);border:1px solid var(--b1);margin-left:auto}
 
 
+
+/* ── POSITION SIZING ── */
+.pos-pill{display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--mono);font-size:9px;font-weight:700;
+  padding:3px 10px;border-radius:3px;border:1px solid rgba(0,229,160,.3);
+  background:rgba(0,229,160,.07);color:var(--g);white-space:nowrap}
+.pos-pill.med{border-color:rgba(255,176,32,.3);background:rgba(255,176,32,.07);color:var(--a)}
+.pos-pill.small{border-color:rgba(61,159,255,.3);background:rgba(61,159,255,.07);color:var(--bl)}
+
+/* ── CAPITAL INPUT ── */
+.capital-row{display:flex;align-items:center;gap:8px;padding:8px 24px;
+  background:rgba(0,0,0,.3);border-bottom:1px solid var(--b1);flex-wrap:wrap}
+.capital-lbl{font-family:var(--mono);font-size:9px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.capital-inp{font-family:var(--mono);font-size:12px;font-weight:600;
+  background:var(--s2);border:1px solid var(--b2);border-radius:4px;
+  color:var(--g);padding:4px 10px;outline:none;width:100px;transition:border-color .15s}
+.capital-inp:focus{border-color:var(--g)}
+.capital-note{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.capital-deployed{font-family:var(--mono);font-size:9px;color:var(--a);margin-left:auto}
+
+/* ── EXTRA SCANNER TABS ── */
+.tab-btn.tab-meme{color:var(--r)}
+.tab-btn.tab-meme.active{color:var(--r);border-bottom-color:var(--r)}
+.tab-btn.tab-midcap{color:var(--a)}
+.tab-btn.tab-midcap.active{color:var(--a);border-bottom-color:var(--a)}
+.tab-btn.tab-legacy{color:var(--dim)}
+.tab-btn.tab-legacy.active{color:var(--g);border-bottom-color:var(--g)}
+
+/* ── SCANNER UNIVERSE PILL ── */
+.universe-pill{font-family:var(--mono);font-size:8px;letter-spacing:1.5px;
+  text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid;
+  display:inline-block;margin-bottom:6px}
+.up-legacy{color:var(--g);border-color:rgba(0,229,160,.3)}
+.up-meme{color:var(--r);border-color:rgba(255,51,85,.3)}
+.up-midcap{color:var(--a);border-color:rgba(255,176,32,.3)}
+
 /* ── TABS ── */
 .tab-bar{display:flex;align-items:center;gap:2px;padding:0 24px;
   background:rgba(2,4,8,.96);border-bottom:1px solid var(--b1);height:38px}
@@ -454,8 +491,17 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
   </div>
 </div>
 
+<div class="capital-row">
+  <span class="capital-lbl">My Capital</span>
+  <input class="capital-inp" id="capital-inp" type="number" value="5000" min="100" max="100000"
+    onchange="USER_CAPITAL=parseFloat(this.value)||5000">
+  <span class="capital-note">Position sizes calculated as % of this amount</span>
+  <span class="capital-deployed" id="capital-deployed"></span>
+</div>
 <div class="tab-bar">
-  <button class="tab-btn active" id="tab-scanner" onclick="switchTab('scanner')">Scanner</button>
+  <button class="tab-btn tab-legacy active" id="tab-scanner" onclick="switchTab('scanner')">Legacy</button>
+  <button class="tab-btn tab-meme" id="tab-meme" onclick="switchTab('meme')">&#x1F525; Meme &amp; Velocity</button>
+  <button class="tab-btn tab-midcap" id="tab-midcap" onclick="switchTab('midcap')">&#x1F4C8; Mid Cap Recovery</button>
   <button class="tab-btn" id="tab-tracker" onclick="switchTab('tracker')">
     Results Tracker <span class="tab-count" id="trk-count">0</span>
   </button>
@@ -466,8 +512,8 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
   <div class="scan-card">
     <div class="scan-top">
       <div>
-        <div class="scan-label">5-Step Filter &middot; Webull Universe</div>
-        <div class="scan-title">Multi-Exchange Signal Scanner</div>
+        <span class="universe-pill up-legacy">Legacy Scanner</span>
+        <div class="scan-title">Webull Universe &middot; 188 Coins</div>
         <div class="scan-desc">
           188 Webull-listed coins &middot; Binance + Bybit simultaneously &middot; L/S ratio enforced &middot; Overhead resistance checked<br>
           Funding flip detection &middot; Volatility compression (SPOT BUY) &middot; Fear &amp; Greed (REDUCE) &middot; No API keys required
@@ -531,6 +577,105 @@ body::before{content:"";position:fixed;inset:0;z-index:0;
   </div>
 </div><!-- /wrap -->
 </div><!-- /view-scanner -->
+
+
+<!-- ════ MEME & VELOCITY VIEW ════ -->
+<div id="view-meme" class="tab-view">
+<div class="wrap">
+  <div class="scan-card">
+    <div class="scan-top">
+      <div>
+        <span class="universe-pill up-meme">Meme &amp; High Velocity</span>
+        <div class="scan-title">Auto-Detected Meme Coins</div>
+        <div class="scan-desc">
+          CoinGecko meme category + Binance volume spike detection &middot; $500K–$50M daily volume<br>
+          Target: 50–300% moves in 24–72h &middot; Catches new listings &amp; viral spikes
+        </div>
+      </div>
+      <div class="scan-actions">
+        <button class="btn-run" id="meme-scan-btn" onclick="runMemesScan()" style="background:linear-gradient(135deg,var(--r),#ff6b35)">&#9654; Scan Memes</button>
+      </div>
+    </div>
+    <div class="exchange-row" id="meme-ex-row">
+      <div class="ex-item" id="meme-ex-cg"><span class="ex-dot-i"></span>CoinGecko meme list</div>
+      <div class="ex-item" id="meme-ex-bn"><span class="ex-dot-i"></span>Binance spike detect</div>
+      <div class="ex-item ok-blue"><span class="ex-dot-i"></span>Volume $500K–$50M filter</div>
+    </div>
+  </div>
+  <div class="prog-card" id="meme-prog">
+    <div class="prog-steps">
+      <div class="pst" id="mps1">1 &middot; CoinGecko</div>
+      <div class="pst" id="mps2">2 &middot; Spike Detect</div>
+      <div class="pst" id="mps3">3 &middot; Structure</div>
+      <div class="pst" id="mps4">4 &middot; Signals</div>
+      <div class="pst" id="mps5">5 &middot; Ranking</div>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="meme-prog-fill" style="width:0%"></div></div>
+    <div class="prog-status">
+      <div class="prog-msg" id="meme-prog-msg">Ready</div>
+      <div class="prog-count" id="meme-prog-count"></div>
+    </div>
+  </div>
+  <div class="summary-row" id="meme-summary" style="display:none"></div>
+  <div class="cards" id="meme-cards">
+    <div class="empty">
+      <strong>Meme &amp; High Velocity Scanner</strong><br>
+      Fetches CoinGecko meme category + auto-detects Binance volume spikes<br>
+      Catches coins with sudden volume surges — often the first sign of a 100%+ move<br>
+      Position sizes shown on each card based on your capital setting
+    </div>
+  </div>
+</div>
+</div><!-- /view-meme -->
+
+<!-- ════ MID CAP RECOVERY VIEW ════ -->
+<div id="view-midcap" class="tab-view">
+<div class="wrap">
+  <div class="scan-card">
+    <div class="scan-top">
+      <div>
+        <span class="universe-pill up-midcap">Mid Cap Recovery</span>
+        <div class="scan-title">80–200% Recovery Plays</div>
+        <div class="scan-desc">
+          CoinGecko market cap $50M–$2B &middot; ATH drop &gt;50% &middot; Volume &gt;$2M/day<br>
+          Coins with real projects that crashed hard and have structural room to recover
+        </div>
+      </div>
+      <div class="scan-actions">
+        <button class="btn-run" id="mc-scan-btn" onclick="runMidCapScan()" style="background:linear-gradient(135deg,var(--a),#ff8c00)">&#9654; Scan Mid Caps</button>
+      </div>
+    </div>
+    <div class="exchange-row">
+      <div class="ex-item" id="mc-ex-cg"><span class="ex-dot-i"></span>CoinGecko enriched</div>
+      <div class="ex-item" id="mc-ex-bn"><span class="ex-dot-i"></span>Binance verified</div>
+      <div class="ex-item ok-blue"><span class="ex-dot-i"></span>ATH drop &gt;50% filter</div>
+    </div>
+  </div>
+  <div class="prog-card" id="mc-prog">
+    <div class="prog-steps">
+      <div class="pst" id="cps1">1 &middot; CoinGecko</div>
+      <div class="pst" id="cps2">2 &middot; ATH Filter</div>
+      <div class="pst" id="cps3">3 &middot; Structure</div>
+      <div class="pst" id="cps4">4 &middot; Signals</div>
+      <div class="pst" id="cps5">5 &middot; Ranking</div>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="mc-prog-fill" style="width:0%"></div></div>
+    <div class="prog-status">
+      <div class="prog-msg" id="mc-prog-msg">Ready</div>
+      <div class="prog-count" id="mc-prog-count"></div>
+    </div>
+  </div>
+  <div class="summary-row" id="mc-summary" style="display:none"></div>
+  <div class="cards" id="mc-cards">
+    <div class="empty">
+      <strong>Mid Cap Recovery Scanner</strong><br>
+      Targets coins ranked #100–#750 by market cap that are &gt;50% below their ATH<br>
+      These are the coins most likely to do 80–200% on a narrative recovery<br>
+      Requires CoinGecko data — slightly slower but accurate
+    </div>
+  </div>
+</div>
+</div><!-- /view-midcap -->
 
 <!-- TRACKER VIEW -->
 <div id="view-tracker" class="tab-view">
@@ -1277,10 +1422,7 @@ function renderTop20(scanned){
     (counts.REDUCE?'<span class="s-pill sp-reduce">'+counts.REDUCE+' REDUCE</span>':"")+
     '<span class="sp-note">F&G: '+fearGreed+'/100 | '+act+' actionable | top 20 shown</span>';
   top20Results=top20;
-  document.getElementById("cards").innerHTML=top20.map(function(r,i){return buildCard(r,i);}).join("");
-  // Enrich with time horizon in background (non-blocking)
-  var actionableCards=top20.map(function(r,i){return i;}).filter(function(i){return top20[i].vd.v!=="NO TRADE";});
-  if(actionableCards.length) enrichWithHorizon(actionableCards);
+  renderScannerResults(scanResults, 'summary', 'cards', 'Legacy', 'var(--g)');
 
   // Auto-log all actionable signals to tracker
   var logCount = autoLogSignals(scanResults.filter(function(r){
@@ -1288,6 +1430,9 @@ function renderTop20(scanned){
   }));
   if(logCount) {
     updateTabCount();
+  updateCapitalDeployed();
+  var capInp=document.getElementById("capital-inp");
+  if(capInp){USER_CAPITAL=parseFloat(capInp.value)||5000;}
     // Flash tab to indicate new signals logged
     var tabEl = document.getElementById('tab-tracker');
     if(tabEl) { tabEl.style.color='var(--g)'; setTimeout(function(){tabEl.style.color='';},2000); }
@@ -1336,6 +1481,7 @@ function buildCard(r,idx){
     +'<div class="c-verdict-wrap">'
       +'<span class="vbadge '+v.vc+'">'+v.v+'</span>'
       +(v.conv?'<div class="c-conv" style="color:'+convColor+'"><span class="conv-dot" style="background:'+convColor+'"></span>'+v.conv+'</div>':"")
+      +positionHTML(v.v, v.conv, v.total)
     +'</div>'
     +'<div class="c-stats">'
       +(r.price?'<div class="stat"><div class="sv" style="color:var(--white)">'+fP(r.price)+'</div><div class="sl">Price</div></div>':"")
@@ -1894,6 +2040,9 @@ function autoLogSignals(results) {
     if(signals.length > 200) signals = signals.slice(0, 200);
     trkSave(signals);
     updateTabCount();
+  updateCapitalDeployed();
+  var capInp=document.getElementById("capital-inp");
+  if(capInp){USER_CAPITAL=parseFloat(capInp.value)||5000;}
   }
   return added;
 }
@@ -2004,6 +2153,9 @@ async function refreshPrices() {
 function renderTracker() {
   var signals = trkLoad();
   updateTabCount();
+  updateCapitalDeployed();
+  var capInp=document.getElementById("capital-inp");
+  if(capInp){USER_CAPITAL=parseFloat(capInp.value)||5000;}
   renderTrackerStats(signals);
   renderBreakdown(signals);
   renderSignalTable(signals);
@@ -2189,6 +2341,354 @@ function clearTracker() {
   localStorage.removeItem(TRK_KEY);
   renderTracker();
   updateTabCount();
+  updateCapitalDeployed();
+  var capInp=document.getElementById("capital-inp");
+  if(capInp){USER_CAPITAL=parseFloat(capInp.value)||5000;}
+}
+
+
+// ════════════════════════════════════════════
+// CAPITAL & POSITION SIZING
+// ════════════════════════════════════════════
+var USER_CAPITAL = 5000;
+
+function suggestPosition(verdict, conviction, score) {
+  if(!verdict || verdict === 'NO TRADE') return null;
+  var riskMap = {
+    'SPOT BUY': { HIGH:0.10, MED:0.07, LOW:0.04, DEVELOPING:0.02 },
+    'LONG':     { HIGH:0.08, MED:0.05, LOW:0.03, DEVELOPING:0.02 },
+    'SHORT':    { HIGH:0.06, MED:0.04, LOW:0.02, DEVELOPING:0.01 },
+    'REDUCE':   { HIGH:0,    MED:0,    LOW:0,    DEVELOPING:0 }
+  };
+  var typeMap = riskMap[verdict] || riskMap['SPOT BUY'];
+  var pct = typeMap[conviction || 'LOW'] || 0.02;
+  // Score multiplier: 6.5 = 0.8x, 10.0 = 1.2x
+  var mult = 0.8 + Math.max(0, Math.min(0.4, (score - 6.5) / 3.5 * 0.4));
+  var amount = Math.max(50, Math.round(USER_CAPITAL * pct * mult / 50) * 50);
+  var maxLoss = Math.round(amount * 0.07); // ~7% stop assumption
+  var cls = amount >= 500 ? '' : amount >= 250 ? 'med' : 'small';
+  return { amount: amount, pct: (pct*mult*100).toFixed(1), maxLoss: maxLoss, cls: cls };
+}
+
+function positionHTML(verdict, conviction, score) {
+  var pos = suggestPosition(verdict, conviction, score);
+  if(!pos || pos.amount === 0) return '';
+  return '<div class="pos-pill '+pos.cls+'" title="'+pos.pct+'% of $'+USER_CAPITAL+' | Max loss: $'+pos.maxLoss+'">'
+    + '$' + pos.amount.toLocaleString() + ' position'
+    + '</div>';
+}
+
+function updateCapitalDeployed() {
+  var signals = trkLoad();
+  var open = signals.filter(function(s){ return s.result7d === null && ['LONG','SHORT','SPOT BUY'].indexOf(s.verdict) !== -1; });
+  var deployed = open.reduce(function(sum, s){
+    var pos = suggestPosition(s.verdict, s.conviction, s.score);
+    return sum + (pos ? pos.amount : 0);
+  }, 0);
+  var el = document.getElementById('capital-deployed');
+  if(el && deployed > 0) el.textContent = '$'+deployed.toLocaleString()+' deployed in '+open.length+' open positions';
+}
+
+// ════════════════════════════════════════════
+// UPDATE switchTab to handle new tabs
+// ════════════════════════════════════════════
+function switchTab(tab) {
+  ['scanner','meme','midcap','tracker'].forEach(function(t) {
+    var view = document.getElementById('view-'+t);
+    var btn  = document.getElementById('tab-'+t);
+    if(view) view.classList.toggle('active', t === tab);
+    if(btn)  btn.classList.toggle('active', t === tab);
+  });
+  if(tab === 'tracker') { renderTracker(); updateCapitalDeployed(); }
+}
+
+// ════════════════════════════════════════════
+// MEME SCANNER
+// ════════════════════════════════════════════
+var memeResults = [];
+
+function setMemeStep(n, msg) {
+  ['mps1','mps2','mps3','mps4','mps5'].forEach(function(id,i){
+    document.getElementById(id).className='pst'+(i+1<n?' done':i+1===n?' on':'');
+  });
+  document.getElementById('meme-prog-fill').style.width=((n-1)/5*100)+'%';
+  document.getElementById('meme-prog-msg').textContent=msg;
+}
+
+async function runMemesScan() {
+  var btn = document.getElementById('meme-scan-btn');
+  if(btn.disabled) return;
+  btn.disabled = true;
+  document.getElementById('meme-prog').classList.add('show');
+  document.getElementById('meme-summary').style.display = 'none';
+  document.getElementById('meme-cards').innerHTML = '<div class="empty"><span class="spinner"></span>Building meme universe...</div>';
+  memeResults = [];
+
+  // Ensure Binance data loaded
+  if(!Object.keys(bnTickers).length) {
+    setMemeStep(1,'Loading Binance data first...');
+    await Promise.all([
+      safeFetch('https://api.binance.com/api/v3/ticker/24hr',14000).then(function(r){return r.json();}).then(function(d){d.forEach(function(t){bnTickers[t.symbol]=t;});}).catch(function(){}),
+      safeFetch('https://fapi.binance.com/fapi/v1/premiumIndex',10000).then(function(r){return r.json();}).then(function(d){d.forEach(function(f){var s=f.symbol.replace('USDT','').replace('BUSD','');bnFunding[s]=parseFloat(f.lastFundingRate)*100;});}).catch(function(){}),
+      safeFetch('https://api.alternative.me/fng/?limit=1',8000).then(function(r){return r.json();}).then(function(d){if(d.data&&d.data.length)fearGreed=parseInt(d.data[0].value);}).catch(function(){})
+    ]);
+    setEx('ex-bn','ok-green','Binance '+Object.keys(bnTickers).length+' pairs');
+  }
+
+  // Step 1: CoinGecko meme category
+  setMemeStep(1,'Fetching CoinGecko meme category...');
+  var cgMemes = [];
+  var cgMemeData = {};
+  try {
+    var r1 = await safeFetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=meme-token&order=volume_desc&per_page=100&page=1&sparkline=false',14000);
+    var d1 = await r1.json();
+    if(Array.isArray(d1)) {
+      d1.forEach(function(c){
+        var sym = c.symbol.toUpperCase();
+        cgMemeData[sym] = c;
+        if(c.total_volume >= 500000) cgMemes.push(sym);
+      });
+      var el = document.getElementById('meme-ex-cg');
+      if(el){el.className='ex-item ok-green';el.innerHTML='<span class="ex-dot-i"></span>CoinGecko: '+cgMemes.length+' memes';}
+    }
+  } catch(e) {
+    var el = document.getElementById('meme-ex-cg');
+    if(el){el.innerHTML='<span class="ex-dot-i"></span>CoinGecko: offline';}
+  }
+
+  // Step 2: Auto-detect volume spikes on Binance
+  setMemeStep(2,'Detecting volume spikes on Binance...');
+  var spikeCoins = [];
+  var VOL_MIN = 500000, VOL_MAX = 50000000;
+  Object.keys(bnTickers).forEach(function(sym) {
+    if(!sym.endsWith('USDT')) return;
+    var t = bnTickers[sym];
+    var vol = parseFloat(t.quoteVolume||0);
+    var price = parseFloat(t.lastPrice||0);
+    var pct = Math.abs(parseFloat(t.priceChangePercent||0));
+    if(vol >= VOL_MIN && vol <= VOL_MAX && (price < 1 || pct > 15)) {
+      spikeCoins.push(sym.replace('USDT',''));
+    }
+  });
+  // Combine: CoinGecko memes + spike-detected coins + known meme seeds
+  var MEME_SEEDS = ['PEPE','BONK','WIF','SHIB','DOGE','FLOKI','MOODENG','POPCAT',
+    'FARTCOIN','GIGA','PNUT','TRUMP','BRETT','NEIRO','TURBO','FLOKI','LADYS','VOLT'];
+  var allMemes = [];
+  var seen = {};
+  MEME_SEEDS.concat(cgMemes).concat(spikeCoins).forEach(function(sym){
+    if(!seen[sym] && (bnTickers[sym+'USDT'] || bnFunding[sym]!==undefined)){
+      seen[sym]=true; allMemes.push(sym);
+    }
+  });
+  var el2 = document.getElementById('meme-ex-bn');
+  if(el2){el2.className='ex-item ok-orange';el2.innerHTML='<span class="ex-dot-i"></span>'+allMemes.length+' meme coins found';}
+  document.getElementById('meme-prog-msg').textContent=allMemes.length+' meme coins queued. Running structure scan...';
+
+  // Steps 3-5: Run 5-step analysis (same engine)
+  var s1Res = {};
+  var BATCH = 15;
+  setMemeStep(3,'Pass 1: structure check...');
+  for(var i=0; i<allMemes.length; i++){
+    var sym = allMemes[i];
+    document.getElementById('meme-prog-fill').style.width=Math.round(30+i/allMemes.length*35)+'%';
+    document.getElementById('meme-prog-msg').textContent='Structure: '+sym+' ('+(i+1)+'/'+allMemes.length+')';
+    try{ s1Res[sym]=await step1(sym); }catch(e){ s1Res[sym]={error:e.message,gatePass:false,dir:'none',score:0,price:0,avgVol7d:0}; }
+    if(i%BATCH===BATCH-1&&i<allMemes.length-1) await new Promise(function(r){setTimeout(r,100);});
+  }
+  var passed = allMemes.filter(function(sym){ return s1Res[sym]&&s1Res[sym].gatePass; });
+  setMemeStep(4,passed.length+' passed structure. Running full analysis...');
+  document.getElementById('meme-prog-count').textContent=passed.length+' candidates';
+
+  // Store NO TRADE for failed structure
+  allMemes.filter(function(sym){ return s1Res[sym]&&!s1Res[sym].gatePass&&!s1Res[sym].error; }).forEach(function(sym){
+    var S1=s1Res[sym];
+    var noS={score:0,status:'N/A',cls:'sb-na',detail:'Skipped.',reason:'',gatePass:false,max:2.0,spotOnly:true};
+    var vd={v:'NO TRADE',vc:'vb-nt',conv:null,cc:'var(--dim)',total:S1.score,fails:['Structure'],noReason:'Mid-range.'};
+    memeResults.push({sym:sym,S1:S1,S2:noS,S3:noS,S4:noS,S5:noS,vd:vd,lvl:null,price:S1.price||0,chg24:0,vol:0,cgd:cgMemeData[sym]||null,onBN:!!bnTickers[sym+'USDT'],onBB:false,onCB:false,hasBNPerp:bnFunding[sym]!==undefined,hasBBPerp:false});
+  });
+
+  for(var i=0; i<passed.length; i++){
+    var sym=passed[i];
+    document.getElementById('meme-prog-fill').style.width=Math.round(65+i/Math.max(passed.length,1)*33)+'%';
+    document.getElementById('meme-prog-msg').textContent='Deep analysis: '+sym+' ('+(i+1)+'/'+passed.length+')';
+    try{
+      var S1=s1Res[sym];
+      var res=await Promise.all([step2(sym,S1.dir),step3(sym,S1.dir)]);
+      var S2=res[0],S3=res[1];
+      var res2=await Promise.all([step4(sym,S1.avgVol7d,S3.pChg||0,S1.dir),step5(sym,S1.dir,S1)]);
+      var S4=res2[0],S5=res2[1];
+      var vd=computeVerdict(S1,S2,S3,S4,S5);
+      var lvl=computeLevels(vd.v,S1.price,S1);
+      var tk=bnTickers[sym+'USDT']||{};
+      memeResults.push({sym:sym,S1:S1,S2:S2,S3:S3,S4:S4,S5:S5,vd:vd,lvl:lvl,
+        price:S1.price,chg24:parseFloat(tk.priceChangePercent)||0,vol:S4.vol||0,
+        cgd:cgMemeData[sym]||null,onBN:!!bnTickers[sym+'USDT'],onBB:false,onCB:COINBASE_ONLY.indexOf(sym)!==-1,
+        hasBNPerp:bnFunding[sym]!==undefined,hasBBPerp:false});
+    }catch(e){
+      memeResults.push({sym:sym,error:e.message,vd:{v:'NO TRADE',vc:'vb-nt',conv:null,cc:'var(--dim)',total:0,fails:[],noReason:e.message},price:0,chg24:0,vol:0,cgd:null});
+    }
+    if(i%8===7&&i<passed.length-1) await new Promise(function(r){setTimeout(r,150);});
+  }
+
+  setMemeStep(5,'Ranking...');
+  document.getElementById('meme-prog-fill').style.width='100%';
+  ['mps1','mps2','mps3','mps4','mps5'].forEach(function(id){document.getElementById(id).className='pst done';});
+  renderScannerResults(memeResults,'meme-summary','meme-cards','Meme','var(--r)');
+  autoLogSignals(memeResults.filter(function(r){return r.vd&&['LONG','SHORT','SPOT BUY','REDUCE'].indexOf(r.vd.v)!==-1;}));
+  btn.disabled=false;
+}
+
+// ════════════════════════════════════════════
+// MID CAP RECOVERY SCANNER
+// ════════════════════════════════════════════
+var midCapResults = [];
+
+function setMCStep(n, msg) {
+  ['cps1','cps2','cps3','cps4','cps5'].forEach(function(id,i){
+    document.getElementById(id).className='pst'+(i+1<n?' done':i+1===n?' on':'');
+  });
+  document.getElementById('mc-prog-fill').style.width=((n-1)/5*100)+'%';
+  document.getElementById('mc-prog-msg').textContent=msg;
+}
+
+async function runMidCapScan() {
+  var btn = document.getElementById('mc-scan-btn');
+  if(btn.disabled) return;
+  btn.disabled=true;
+  document.getElementById('mc-prog').classList.add('show');
+  document.getElementById('mc-summary').style.display='none';
+  document.getElementById('mc-cards').innerHTML='<div class="empty"><span class="spinner"></span>Fetching CoinGecko mid cap data...</div>';
+  midCapResults=[];
+
+  if(!Object.keys(bnTickers).length) {
+    setMCStep(1,'Loading Binance data...');
+    await Promise.all([
+      safeFetch('https://api.binance.com/api/v3/ticker/24hr',14000).then(function(r){return r.json();}).then(function(d){d.forEach(function(t){bnTickers[t.symbol]=t;});}).catch(function(){}),
+      safeFetch('https://fapi.binance.com/fapi/v1/premiumIndex',10000).then(function(r){return r.json();}).then(function(d){d.forEach(function(f){var s=f.symbol.replace('USDT','').replace('BUSD','');bnFunding[s]=parseFloat(f.lastFundingRate)*100;});}).catch(function(){}),
+      safeFetch('https://api.alternative.me/fng/?limit=1',8000).then(function(r){return r.json();}).then(function(d){if(d.data&&d.data.length)fearGreed=parseInt(d.data[0].value);}).catch(function(){})
+    ]);
+  }
+
+  // Step 1-2: CoinGecko mid cap coins with ATH filter
+  setMCStep(1,'Fetching CoinGecko pages 2-6 (ranks 250-1500)...');
+  var cgCoins = [], cgMap = {};
+  var pages = [];
+  for(var p=2; p<=6; p++) pages.push(
+    safeFetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page='+p+'&sparkline=false',14000)
+      .then(function(r){return r.json();}).catch(function(){return[];})
+  );
+  var results = await Promise.allSettled(pages);
+  results.forEach(function(res){
+    if(res.status==='fulfilled'&&Array.isArray(res.value)){
+      res.value.forEach(function(c){
+        var sym=c.symbol.toUpperCase();
+        cgMap[sym]=c;
+        // Filter: market cap $20M-$3B, ATH drop >40%, volume >$1M
+        if(c.market_cap>=20000000 && c.market_cap<=3000000000
+          && c.ath_change_percentage<-40
+          && c.total_volume>=1000000) {
+          cgCoins.push(sym);
+        }
+      });
+    }
+  });
+
+  setMCStep(2,'Applying ATH drop filter...');
+  var el1=document.getElementById('mc-ex-cg');
+  if(el1){el1.className='ex-item ok-green';el1.innerHTML='<span class="ex-dot-i"></span>CoinGecko: '+cgCoins.length+' candidates';}
+
+  // Cross-ref with Binance
+  var toScan=cgCoins.filter(function(sym){
+    return bnTickers[sym+'USDT']||bnFunding[sym]!==undefined;
+  });
+  var el2=document.getElementById('mc-ex-bn');
+  if(el2){el2.className='ex-item ok-green';el2.innerHTML='<span class="ex-dot-i"></span>'+toScan.length+' on Binance';}
+  document.getElementById('mc-prog-msg').textContent=toScan.length+' mid-cap coins queued (ATH drop >40%, vol >$1M). Running scan...';
+
+  // Pass 1: Structure
+  setMCStep(3,'Structure check...');
+  var s1Res={};
+  var BATCH=15;
+  for(var i=0;i<toScan.length;i++){
+    var sym=toScan[i];
+    document.getElementById('mc-prog-fill').style.width=Math.round(30+i/toScan.length*30)+'%';
+    document.getElementById('mc-prog-msg').textContent='Structure: '+sym+' ('+(i+1)+'/'+toScan.length+')';
+    try{ s1Res[sym]=await step1(sym); }catch(e){ s1Res[sym]={error:e.message,gatePass:false,dir:'none',score:0,price:0,avgVol7d:0}; }
+    if(i%BATCH===BATCH-1&&i<toScan.length-1) await new Promise(function(r){setTimeout(r,100);});
+  }
+  var passed=toScan.filter(function(sym){ return s1Res[sym]&&s1Res[sym].gatePass; });
+  setMCStep(4,passed.length+' passed structure. Running deep analysis...');
+  document.getElementById('mc-prog-count').textContent=passed.length+' candidates';
+
+  toScan.filter(function(sym){ return s1Res[sym]&&!s1Res[sym].gatePass&&!s1Res[sym].error; }).forEach(function(sym){
+    var S1=s1Res[sym]; var cgd=cgMap[sym]||{};
+    var noS={score:0,status:'N/A',cls:'sb-na',detail:'Skipped.',reason:'',gatePass:false,max:2.0,spotOnly:true};
+    var vd={v:'NO TRADE',vc:'vb-nt',conv:null,cc:'var(--dim)',total:S1.score,fails:['Structure'],noReason:'Mid-range.'};
+    midCapResults.push({sym:sym,S1:S1,S2:noS,S3:noS,S4:noS,S5:noS,vd:vd,lvl:null,price:S1.price||0,chg24:0,vol:0,cgd:cgd,onBN:!!bnTickers[sym+'USDT'],onBB:false,onCB:false,hasBNPerp:bnFunding[sym]!==undefined,hasBBPerp:false});
+  });
+
+  for(var i=0;i<passed.length;i++){
+    var sym=passed[i];
+    document.getElementById('mc-prog-fill').style.width=Math.round(60+i/Math.max(passed.length,1)*38)+'%';
+    document.getElementById('mc-prog-msg').textContent='Deep analysis: '+sym+' ('+(i+1)+'/'+passed.length+')';
+    try{
+      var S1=s1Res[sym]; var cgd=cgMap[sym]||{};
+      var res=await Promise.all([step2(sym,S1.dir),step3(sym,S1.dir)]);
+      var S2=res[0],S3=res[1];
+      var res2=await Promise.all([step4(sym,S1.avgVol7d,S3.pChg||0,S1.dir),step5(sym,S1.dir,S1)]);
+      var S4=res2[0],S5=res2[1];
+      var vd=computeVerdict(S1,S2,S3,S4,S5);
+      var lvl=computeLevels(vd.v,S1.price,S1);
+      var tk=bnTickers[sym+'USDT']||{};
+      midCapResults.push({sym:sym,S1:S1,S2:S2,S3:S3,S4:S4,S5:S5,vd:vd,lvl:lvl,
+        price:S1.price,chg24:parseFloat(tk.priceChangePercent)||0,vol:S4.vol||0,
+        cgd:cgd,onBN:!!bnTickers[sym+'USDT'],onBB:false,onCB:false,
+        hasBNPerp:bnFunding[sym]!==undefined,hasBBPerp:false});
+    }catch(e){
+      midCapResults.push({sym:sym,error:e.message,vd:{v:'NO TRADE',vc:'vb-nt',conv:null,cc:'var(--dim)',total:0,fails:[],noReason:e.message},price:0,chg24:0,vol:0,cgd:cgMap[sym]||null});
+    }
+    if(i%8===7&&i<passed.length-1) await new Promise(function(r){setTimeout(r,150);});
+  }
+
+  setMCStep(5,'Ranking by recovery potential...');
+  document.getElementById('mc-prog-fill').style.width='100%';
+  ['cps1','cps2','cps3','cps4','cps5'].forEach(function(id){document.getElementById(id).className='pst done';});
+  renderScannerResults(midCapResults,'mc-summary','mc-cards','Mid Cap','var(--a)');
+  autoLogSignals(midCapResults.filter(function(r){return r.vd&&['LONG','SHORT','SPOT BUY','REDUCE'].indexOf(r.vd.v)!==-1;}));
+  btn.disabled=false;
+}
+
+// ════════════════════════════════════════════
+// SHARED RENDER FUNCTION (used by all scanners)
+// ════════════════════════════════════════════
+function renderScannerResults(results, summaryId, cardsId, label, accentColor) {
+  var sorted = results.slice().sort(function(a,b){return b.vd.total-a.vd.total;});
+  var top20  = sorted.slice(0,20);
+
+  // Store for horizon enrichment
+  top20Results = top20;
+
+  var counts = {LONG:0,SHORT:0,'SPOT BUY':0,REDUCE:0,'NO TRADE':0};
+  results.forEach(function(r){counts[r.vd.v]=(counts[r.vd.v]||0)+1;});
+  var act=(counts.LONG||0)+(counts.SHORT||0)+(counts['SPOT BUY']||0)+(counts.REDUCE||0);
+
+  var sumEl = document.getElementById(summaryId);
+  sumEl.style.display = 'flex';
+  sumEl.innerHTML =
+    '<span class="s-pill sp-total">'+results.length+' scanned</span>'+
+    (counts.LONG?'<span class="s-pill sp-long">'+counts.LONG+' LONG</span>':'')+
+    (counts.SHORT?'<span class="s-pill sp-short">'+counts.SHORT+' SHORT</span>':'')+
+    (counts['SPOT BUY']?'<span class="s-pill sp-spot">'+counts['SPOT BUY']+' SPOT BUY</span>':'')+
+    (counts.REDUCE?'<span class="s-pill sp-reduce">'+counts.REDUCE+' REDUCE</span>':'')+
+    '<span class="sp-note">F&G: '+fearGreed+'/100 | '+act+' actionable | top 20 shown</span>';
+
+  document.getElementById(cardsId).innerHTML = top20.map(function(r,i){
+    return buildCard(r, i);
+  }).join('');
+
+  // Enrich with horizon in background
+  var actionable = top20.map(function(r,i){return i;}).filter(function(i){return top20[i].vd.v!=='NO TRADE';});
+  if(actionable.length) enrichWithHorizon(actionable);
 }
 
 // ---- TELEGRAM ----
@@ -2237,6 +2737,9 @@ function saveTG(){
 setInterval(function(){document.getElementById("clk").textContent=new Date().toLocaleTimeString();},1000);
 window.addEventListener("load",function(){
   updateTabCount();
+  updateCapitalDeployed();
+  var capInp=document.getElementById("capital-inp");
+  if(capInp){USER_CAPITAL=parseFloat(capInp.value)||5000;}
   var tok=localStorage.getItem("si6_tok"),cid=localStorage.getItem("si6_cid");
   if(tok)document.getElementById("tg-tok").value=tok;
   if(cid)document.getElementById("tg-cid").value=cid;
