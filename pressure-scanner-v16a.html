@@ -631,6 +631,25 @@ input{font-family:var(--font-ui);}
 .analytics-summary-card .seg strong.neg{color:var(--red);}
 .analytics-summary-card .seg-div{color:var(--border2);}
 
+
+/* v16ab — VPS Sync UI */
+.vps-section{border:1px solid rgba(165,108,255,.35);background:rgba(165,108,255,.04);padding:14px;border-radius:6px;}
+.vps-section h4{color:#bfa3ff;}
+.vps-row{display:flex;gap:10px;align-items:center;margin:8px 0;font-family:var(--font-mono);font-size:12px;}
+.vps-row label{color:var(--muted);min-width:90px;text-transform:uppercase;letter-spacing:.4px;font-size:10.5px;}
+.vps-row input[type=text],.vps-row input[type=password],.vps-row select{flex:1;background:var(--s1);color:var(--hi);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-family:var(--font-mono);font-size:12px;outline:none;min-width:0;}
+.vps-row input:focus,.vps-row select:focus{border-color:#bfa3ff;}
+.vps-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+.vps-status-line{margin-top:10px;font-family:var(--font-mono);font-size:10.5px;line-height:1.5;}
+.vps-toggle-wrap{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted);cursor:pointer;user-select:none;}
+.vps-toggle-wrap input[type=checkbox]{width:14px;height:14px;cursor:pointer;}
+.vps-status-pill{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:10px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border:1px solid var(--border);}
+.vps-status-pill .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+.vps-status-pill.is-vps{color:#bfa3ff;border-color:rgba(191,163,255,.5);background:rgba(165,108,255,.08);}
+.vps-status-pill.is-vps .dot{background:#bfa3ff;box-shadow:0 0 6px rgba(191,163,255,.7);}
+.vps-status-pill.is-local{color:var(--muted);}
+.vps-status-pill.is-local .dot{background:var(--muted);}
+
 </style>
 </head>
 <body>
@@ -868,7 +887,7 @@ input{font-family:var(--font-ui);}
       <div id="hour-heatmap-container"></div>
     </div>
     <div class="analysis-section">
-      <h3>📊 Custom analytics · <span style="color:var(--muted);font-weight:400;font-size:11px;">slice the data by time period and dimension · click any row to drill into trades</span></h3>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;"><h3>📊 Custom analytics · <span style="color:var(--muted);font-weight:400;font-size:11px;">slice the data by time period and dimension · click any row to drill into trades</span></h3><span id="vps-analytics-pill" class="vps-status-pill is-local"><span class="dot"></span>LOCAL DATA</span></div>
       <div class="analytics-controls">
         <label>Time period
           <select id="analytics-period" onchange="renderAnalytics()">
@@ -4324,6 +4343,7 @@ function renderSettingsModal(){
   var ct=document.getElementById('settings-current-time');
   if(ct) ct.textContent = fmtTimeDual(Date.now());
   paintLastBackupMeta();
+  if (window.VPS) { VPS.loadConfigIntoForm(); }
   var bd=document.getElementById('settings-storage-breakdown');
   if(!bd) return;
   var breakdown = getLocalStorageBreakdown();
@@ -4866,6 +4886,422 @@ function paintLastBackupMeta(){
   el.innerHTML = '<span style="color:' + color + ';">Last backup: ' + label + '</span> · <span style="color:var(--muted);">' + fmtTimeEDT(ts) + '</span>';
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — VPS Sync namespace
+// ════════════════════════════════════════════════════════════════════
+window.VPS = {
+  // ── Configuration (localStorage-backed) ──
+  KEYS: {
+    url:     'acress_vps_url',
+    apiKey:  'acress_vps_api_key',
+    profile: 'acress_vps_profile',
+    enabled: 'acress_vps_enabled',
+  },
+  getConfig: function(){
+    return {
+      url:     localStorage.getItem(this.KEYS.url)     || '',
+      apiKey:  localStorage.getItem(this.KEYS.apiKey)  || '',
+      profile: localStorage.getItem(this.KEYS.profile) || 'v16a',
+      enabled: localStorage.getItem(this.KEYS.enabled) === '1',
+    };
+  },
+  setConfig: function(cfg){
+    if (cfg.url     != null) localStorage.setItem(this.KEYS.url,     cfg.url);
+    if (cfg.apiKey  != null) localStorage.setItem(this.KEYS.apiKey,  cfg.apiKey);
+    if (cfg.profile != null) localStorage.setItem(this.KEYS.profile, cfg.profile);
+    if (cfg.enabled != null) localStorage.setItem(this.KEYS.enabled, cfg.enabled ? '1' : '0');
+  },
+
+  // ── Transient state ──
+  state: {
+    connected: false,
+    lastTestAt: null,
+    lastError: null,
+    lastHealth: null,
+  },
+  isActive: function(){
+    var cfg = this.getConfig();
+    return !!(cfg.enabled && cfg.url && this.state.connected);
+  },
+  markUnreachable: function(reason){
+    this.state.connected = false;
+    this.state.lastError = reason || 'connection lost';
+    this.repaintStatusPill();
+  },
+
+  // ── Low-level fetch ──
+  fetchJson: function(path, opts){
+    var cfg = this.getConfig();
+    if (!cfg.url) return Promise.reject(new Error('VPS URL not configured'));
+    var url = cfg.url.replace(/\/$/, '') + path;
+    var headers = { 'Accept': 'application/json' };
+    if (cfg.apiKey) headers['X-Api-Key'] = cfg.apiKey;
+    var fetchOpts = Object.assign({ headers: headers, credentials: 'omit' }, opts || {});
+    fetchOpts.headers = headers;
+    // 8-second timeout per request — fail fast so the UI can fall back
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    if (ctrl){
+      fetchOpts.signal = ctrl.signal;
+      setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, 8000);
+    }
+    return fetch(url, fetchOpts).then(function(resp){
+      if (!resp.ok){
+        return resp.text().catch(function(){return '';}).then(function(text){
+          throw new Error('HTTP ' + resp.status + ' — ' + (text.slice(0, 200) || resp.statusText));
+        });
+      }
+      return resp.json();
+    });
+  },
+
+  // ── Endpoints ──
+  testConnection: function(){
+    var self = this;
+    return this.fetchJson('/api/db-health').then(function(data){
+      self.state.connected = !!data.healthy;
+      self.state.lastTestAt = Date.now();
+      self.state.lastError = null;
+      self.state.lastHealth = data;
+      return { ok: true, data: data };
+    }).catch(function(e){
+      self.state.connected = false;
+      self.state.lastTestAt = Date.now();
+      self.state.lastError = e.message;
+      self.state.lastHealth = null;
+      return { ok: false, error: e.message };
+    });
+  },
+  aggregate: function(period, dim){
+    var cfg = this.getConfig();
+    var q = '?profile=' + encodeURIComponent(cfg.profile)
+          + '&period='  + encodeURIComponent(period)
+          + '&dim='     + encodeURIComponent(dim);
+    return this.fetchJson('/api/analysis/aggregate' + q);
+  },
+  entries: function(period, opts){
+    var cfg = this.getConfig();
+    opts = opts || {};
+    var q = '?profile=' + encodeURIComponent(cfg.profile)
+          + '&period='  + encodeURIComponent(period)
+          + '&limit='   + encodeURIComponent(opts.limit != null ? opts.limit : 500)
+          + '&offset='  + encodeURIComponent(opts.offset || 0);
+    if (opts.mech) q += '&mech=' + encodeURIComponent(opts.mech);
+    if (opts.dir)  q += '&dir='  + encodeURIComponent(opts.dir);
+    return this.fetchJson('/api/analysis/entries' + q);
+  },
+
+  // ── UI helpers ──
+  loadConfigIntoForm: function(){
+    var cfg = this.getConfig();
+    var urlEl = document.getElementById('vps-url');
+    var keyEl = document.getElementById('vps-api-key');
+    var profEl = document.getElementById('vps-profile');
+    var enaEl = document.getElementById('vps-enabled');
+    if (urlEl) urlEl.value = cfg.url || 'http://localhost:3000';
+    if (keyEl) keyEl.value = cfg.apiKey || '';
+    if (profEl) profEl.value = cfg.profile;
+    if (enaEl) enaEl.checked = cfg.enabled;
+  },
+  readConfigFromForm: function(){
+    var urlEl = document.getElementById('vps-url');
+    var keyEl = document.getElementById('vps-api-key');
+    var profEl = document.getElementById('vps-profile');
+    var enaEl = document.getElementById('vps-enabled');
+    return {
+      url:     urlEl ? urlEl.value.trim() : '',
+      apiKey:  keyEl ? keyEl.value.trim() : '',
+      profile: profEl ? profEl.value : 'v16a',
+      enabled: enaEl ? enaEl.checked : false,
+    };
+  },
+  saveAndTest: function(){
+    var cfg = this.readConfigFromForm();
+    if (!cfg.url){ toast('Enter the VPS URL first', 'warn', 4000); return; }
+    if (!cfg.apiKey){ toast('Enter the API key first', 'warn', 4000); return; }
+    this.setConfig(cfg);
+    this.paintStatus('Testing connection…', 'muted');
+    var self = this;
+    this.testConnection().then(function(res){
+      if (res.ok){
+        var h = res.data;
+        var msg = '✓ Connected · DB ' + (h.dbSizeBytes/1048576).toFixed(2) + ' MB';
+        if (h.profiles && h.profiles[cfg.profile]){
+          msg += ' · ' + cfg.profile + ': ' + h.profiles[cfg.profile].analysisCount + ' entries';
+        }
+        self.paintStatus(msg, 'ok');
+        toast('VPS connection OK', 'ok', 4000);
+        self.repaintStatusPill();
+        // If the user has analytics open, re-render with VPS data now
+        if (typeof renderAnalytics === 'function'){
+          try { renderAnalytics(); } catch(e){}
+        }
+      } else {
+        self.paintStatus('✗ ' + res.error, 'err');
+        toast('VPS error: ' + res.error, 'err', 6000);
+        self.repaintStatusPill();
+      }
+    });
+  },
+  toggleEnabled: function(on){
+    this.setConfig({ enabled: on });
+    if (on && !this.state.connected){
+      // Auto-test when enabling
+      this.saveAndTest();
+    } else {
+      this.repaintStatusPill();
+      if (typeof renderAnalytics === 'function'){
+        try { renderAnalytics(); } catch(e){}
+      }
+    }
+  },
+  paintStatus: function(msg, kind){
+    var el = document.getElementById('vps-status-line');
+    if (!el) return;
+    var color = kind === 'ok' ? 'var(--green)' : (kind === 'err' ? 'var(--red)' : 'var(--muted)');
+    el.innerHTML = '<span style="color:' + color + ';">' + msg + '</span>';
+  },
+  repaintStatusPill: function(){
+    var el = document.getElementById('vps-analytics-pill');
+    if (!el) return;
+    if (this.isActive()){
+      el.className = 'vps-status-pill is-vps';
+      el.innerHTML = '<span class="dot"></span>VPS DATA';
+      el.title = 'Analytics is reading from your VPS database';
+    } else {
+      var cfg = this.getConfig();
+      var label = cfg.enabled ? 'LOCAL · VPS UNREACHABLE' : 'LOCAL DATA';
+      el.className = 'vps-status-pill is-local';
+      el.innerHTML = '<span class="dot"></span>' + label;
+      el.title = cfg.enabled
+        ? 'VPS is enabled but unreachable — falling back to local storage'
+        : 'Analytics is using local browser storage';
+    }
+  },
+  initOnLoad: function(){
+    var self = this;
+    // Test connection if previously enabled
+    var cfg = this.getConfig();
+    if (cfg.enabled && cfg.url && cfg.apiKey){
+      this.testConnection().then(function(res){
+        self.repaintStatusPill();
+        if (res.ok){
+          // Refresh analytics with VPS data if the page is already open
+          if (typeof renderAnalytics === 'function'){
+            try { renderAnalytics(); } catch(e){}
+          }
+        } else {
+          console.warn('[VPS] auto-connect failed:', res.error);
+        }
+      });
+    } else {
+      this.repaintStatusPill();
+    }
+  },
+};
+
+// ── Wrap renderAnalytics so VPS path runs when active ──
+(function(){
+  if (typeof renderAnalytics !== 'function') return;  // analytics patch not active
+  var origRender = renderAnalytics;
+  window.renderAnalyticsLocal = origRender;
+
+  window.renderAnalytics = function(){
+    var periodEl = document.getElementById('analytics-period');
+    var dimEl = document.getElementById('analytics-dim');
+    if (!periodEl || !dimEl) return;
+    var period = periodEl.value;
+    var dim = dimEl.value;
+
+    if (window.VPS && window.VPS.isActive()){
+      return renderAnalyticsFromVPS(period, dim).catch(function(e){
+        console.warn('[VPS] render failed, falling back to local:', e.message);
+        window.VPS.markUnreachable('render failed: ' + e.message);
+        toast('VPS unreachable, showing local data', 'warn', 4000);
+        origRender();
+      });
+    }
+    origRender();
+    window.__analyticsSource = 'local';
+    if (window.VPS) window.VPS.repaintStatusPill();
+  };
+})();
+
+function renderAnalyticsFromVPS(period, dim){
+  var periodEl = document.getElementById('analytics-period');
+  var dimEl = document.getElementById('analytics-dim');
+  var periodLabel = periodEl.options[periodEl.selectedIndex].textContent;
+  var dimLabel = dimEl.options[dimEl.selectedIndex].textContent;
+
+  // Fetch both: rows for breakdown table, totals for the summary card.
+  return Promise.all([
+    window.VPS.aggregate(period, dim),
+    window.VPS.aggregate(period, 'none'),
+  ]).then(function(both){
+    var rows = (both[0] && both[0].rows) || [];
+    var totalRows = (both[1] && both[1].rows) || [];
+    var total = totalRows.length ? totalRows[0] : { n:0, wins:0, winRate:0, totalPnl:0, meanPnl:0, meanMfe:0, meanMae:0 };
+
+    // Sort identically to local
+    if (dim === 'hour' || dim === 'day' || dim === 'week' || dim === 'month' || dim === 'quarter' || dim === 'year'){
+      rows.sort(function(a,b){ return String(a.label).localeCompare(String(b.label)); });
+    } else if (dim === 'dayOfWeek'){
+      var dayOrder = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+      rows.sort(function(a,b){
+        var ao = dayOrder.hasOwnProperty(a.label) ? dayOrder[a.label] : 9;
+        var bo = dayOrder.hasOwnProperty(b.label) ? dayOrder[b.label] : 9;
+        return ao - bo;
+      });
+    } else if (dim === 'scoreTier'){
+      var tierOrder = {'SURGICAL (85+)':0,'HIGH (72-84)':1,'MARGINAL (60-71)':2,'SLEEPER (50-59)':3,'BELOW (<50)':4};
+      rows.sort(function(a,b){
+        var ao = tierOrder.hasOwnProperty(a.label) ? tierOrder[a.label] : 9;
+        var bo = tierOrder.hasOwnProperty(b.label) ? tierOrder[b.label] : 9;
+        return ao - bo;
+      });
+    } else {
+      rows.sort(function(a,b){ return b.totalPnl - a.totalPnl; });
+    }
+
+    window.__analyticsRows = rows;
+    window.__analyticsSource = 'vps';
+    window.__analyticsContext = { period: period, dim: dim };
+
+    // Summary card
+    var pnlCls = total.totalPnl >= 0 ? 'pos' : 'neg';
+    var meanCls = total.meanPnl >= 0 ? 'pos' : 'neg';
+    var summaryEl = document.getElementById('analytics-summary');
+    if (summaryEl){
+      summaryEl.innerHTML =
+        '<div class="analytics-summary-card">'
+        + '<span class="seg">Period:<strong>' + periodLabel + '</strong></span>'
+        + '<span class="seg-div">·</span>'
+        + '<span class="seg">Entries:<strong>' + total.n + '</strong></span>'
+        + '<span class="seg-div">·</span>'
+        + '<span class="seg">Win rate:<strong>' + (total.winRate*100).toFixed(0) + '%</strong></span>'
+        + '<span class="seg-div">·</span>'
+        + '<span class="seg">Total PnL:<strong class="' + pnlCls + '">' + (total.totalPnl>=0?'+$':'-$') + Math.abs(total.totalPnl).toFixed(0) + '</strong></span>'
+        + '<span class="seg-div">·</span>'
+        + '<span class="seg">$/trade:<strong class="' + meanCls + '">' + (total.meanPnl>=0?'+$':'-$') + Math.abs(total.meanPnl).toFixed(2) + '</strong></span>'
+        + '<span class="seg-div">·</span>'
+        + '<span class="seg">Mean MFE:<strong>+' + (total.meanMfe||0).toFixed(2) + '%</strong></span>'
+        + '<span class="seg-div">·</span>'
+        + '<span class="seg">Mean MAE:<strong>' + (total.meanMae||0).toFixed(2) + '%</strong></span>'
+        + '</div>';
+    }
+
+    // Table
+    var tableEl = document.getElementById('analytics-table');
+    if (!tableEl) return;
+    var html = '<table class="mech-table"><thead><tr>'
+      + '<th>' + dimLabel + '</th>'
+      + '<th class="num">N</th>'
+      + '<th class="num">Win%</th>'
+      + '<th class="num">Mean MFE</th>'
+      + '<th class="num">Mean MAE</th>'
+      + '<th class="num">Total PnL</th>'
+      + '<th class="num">$/Trade</th>'
+      + '</tr></thead><tbody>';
+    for (var j = 0; j < rows.length; j++){
+      var r = rows[j];
+      var rPnlCls = r.totalPnl >= 0 ? 'pos' : 'neg';
+      var rMeanCls = r.meanPnl >= 0 ? 'pos' : 'neg';
+      html += '<tr onclick="openDrilldownFromAnalytics(' + j + ')" title="Click for trade-by-trade breakdown of this row">'
+        + '<td>' + escapeHtml(String(r.label)) + '</td>'
+        + '<td class="num">' + r.n + '</td>'
+        + '<td class="num">' + (r.winRate*100).toFixed(0) + '%</td>'
+        + '<td class="num">+' + (r.meanMfe||0).toFixed(2) + '%</td>'
+        + '<td class="num">' + (r.meanMae||0).toFixed(2) + '%</td>'
+        + '<td class="num ' + rPnlCls + '">' + (r.totalPnl>=0?'+$':'-$') + Math.abs(r.totalPnl).toFixed(0) + '</td>'
+        + '<td class="num ' + rMeanCls + '">' + (r.meanPnl>=0?'+$':'-$') + Math.abs(r.meanPnl).toFixed(2) + '</td>'
+        + '</tr>';
+    }
+    if (!rows.length){
+      html += '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted);">No closed entries match this filter on the VPS.</td></tr>';
+    }
+    html += '</tbody></table>';
+    tableEl.innerHTML = html;
+
+    window.VPS.repaintStatusPill();
+  });
+}
+
+// Tiny HTML escape — labels can contain dimension values with quote chars
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// ── Wrap openDrilldownFromAnalytics for VPS row support ──
+(function(){
+  if (typeof openDrilldownFromAnalytics !== 'function') return;
+  var origDrill = openDrilldownFromAnalytics;
+  window.openDrilldownFromAnalyticsLocal = origDrill;
+
+  window.openDrilldownFromAnalytics = function(idx){
+    if (window.__analyticsSource === 'vps'){
+      return openDrilldownFromVPSAnalytics(idx).catch(function(e){
+        console.warn('[VPS] drilldown fetch failed:', e.message);
+        toast('VPS drilldown failed: ' + e.message, 'err', 5000);
+      });
+    }
+    origDrill(idx);
+  };
+})();
+
+function openDrilldownFromVPSAnalytics(idx){
+  var rows = window.__analyticsRows;
+  var ctx = window.__analyticsContext || {};
+  if (!rows || !rows[idx]) return Promise.resolve();
+  var r = rows[idx];
+  var period = ctx.period || 'all';
+  var dim = ctx.dim || 'mechDir';
+
+  // For mech/dir/mechDir dimensions, we can filter server-side
+  var fetchOpts = { limit: 500, offset: 0 };
+  if (dim === 'mechDir'){
+    var parts = String(r.label).split(' · ');
+    if (parts.length === 2){ fetchOpts.mech = parts[0]; fetchOpts.dir = parts[1]; }
+  } else if (dim === 'mech'){
+    fetchOpts.mech = String(r.label);
+  } else if (dim === 'dir'){
+    fetchOpts.dir = String(r.label);
+  }
+  // For other dimensions (scoreTier/oiStage/regime/hour/etc.) we still send
+  // period and filter the returned entries by group key on the client below.
+
+  return window.VPS.entries(period, fetchOpts).then(function(resp){
+    var entries = resp.entries || [];
+
+    // Client-side filter for dimensions the API doesn't natively understand
+    if (!fetchOpts.mech && !fetchOpts.dir && dim !== 'none' && typeof analyticsGroupKey === 'function'){
+      entries = entries.filter(function(e){
+        try { return analyticsGroupKey(e, dim) === r.label; }
+        catch(_) { return false; }
+      });
+    }
+
+    entries.sort(function(a,b){ return (b.closedAt||b.loggedAt) - (a.closedAt||a.loggedAt); });
+
+    drilldownState.bucket = {
+      type: 'analytics-vps', key: r.label, label: r.label,
+      entries: entries, shown: DRILLDOWN_INITIAL,
+    };
+
+    // Highlight selected row
+    document.querySelectorAll('#analytics-table tbody tr.selected').forEach(function(tr){ tr.classList.remove('selected'); });
+    var trs = document.querySelectorAll('#analytics-table tbody tr');
+    if (trs[idx]) trs[idx].classList.add('selected');
+    renderDrilldown();
+
+    // Note: if the row has more entries than the page size, surface that
+    if (resp.total && resp.total > entries.length){
+      toast('Showing first ' + entries.length + ' of ' + resp.total + ' entries (drill-down pagination on the roadmap)', 'warn', 5000);
+    }
+  });
+}
+
 </script>
 
 <div class="settings-modal-bg" id="settings-modal-bg" onclick="if(event.target===this)closeSettingsModal()">
@@ -4886,6 +5322,37 @@ function paintLastBackupMeta(){
           <input type="file" id="backup-import-file" accept="application/json,.json" style="display:none" onchange="importFullBackup(event)" />
         </div>
         <div id="last-backup-meta" style="font-size:10.5px;font-family:var(--font-mono);margin-top:10px;"></div>
+      </div>
+      <div class="settings-section vps-section">
+        <h4>📡 VPS Sync — pull analytics from your VPS database</h4>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55;">
+          Connect this browser to the SQLite database on your VPS so the Analytics page shows your full historical dataset (not capped by browser storage). Local scanning continues either way as a backup; this only affects what the Analytics tab reads.
+        </div>
+        <div class="vps-row"><label>VPS URL</label>
+          <input type="text" id="vps-url" placeholder="http://localhost:3000" autocomplete="off" />
+        </div>
+        <div class="vps-row"><label>API key</label>
+          <input type="password" id="vps-api-key" placeholder="64-character hex string from the VPS .env file" autocomplete="off" />
+        </div>
+        <div class="vps-row"><label>Profile</label>
+          <select id="vps-profile">
+            <option value="v16a">v16a</option>
+            <option value="v16b">v16b</option>
+          </select>
+        </div>
+        <div class="vps-actions">
+          <button class="pc-act" onclick="VPS.saveAndTest()" title="Save config and test connection" style="border-color:#bfa3ff;color:#bfa3ff;font-weight:700;">🧪 Save &amp; test connection</button>
+          <label class="vps-toggle-wrap" title="When on, the Analytics page reads from the VPS instead of local browser storage">
+            <input type="checkbox" id="vps-enabled" onchange="VPS.toggleEnabled(this.checked)" />
+            <span>Use VPS as data source for analytics</span>
+          </label>
+        </div>
+        <div id="vps-status-line" class="vps-status-line"></div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.5;border-top:1px dashed var(--border);padding-top:10px;">
+          <b style="color:var(--hi);">Setup with SSH tunnel:</b> open PowerShell on your laptop and run<br/>
+          <code style="background:var(--s1);padding:2px 6px;border-radius:3px;color:#bfa3ff;display:inline-block;margin-top:4px;">ssh -N -L 3000:localhost:3000 root@YOUR_VPS_IP</code><br/>
+          Leave that window open while using analytics. The URL above stays <code style="color:#bfa3ff;">http://localhost:3000</code>.
+        </div>
       </div>
       <div class="settings-section">
         <h4>🗄️ Storage breakdown — what's using your localStorage capacity</h4>
@@ -4909,5 +5376,20 @@ function paintLastBackupMeta(){
   </div>
 </div>
 
+<script>
+// v16ab — VPS Sync init on page load
+(function(){
+  function go(){
+    if (window.VPS && typeof window.VPS.initOnLoad === 'function'){
+      try { window.VPS.initOnLoad(); } catch(e){ console.warn('[VPS] init failed:', e); }
+    }
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(go, 400); });
+  } else {
+    setTimeout(go, 400);
+  }
+})();
+</script>
 </body>
 </html>
