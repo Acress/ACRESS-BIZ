@@ -617,6 +617,20 @@ input{font-family:var(--font-ui);}
 .show-more-btn{margin-top:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);color:var(--cyan);font-family:var(--font-mono);font-size:11px;cursor:pointer;border-radius:5px;width:100%;}
 .show-more-btn:hover{border-color:var(--cyan);}
 
+
+/* v16ab — Custom analytics section */
+.analytics-controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--s2);border:1px solid var(--border);border-radius:6px;}
+.analytics-controls label{font-family:var(--font-mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.4px;}
+.analytics-controls select{font-family:var(--font-mono);font-size:12px;background:var(--s1);color:var(--hi);border:1px solid var(--border);border-radius:4px;padding:5px 8px;cursor:pointer;outline:none;}
+.analytics-controls select:hover{border-color:var(--cyan);}
+.analytics-controls select:focus{border-color:var(--cyan);}
+.analytics-summary-card{display:flex;gap:16px;flex-wrap:wrap;padding:12px 14px;background:var(--s2);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-family:var(--font-mono);font-size:12px;}
+.analytics-summary-card .seg{color:var(--muted);display:inline-flex;align-items:center;gap:6px;}
+.analytics-summary-card .seg strong{color:var(--hi);font-weight:800;font-size:13px;}
+.analytics-summary-card .seg strong.pos{color:var(--green);}
+.analytics-summary-card .seg strong.neg{color:var(--red);}
+.analytics-summary-card .seg-div{color:var(--border2);}
+
 </style>
 </head>
 <body>
@@ -854,8 +868,45 @@ input{font-family:var(--font-ui);}
       <div id="hour-heatmap-container"></div>
     </div>
     <div class="analysis-section">
-      <h3>Mechanism × direction</h3>
-      <div id="mech-table-container"></div>
+      <h3>📊 Custom analytics · <span style="color:var(--muted);font-weight:400;font-size:11px;">slice the data by time period and dimension · click any row to drill into trades</span></h3>
+      <div class="analytics-controls">
+        <label>Time period
+          <select id="analytics-period" onchange="renderAnalytics()">
+            <option value="all">All time</option>
+            <option value="today">Today (EDT)</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="last24h">Last 24 hours</option>
+            <option value="thisWeek">This week</option>
+            <option value="last7days">Last 7 days</option>
+            <option value="thisMonth">This month</option>
+            <option value="last30days">Last 30 days</option>
+            <option value="last90days">Last 90 days</option>
+            <option value="thisQuarter">This quarter</option>
+            <option value="thisYear">This year</option>
+          </select>
+        </label>
+        <label>Break down by
+          <select id="analytics-dim" onchange="renderAnalytics()">
+            <option value="mechDir">Mechanism × Direction</option>
+            <option value="mech">Mechanism</option>
+            <option value="dir">Direction</option>
+            <option value="scoreTier">Score tier</option>
+            <option value="oiStage">OI stage</option>
+            <option value="regime">Regime</option>
+            <option value="hour">Hour of day (EDT)</option>
+            <option value="dayOfWeek">Day of week</option>
+            <option value="day">Each day</option>
+            <option value="week">Each week (ISO)</option>
+            <option value="month">Each month</option>
+            <option value="quarter">Each quarter</option>
+            <option value="year">Each year</option>
+            <option value="none">No breakdown (single aggregate)</option>
+          </select>
+        </label>
+        <button class="pc-act" onclick="downloadAnalyticsCSV()" title="Download current view as CSV">⬇ Download CSV</button>
+      </div>
+      <div id="analytics-summary"></div>
+      <div id="analytics-table"></div>
     </div>
     <div class="drilldown-panel" id="drilldown-panel">
       <div class="drilldown-head">
@@ -2845,36 +2896,8 @@ function renderAnalysisPage(){
   hmHtml += '</div>';
   document.getElementById('hour-heatmap-container').innerHTML = hmHtml;
 
-  // Mechanism × direction table
-  var mechAgg = {};
-  closed.forEach(function(t){
-    var key = (t.mech||'(none)') + '|' + (t.dir||'?');
-    if(!mechAgg[key]) mechAgg[key] = {mech:t.mech||'(none)', dir:t.dir||'?', n:0, wins:0, pnl:0, mfeSum:0};
-    mechAgg[key].n++;
-    if((t.finalPnlUsd||0) > 0) mechAgg[key].wins++;
-    mechAgg[key].pnl += (t.finalPnlUsd||0);
-    mechAgg[key].mfeSum += (t.maxFavPct||0);
-  });
-  var rows = Object.values(mechAgg).sort(function(a,b){return b.pnl - a.pnl;});
-  var tableHtml = '<table class="mech-table"><thead><tr><th>Mechanism</th><th>Dir</th><th class="num">N</th><th class="num">Win%</th><th class="num">Mean MFE</th><th class="num">Total PnL</th><th class="num">$/trade</th></tr></thead><tbody>';
-  rows.forEach(function(r){
-    var wr = r.n ? (r.wins/r.n*100).toFixed(0) : '0';
-    var mean = r.n ? (r.pnl/r.n) : 0;
-    tableHtml += '<tr data-mech-key="' + (r.mech+'|'+r.dir) + '" onclick="openDrilldownByMech(' + JSON.stringify(r.mech) + ',' + JSON.stringify(r.dir) + ')">' +
-      '<td>' + r.mech + '</td>' +
-      '<td class="dir-' + r.dir.toLowerCase() + '">' + r.dir + '</td>' +
-      '<td class="num">' + r.n + '</td>' +
-      '<td class="num">' + wr + '%</td>' +
-      '<td class="num">+' + (r.mfeSum/r.n).toFixed(2) + '%</td>' +
-      '<td class="num ' + (r.pnl>=0?'pos':'neg') + '">' + (r.pnl>=0?'+$':'-$') + Math.abs(r.pnl).toFixed(0) + '</td>' +
-      '<td class="num ' + (mean>=0?'pos':'neg') + '">' + (mean>=0?'+$':'-$') + Math.abs(mean).toFixed(2) + '</td>' +
-      '</tr>';
-  });
-  if(!rows.length){
-    tableHtml += '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted);">No closed entries yet. Enable AUTO-LOG 24/7 to start collecting.</td></tr>';
-  }
-  tableHtml += '</tbody></table>';
-  document.getElementById('mech-table-container').innerHTML = tableHtml;
+  // Custom analytics replaces the old static mech table
+  try{ renderAnalytics(); }catch(e){ console.warn('[Acress Analytics]', e.message); }
 
 }
 
@@ -4470,6 +4493,256 @@ function downloadDrilldownCSV(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);}, 5000);
   toast('Exported ' + entries.length + ' entries (' + drilldownState.bucket.label + ')','ok');
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Custom analytics: time period × dimension breakdown
+// ════════════════════════════════════════════════════════════════════
+// EDT/EST-aware date helpers
+function edtDateStr(ms){
+  try{ return new Date(ms).toLocaleDateString('en-CA',{timeZone:'America/New_York'}); }
+  catch(e){ return new Date(ms).toISOString().slice(0,10); }
+}
+function edtDateLabel(ms){
+  try{ return new Date(ms).toLocaleDateString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric'}); }
+  catch(e){ return edtDateStr(ms); }
+}
+function edtDayOfWeek(ms){
+  try{ return new Date(ms).toLocaleDateString('en-US',{timeZone:'America/New_York',weekday:'short'}); }
+  catch(e){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(ms).getDay()]; }
+}
+function edtMonthKey(ms){ return edtDateStr(ms).slice(0,7); }
+function edtMonthLabel(ms){
+  try{ return new Date(ms).toLocaleDateString('en-US',{timeZone:'America/New_York',month:'long',year:'numeric'}); }
+  catch(e){ return edtMonthKey(ms); }
+}
+function edtQuarterKey(ms){
+  var ds = edtDateStr(ms);
+  var y = parseInt(ds.slice(0,4));
+  var mo = parseInt(ds.slice(5,7));
+  return y + '-Q' + (Math.floor((mo-1)/3) + 1);
+}
+function edtYearKey(ms){ return edtDateStr(ms).slice(0,4); }
+function edtWeekKey(ms){
+  // ISO week with America/New_York day boundary
+  var ds = edtDateStr(ms);
+  var d = new Date(ds + 'T00:00:00Z');  // treat EDT-date as a UTC-anchored date for arithmetic
+  d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
+  var jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  var wk = 1 + Math.round(((d - jan4) / 86400000 - 3 + (jan4.getUTCDay() + 6) % 7) / 7);
+  return d.getUTCFullYear() + '-W' + String(wk).padStart(2,'0');
+}
+
+// Time period membership
+function inAnalyticsPeriod(t, period, now){
+  if (period === 'all') return true;
+  var ms = t.loggedAt;
+  if (period === 'today')      return edtDateStr(ms) === edtDateStr(now);
+  if (period === 'yesterday')  return edtDateStr(ms) === edtDateStr(now - 86400000);
+  if (period === 'last24h')    return ms >= now - 86400000;
+  if (period === 'last7days')  return ms >= now - 7*86400000;
+  if (period === 'last30days') return ms >= now - 30*86400000;
+  if (period === 'last90days') return ms >= now - 90*86400000;
+  if (period === 'thisWeek')   return edtWeekKey(ms) === edtWeekKey(now);
+  if (period === 'thisMonth')  return edtMonthKey(ms) === edtMonthKey(now);
+  if (period === 'thisQuarter')return edtQuarterKey(ms) === edtQuarterKey(now);
+  if (period === 'thisYear')   return edtYearKey(ms) === edtYearKey(now);
+  return true;
+}
+
+// Group key — what bucket does this entry belong to for the chosen dimension?
+function analyticsGroupKey(t, dim){
+  if (dim === 'none')      return '(all entries)';
+  if (dim === 'mech')      return t.mech || '(none)';
+  if (dim === 'dir')       return t.dir || '?';
+  if (dim === 'mechDir')   return (t.mech || '(none)') + ' · ' + (t.dir || '?');
+  if (dim === 'scoreTier'){
+    var sc = t.score || 0;
+    if (sc >= 85) return 'SURGICAL (85+)';
+    if (sc >= 72) return 'HIGH (72-84)';
+    if (sc >= 60) return 'MARGINAL (60-71)';
+    return 'BELOW (<60)';
+  }
+  if (dim === 'oiStage')   return t.oiStageAtLog || 'untagged';
+  if (dim === 'regime')    return t.regimeAtLog || '(none)';
+  if (dim === 'hour')      return String(getEDTHour(t.loggedAt)).padStart(2,'0') + ':00 EDT';
+  if (dim === 'dayOfWeek') return edtDayOfWeek(t.loggedAt);
+  if (dim === 'day')       return edtDateLabel(t.loggedAt);
+  if (dim === 'week')      return edtWeekKey(t.loggedAt);
+  if (dim === 'month')     return edtMonthLabel(t.loggedAt);
+  if (dim === 'quarter')   return edtQuarterKey(t.loggedAt);
+  if (dim === 'year')      return edtYearKey(t.loggedAt);
+  return '?';
+}
+
+// Aggregate metrics across a list of entries
+function aggregateEntries(entries){
+  var n = 0, wins = 0, totalPnl = 0, totalMfe = 0, totalMae = 0;
+  for (var i = 0; i < entries.length; i++){
+    var t = entries[i];
+    if (t.status === 'open') continue;
+    n++;
+    if ((t.finalPnlUsd||0) > 0) wins++;
+    totalPnl += t.finalPnlUsd || 0;
+    totalMfe += t.maxFavPct || 0;
+    totalMae += t.maxAdvPct || 0;
+  }
+  return {
+    n: n, wins: wins,
+    winRate: n ? wins/n : 0,
+    totalPnl: totalPnl,
+    meanPnl: n ? totalPnl/n : 0,
+    meanMfe: n ? totalMfe/n : 0,
+    meanMae: n ? totalMae/n : 0,
+  };
+}
+
+// Render the analytics section
+window.__analyticsRows = [];
+function renderAnalytics(){
+  var periodEl = document.getElementById('analytics-period');
+  var dimEl = document.getElementById('analytics-dim');
+  if (!periodEl || !dimEl) return;
+  var period = periodEl.value;
+  var dim = dimEl.value;
+  var periodLabel = periodEl.options[periodEl.selectedIndex].textContent;
+  var dimLabel = dimEl.options[dimEl.selectedIndex].textContent;
+  var now = Date.now();
+
+  // Filter by period
+  var filtered = analysisLog.filter(function(t){ return inAnalyticsPeriod(t, period, now); });
+
+  // Top summary card across the full filtered set
+  var total = aggregateEntries(filtered);
+  var pnlCls = total.totalPnl >= 0 ? 'pos' : 'neg';
+  var meanCls = total.meanPnl >= 0 ? 'pos' : 'neg';
+  var summaryEl = document.getElementById('analytics-summary');
+  if (summaryEl){
+    summaryEl.innerHTML =
+      '<div class="analytics-summary-card">'
+      + '<span class="seg">Period:<strong>' + periodLabel + '</strong></span>'
+      + '<span class="seg-div">·</span>'
+      + '<span class="seg">Entries:<strong>' + total.n + '</strong></span>'
+      + '<span class="seg-div">·</span>'
+      + '<span class="seg">Win rate:<strong>' + (total.winRate*100).toFixed(0) + '%</strong></span>'
+      + '<span class="seg-div">·</span>'
+      + '<span class="seg">Total PnL:<strong class="' + pnlCls + '">' + (total.totalPnl>=0?'+$':'-$') + Math.abs(total.totalPnl).toFixed(0) + '</strong></span>'
+      + '<span class="seg-div">·</span>'
+      + '<span class="seg">$/trade:<strong class="' + meanCls + '">' + (total.meanPnl>=0?'+$':'-$') + Math.abs(total.meanPnl).toFixed(2) + '</strong></span>'
+      + '<span class="seg-div">·</span>'
+      + '<span class="seg">Mean MFE:<strong>+' + total.meanMfe.toFixed(2) + '%</strong></span>'
+      + '<span class="seg-div">·</span>'
+      + '<span class="seg">Mean MAE:<strong>' + total.meanMae.toFixed(2) + '%</strong></span>'
+      + '</div>';
+  }
+
+  // Group by dimension (skipping open entries)
+  var groups = {};
+  for (var i = 0; i < filtered.length; i++){
+    var t = filtered[i];
+    if (t.status === 'open') continue;
+    var k = analyticsGroupKey(t, dim);
+    if (!groups[k]) groups[k] = [];
+    groups[k].push(t);
+  }
+  var rows = Object.keys(groups).map(function(k){
+    var entries = groups[k];
+    var agg = aggregateEntries(entries);
+    agg.label = k;
+    agg.entries = entries;
+    return agg;
+  });
+
+  // Sort: most natural ordering per dimension type
+  if (dim === 'hour' || dim === 'day' || dim === 'week' || dim === 'month' || dim === 'quarter' || dim === 'year'){
+    rows.sort(function(a,b){ return a.label.localeCompare(b.label); });
+  } else if (dim === 'dayOfWeek'){
+    var dayOrder = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
+    rows.sort(function(a,b){ return (dayOrder[a.label]||0) - (dayOrder[b.label]||0); });
+  } else if (dim === 'scoreTier'){
+    var tierOrder = {'SURGICAL (85+)':0,'HIGH (72-84)':1,'MARGINAL (60-71)':2,'BELOW (<60)':3};
+    rows.sort(function(a,b){ return (tierOrder[a.label]||9) - (tierOrder[b.label]||9); });
+  } else {
+    // By PnL descending — biggest winners first, biggest losers last
+    rows.sort(function(a,b){ return b.totalPnl - a.totalPnl; });
+  }
+
+  window.__analyticsRows = rows;
+
+  // Render table
+  var tableEl = document.getElementById('analytics-table');
+  if (!tableEl) return;
+  var html = '<table class="mech-table"><thead><tr>'
+    + '<th>' + dimLabel + '</th>'
+    + '<th class="num">N</th>'
+    + '<th class="num">Win%</th>'
+    + '<th class="num">Mean MFE</th>'
+    + '<th class="num">Mean MAE</th>'
+    + '<th class="num">Total PnL</th>'
+    + '<th class="num">$/Trade</th>'
+    + '</tr></thead><tbody>';
+  for (var j = 0; j < rows.length; j++){
+    var r = rows[j];
+    var rPnlCls = r.totalPnl >= 0 ? 'pos' : 'neg';
+    var rMeanCls = r.meanPnl >= 0 ? 'pos' : 'neg';
+    html += '<tr onclick="openDrilldownFromAnalytics(' + j + ')" title="Click for trade-by-trade breakdown of this row">'
+      + '<td>' + r.label + '</td>'
+      + '<td class="num">' + r.n + '</td>'
+      + '<td class="num">' + (r.winRate*100).toFixed(0) + '%</td>'
+      + '<td class="num">+' + r.meanMfe.toFixed(2) + '%</td>'
+      + '<td class="num">' + r.meanMae.toFixed(2) + '%</td>'
+      + '<td class="num ' + rPnlCls + '">' + (r.totalPnl>=0?'+$':'-$') + Math.abs(r.totalPnl).toFixed(0) + '</td>'
+      + '<td class="num ' + rMeanCls + '">' + (r.meanPnl>=0?'+$':'-$') + Math.abs(r.meanPnl).toFixed(2) + '</td>'
+      + '</tr>';
+  }
+  if (!rows.length){
+    html += '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--muted);">No closed entries match this filter.</td></tr>';
+  }
+  html += '</tbody></table>';
+  tableEl.innerHTML = html;
+}
+
+function openDrilldownFromAnalytics(idx){
+  var rows = window.__analyticsRows;
+  if (!rows || !rows[idx]) return;
+  var r = rows[idx];
+  var sorted = r.entries.slice().sort(function(a,b){ return (b.closedAt||b.loggedAt) - (a.closedAt||a.loggedAt); });
+  drilldownState.bucket = {
+    type: 'analytics', key: r.label, label: r.label,
+    entries: sorted, shown: DRILLDOWN_INITIAL,
+  };
+  // Highlight selected row
+  document.querySelectorAll('#analytics-table tbody tr.selected').forEach(function(tr){ tr.classList.remove('selected'); });
+  var trs = document.querySelectorAll('#analytics-table tbody tr');
+  if (trs[idx]) trs[idx].classList.add('selected');
+  renderDrilldown();
+}
+
+function downloadAnalyticsCSV(){
+  var rows = window.__analyticsRows;
+  if (!rows || !rows.length){ toast('No data to export','warn'); return; }
+  var period = document.getElementById('analytics-period').value;
+  var dim = document.getElementById('analytics-dim').value;
+  var cols = ['label','n','wins','winRate','totalPnl','meanPnl','meanMfe','meanMae'];
+  var lines = [cols.join(',')];
+  rows.forEach(function(r){
+    lines.push(cols.map(function(c){
+      var v = r[c];
+      if (typeof v === 'number') return c==='winRate' ? (v*100).toFixed(2)+'%' : v.toFixed(4);
+      var sv = String(v == null ? '' : v);
+      return /[,"\n]/.test(sv) ? '"' + sv.replace(/"/g, '""') + '"' : sv;
+    }).join(','));
+  });
+  var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'acress-analytics-' + period + '-by-' + dim + '-v16a-' + stamp + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+  toast('Exported ' + rows.length + ' rows (' + period + ' / ' + dim + ')','ok');
 }
 
 </script>
