@@ -4774,7 +4774,8 @@ function analyticsGroupKey(t, dim){
     if (sc >= 85) return 'SURGICAL (85+)';
     if (sc >= 72) return 'HIGH (72-84)';
     if (sc >= 60) return 'MARGINAL (60-71)';
-    return 'BELOW (<60)';
+    if (sc >= 50) return 'SLEEPER (50-59)';  // empirically strong in V16A — keep isolated
+    return 'BELOW (<50)';
   }
   if (dim === 'oiStage')   return t.oiStageAtLog || 'untagged';
   if (dim === 'regime')    return t.regimeAtLog || '(none)';
@@ -4871,10 +4872,18 @@ function renderAnalytics(){
     rows.sort(function(a,b){ return a.label.localeCompare(b.label); });
   } else if (dim === 'dayOfWeek'){
     var dayOrder = {Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6};
-    rows.sort(function(a,b){ return (dayOrder[a.label]||0) - (dayOrder[b.label]||0); });
+    rows.sort(function(a,b){
+      var ao = dayOrder.hasOwnProperty(a.label) ? dayOrder[a.label] : 9;
+      var bo = dayOrder.hasOwnProperty(b.label) ? dayOrder[b.label] : 9;
+      return ao - bo;
+    });
   } else if (dim === 'scoreTier'){
-    var tierOrder = {'SURGICAL (85+)':0,'HIGH (72-84)':1,'MARGINAL (60-71)':2,'BELOW (<60)':3};
-    rows.sort(function(a,b){ return (tierOrder[a.label]||9) - (tierOrder[b.label]||9); });
+    var tierOrder = {'SURGICAL (85+)':0,'HIGH (72-84)':1,'MARGINAL (60-71)':2,'SLEEPER (50-59)':3,'BELOW (<50)':4};
+    rows.sort(function(a,b){
+      var ao = tierOrder.hasOwnProperty(a.label) ? tierOrder[a.label] : 9;
+      var bo = tierOrder.hasOwnProperty(b.label) ? tierOrder[b.label] : 9;
+      return ao - bo;
+    });
   } else {
     // By PnL descending — biggest winners first, biggest losers last
     rows.sort(function(a,b){ return b.totalPnl - a.totalPnl; });
