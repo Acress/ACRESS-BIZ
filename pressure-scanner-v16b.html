@@ -4535,6 +4535,7 @@ function closeSettingsModal(){
 function renderSettingsModal(){
   var ct=document.getElementById('settings-current-time');
   if(ct) ct.textContent = fmtTimeDual(Date.now());
+  paintLastBackupMeta();
   var bd=document.getElementById('settings-storage-breakdown');
   if(!bd) return;
   var breakdown = getLocalStorageBreakdown();
@@ -4966,6 +4967,117 @@ function downloadAnalyticsCSV(){
   toast('Exported ' + rows.length + ' rows (' + period + ' / ' + dim + ')','ok');
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Backup & Restore (safety net before VPS migration)
+// ════════════════════════════════════════════════════════════════════
+function exportFullBackup(){
+  try{
+    var backup = {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      exportedAtEDT: fmtTimeEDT(Date.now()),
+      profile: 'v16b',
+      toolVersion: 'v16ab',
+      counts: {
+        analysisLog: (typeof analysisLog !== 'undefined' && analysisLog) ? analysisLog.length : 0,
+        trackerEntries: (typeof trackerEntries !== 'undefined' && trackerEntries) ? trackerEntries.length : 0,
+        localStorageKeys: localStorage.length,
+      },
+      localStorage: {}
+    };
+    // Capture every localStorage key — full snapshot
+    for (var i = 0; i < localStorage.length; i++){
+      var k = localStorage.key(i);
+      backup.localStorage[k] = localStorage.getItem(k);
+    }
+    var json = JSON.stringify(backup, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var sizeMB = (blob.size / 1024 / 1024).toFixed(2);
+    var url = URL.createObjectURL(blob);
+    var stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'acress-backup-v16b-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+    // Remember the moment of last backup (tiny key, won't fill storage)
+    try{ localStorage.setItem('acress_last_backup_at', String(Date.now())); }catch(e){}
+    paintLastBackupMeta();
+    toast('Backup saved (' + sizeMB + ' MB) — ' + backup.counts.analysisLog + ' analysis entries + ' + backup.counts.trackerEntries + ' trades', 'ok', 6000);
+  }catch(e){
+    console.error('[Backup] export failed:', e);
+    toast('Backup failed: ' + e.message, 'err', 6000);
+  }
+}
+
+function importFullBackup(event){
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      var backup = JSON.parse(ev.target.result);
+      if (!backup.schemaVersion || !backup.localStorage){
+        toast('Invalid backup file — missing required fields', 'err', 6000);
+        return;
+      }
+      var keys = Object.keys(backup.localStorage);
+      var sizeMB = (ev.target.result.length / 1024 / 1024).toFixed(2);
+      var msg = 'Restore backup?\n\n' +
+        'Exported: ' + (backup.exportedAtEDT || backup.exportedAt) + '\n' +
+        'Profile in backup: ' + (backup.profile || 'unknown') + '\n' +
+        'Current profile: ' + 'v16b' + '\n' +
+        'Backup size: ' + sizeMB + ' MB (' + keys.length + ' keys)\n' +
+        'Analysis entries: ' + (backup.counts ? backup.counts.analysisLog : '?') + '\n' +
+        'Tracker entries: ' + (backup.counts ? backup.counts.trackerEntries : '?') + '\n\n' +
+        '⚠  THIS REPLACES ALL YOUR CURRENT DATA.\n' +
+        'Consider exporting current data first.\n\n' +
+        'Continue with restore?';
+      if (!confirm(msg)){ event.target.value = ''; return; }
+      // Clear current localStorage then restore from backup
+      localStorage.clear();
+      for (var i = 0; i < keys.length; i++){
+        var k = keys[i];
+        try{ localStorage.setItem(k, backup.localStorage[k]); }
+        catch(setErr){ console.warn('[Backup] could not restore key', k, setErr.message); }
+      }
+      try{ localStorage.setItem('acress_imported_at', String(Date.now())); }catch(e){}
+      alert('✓ Backup restored successfully.\n\nThe page will now reload to apply the data.');
+      window.location.reload();
+    }catch(err){
+      console.error('[Backup] import failed:', err);
+      toast('Import failed: ' + err.message, 'err', 6000);
+    }
+  };
+  reader.onerror = function(){ toast('Could not read file', 'err', 6000); };
+  reader.readAsText(file);
+  event.target.value = '';  // allow re-selecting same file
+}
+
+function paintLastBackupMeta(){
+  var el = document.getElementById('last-backup-meta');
+  if (!el) return;
+  var last = localStorage.getItem('acress_last_backup_at');
+  if (!last){
+    el.innerHTML = '<span style="color:var(--amber);">⚠  No backup taken yet</span> · <span style="color:var(--muted);">strongly recommended before any data change</span>';
+    return;
+  }
+  var ts = parseInt(last);
+  if (!ts){ el.textContent = ''; return; }
+  var ago = Date.now() - ts;
+  var hours = ago / 3600000;
+  var label;
+  var color;
+  if (hours < 1){ label = Math.round(ago/60000) + 'm ago'; color = 'var(--green)'; }
+  else if (hours < 24){ label = Math.round(hours) + 'h ago'; color = 'var(--green)'; }
+  else if (hours < 24*7){ label = Math.round(hours/24) + 'd ago'; color = 'var(--amber)'; }
+  else { label = Math.round(hours/24) + 'd ago'; color = 'var(--red)'; }
+  el.innerHTML = '<span style="color:' + color + ';">Last backup: ' + label + '</span> · <span style="color:var(--muted);">' + fmtTimeEDT(ts) + '</span>';
+}
+
 </script>
 
 <div class="settings-modal-bg" id="settings-modal-bg" onclick="if(event.target===this)closeSettingsModal()">
@@ -4975,6 +5087,18 @@ function downloadAnalyticsCSV(){
       <button class="settings-modal-close" onclick="closeSettingsModal()" title="Close (Esc)">×</button>
     </div>
     <div class="settings-modal-body">
+      <div class="settings-section" style="border:1px solid rgba(65,209,255,.3);background:rgba(65,209,255,.04);padding:14px;border-radius:6px;">
+        <h4 style="color:var(--cyan);">💾 Backup &amp; Restore — protect your data before any change</h4>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55;">
+          Your data lives only in this browser's storage. <b style="color:var(--hi);">Download a full backup BEFORE</b> clearing storage, switching browsers, migrating to the VPS database, or doing anything that could lose data. The file you download has every analysis entry, every tracked trade, every setting — everything. You can re-import it later to restore.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="pc-act" onclick="exportFullBackup()" title="Download all your data as a single JSON file" style="border-color:var(--cyan);color:var(--cyan);font-weight:700;">💾 Export full backup</button>
+          <button class="pc-act" onclick="document.getElementById('backup-import-file').click()" title="Load a previously-exported backup file">📂 Import backup...</button>
+          <input type="file" id="backup-import-file" accept="application/json,.json" style="display:none" onchange="importFullBackup(event)" />
+        </div>
+        <div id="last-backup-meta" style="font-size:10.5px;font-family:var(--font-mono);margin-top:10px;"></div>
+      </div>
       <div class="settings-section">
         <h4>🗄️ Storage breakdown — what's using your localStorage capacity</h4>
         <div id="settings-storage-breakdown"></div>
