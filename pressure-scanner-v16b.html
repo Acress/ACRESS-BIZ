@@ -565,6 +565,58 @@ input{font-family:var(--font-ui);}
   .hdr-tabs .page-tab{padding:10px 12px;font-size:10px;}
 }
 
+
+/* v16ab — Settings modal accessed from header gear icon. Contains storage
+   breakdown + clear buttons (moved out of the Analysis page). */
+.settings-toggle{background:none;border:1px solid var(--border);color:var(--text);width:32px;height:32px;border-radius:50%;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s;}
+.settings-toggle:hover{border-color:var(--cyan);color:var(--cyan);transform:rotate(30deg);}
+.settings-modal-bg{position:fixed;inset:0;background:rgba(11,15,26,.85);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;}
+.settings-modal-bg.open{display:flex;}
+.settings-modal{background:var(--s1);border:1px solid var(--border);border-radius:10px;max-width:900px;width:100%;max-height:90vh;overflow-y:auto;padding:0;}
+.settings-modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--s1);z-index:1;}
+.settings-modal-title{font-size:14px;font-weight:700;color:var(--cyan);letter-spacing:.6px;text-transform:uppercase;font-family:var(--font-mono);}
+.settings-modal-close{background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:0 8px;line-height:1;}
+.settings-modal-close:hover{color:var(--hi);}
+.settings-modal-body{padding:20px;}
+.settings-section{margin-bottom:24px;}
+.settings-section:last-child{margin-bottom:0;}
+.settings-section h4{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-family:var(--font-mono);}
+
+
+/* v16ab — Analysis drill-down panel: appears below the heatmap/table when
+   user clicks a bucket. Cards are lightweight (essential fields only),
+   capped at 50 by default with show-more. */
+.hour-cell, .mech-table tbody tr{cursor:pointer;transition:transform .12s;}
+.hour-cell:hover{transform:scale(1.08);outline:1px solid var(--cyan);outline-offset:1px;}
+.hour-cell.selected{outline:2px solid var(--cyan);outline-offset:1px;}
+.mech-table tbody tr.selected td{background:rgba(65,209,255,.08);}
+.drilldown-panel{margin-top:18px;padding:16px;background:var(--s1);border:1px solid var(--border);border-radius:8px;display:none;}
+.drilldown-panel.open{display:block;}
+.drilldown-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+.drilldown-title{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--cyan);letter-spacing:.5px;}
+.drilldown-meta{font-family:var(--font-mono);font-size:10px;color:var(--muted);}
+.drilldown-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:10px;}
+.dd-card{background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:var(--font-mono);font-size:11px;line-height:1.55;}
+.dd-card .row1{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
+.dd-card .sym{font-weight:800;color:var(--hi);font-size:13px;}
+.dd-card .dir-long{color:var(--green);font-weight:700;}
+.dd-card .dir-short{color:var(--red);font-weight:700;}
+.dd-card .score{color:var(--cyan);font-weight:700;}
+.dd-card .status{font-size:9px;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.4px;}
+.dd-card .status.target{background:rgba(46,232,160,.18);color:var(--green);}
+.dd-card .status.stopped{background:rgba(255,82,119,.18);color:var(--red);}
+.dd-card .status.expired{background:rgba(143,163,188,.18);color:var(--muted);}
+.dd-card .status.open{background:rgba(65,209,255,.18);color:var(--cyan);}
+.dd-card .mech{color:var(--text);margin-bottom:6px;font-size:10.5px;}
+.dd-card .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding-top:6px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);}
+.dd-card .stats .lbl{color:var(--faint);font-size:9px;}
+.dd-card .stats .val{color:var(--hi);}
+.dd-card .stats .val.pos{color:var(--green);}
+.dd-card .stats .val.neg{color:var(--red);}
+.dd-card .time{font-size:9.5px;color:var(--faint);margin-top:4px;}
+.show-more-btn{margin-top:12px;padding:8px 14px;background:var(--s2);border:1px solid var(--border);color:var(--cyan);font-family:var(--font-mono);font-size:11px;cursor:pointer;border-radius:5px;width:100%;}
+.show-more-btn:hover{border-color:var(--cyan);}
+
 </style>
 </head>
 <body>
@@ -583,7 +635,8 @@ input{font-family:var(--font-ui);}
   <div class="hdr-right"><span class="profile-pill" style="color:#f0b341;border-color:#f0b341;background:rgba(240,179,65,.12);">V16B · EXPERIMENTAL</span>
     <span class="hdr-clock" id="clock"></span>
     <span class="hdr-status" id="status">Idle</span>
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="theme">
+    <button class="settings-toggle" id="btn-open-settings" onclick="openSettingsModal()" title="Settings · storage management">⚙</button>
+      <button class="theme-toggle" onclick="toggleTheme()" aria-label="theme">
       <span class="ti moon">🌙</span><span class="ti sun">☀</span>
     </button>
   </div>
@@ -797,23 +850,25 @@ input{font-family:var(--font-ui);}
   <div class="analysis-wrap">
     <div class="analysis-summary" id="analysis-summary"></div>
     <div class="analysis-section">
-      <h3>Activity by hour of day (UTC)</h3>
+      <h3>Activity by hour of day (EDT/EST) <span style="color:var(--muted);font-weight:400;font-size:11px;">· UTC shown as secondary</span></h3>
       <div id="hour-heatmap-container"></div>
     </div>
     <div class="analysis-section">
       <h3>Mechanism × direction</h3>
       <div id="mech-table-container"></div>
     </div>
-    <div class="analysis-section">
-      <h3>🗄️ Storage breakdown · <span style="color:var(--muted);font-weight:400;font-size:11px;">what's using your localStorage capacity</span></h3>
-      <div id="storage-breakdown-container"></div>
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-        <button class="pc-act" onclick="pruneAnalysisEntries(60*60*1000,'>1 hour')" title="Remove closed analysis entries older than 1 hour">🗑 Prune &gt;1h</button>
-        <button class="pc-act" onclick="pruneAnalysisEntries(24*60*60*1000,'>1 day')" title="Remove closed analysis entries older than 1 day">🗑 Prune &gt;24h</button>
-        <button class="pc-act" onclick="clearOldAnalysisEntries()" title="Remove closed analysis entries older than 7 days">🗑 Prune &gt;7d</button>
-        <button class="pc-act" onclick="clearAllAnalysisEntries()" title="Wipe the ENTIRE analysis log (trading tracker unaffected)" style="color:var(--red);border-color:rgba(255,82,119,.5);">💣 Clear ALL analysis</button>
-        <button class="pc-act" onclick="clearZBuffers()" title="Clear Z-score baselines (will regenerate from next scan — safe)">♻ Clear z-buffers</button>
+    <div class="drilldown-panel" id="drilldown-panel">
+      <div class="drilldown-head">
+        <div>
+          <div class="drilldown-title" id="drilldown-title">—</div>
+          <div class="drilldown-meta" id="drilldown-meta">—</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="pc-act" onclick="downloadDrilldownCSV()" title="Download just these entries as CSV">⬇ Download CSV</button>
+          <button class="pc-act" onclick="closeDrilldown()" title="Close drill-down">× Close</button>
+        </div>
       </div>
+      <div class="drilldown-cards" id="drilldown-cards"></div>
     </div>
     <div class="analysis-section" style="display:flex;justify-content:space-between;align-items:center;">
       <div>
@@ -867,7 +922,7 @@ function fP(n){if(n===null||n===undefined)return'—';var f=parseFloat(n);if(isN
 function fPct(n,d){if(n===null||isNaN(n))return'—';return(n>=0?'+':'')+parseFloat(n).toFixed(d||2)+'%';}
 function setStatus(txt,cls){var el=document.getElementById('status');el.textContent=txt;el.className='hdr-status'+(cls?' '+cls:'');}
 function setProgress(msg){var el=document.getElementById('scan-progress');if(el)el.textContent=msg;setProgress.last=msg;}
-function updateClock(){var d=new Date();document.getElementById('clock').textContent=String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')+':'+String(d.getUTCSeconds()).padStart(2,'0')+' UTC';}
+function updateClock(){var el=document.getElementById('clock'); if(el) el.textContent=fmtTimeDual(Date.now());}
 // v16ab — Score filter API. setScoreRange clamps + persists + triggers
 // renderResults. Legacy updateThreshold/effectiveScoreThreshold preserved
 // as thin aliases so any forgotten reference still works.
@@ -2113,7 +2168,7 @@ async function runScan(){
   var live=signals.filter(function(s){return s.validUntil>Date.now();}).length;
   var ts=new Date();
   setStatus('Scanned '+checked+(errors?' ('+errors+' err)':'')+' · '+live+' live','live');
-  setProgress(live+' signals live · scanned '+checked+' coins '+(errors?'('+errors+' errors) ':'')+'· OI:'+diagnostics.oiPass+' Taker:'+diagnostics.takerPass+' MTF:'+diagnostics.mtfPass+' CVD:'+diagnostics.cvdPass+' Sweep:'+diagnostics.sweepPass+' · '+diagnostics.aggregatedOI+' had Bybit OI aggregated · '+String(ts.getUTCHours()).padStart(2,'0')+':'+String(ts.getUTCMinutes()).padStart(2,'0')+' UTC');
+  setProgress(live+' signals live · scanned '+checked+' coins '+(errors?'('+errors+' errors) ':'')+'· OI:'+diagnostics.oiPass+' Taker:'+diagnostics.takerPass+' MTF:'+diagnostics.mtfPass+' CVD:'+diagnostics.cvdPass+' Sweep:'+diagnostics.sweepPass+' · '+diagnostics.aggregatedOI+' had Bybit OI aggregated · '+fmtTimeDualShort(ts.getTime()));
   btn.disabled=false;btn.textContent='⚡ Scan Now';
   isScanning=false;
   renderResults();
@@ -2438,6 +2493,64 @@ function suggestedHoldText(s){
 // Stats are derived from the tracker (closed trades only, within the
 // rolling window). Cached per-render for cheap card-rendering.
 // ════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Dual-timezone time formatters. EDT/EST is the primary display;
+// UTC follows in dimmer text. Tied to America/New_York so DST handles
+// itself (EDT in summer, EST in winter — JS toLocaleString does it).
+// ════════════════════════════════════════════════════════════════════
+function fmtTimeEDT(ms){
+  try{
+    return new Date(ms).toLocaleString('en-US',{
+      timeZone:'America/New_York',
+      hour:'2-digit',minute:'2-digit',second:'2-digit',
+      hour12:false,timeZoneName:'short'
+    });
+  }catch(e){ return ''; }
+}
+function fmtTimeEDTShort(ms){
+  try{
+    return new Date(ms).toLocaleString('en-US',{
+      timeZone:'America/New_York',
+      hour:'2-digit',minute:'2-digit',
+      hour12:false,timeZoneName:'short'
+    });
+  }catch(e){ return ''; }
+}
+function fmtTimeUTC(ms){
+  var d=new Date(ms);
+  var p=function(n){return String(n).padStart(2,'0');};
+  return p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC';
+}
+function fmtTimeUTCShort(ms){
+  var d=new Date(ms);
+  var p=function(n){return String(n).padStart(2,'0');};
+  return p(d.getUTCHours())+':'+p(d.getUTCMinutes())+' UTC';
+}
+function fmtTimeDual(ms){ return fmtTimeEDT(ms)+' · '+fmtTimeUTC(ms); }
+function fmtTimeDualShort(ms){ return fmtTimeEDTShort(ms)+' · '+fmtTimeUTCShort(ms); }
+function fmtDateTimeDual(ms){
+  var local = '';
+  try{
+    local = new Date(ms).toLocaleString('en-US',{
+      timeZone:'America/New_York',month:'short',day:'numeric',
+      hour:'2-digit',minute:'2-digit',hour12:false,timeZoneName:'short'
+    });
+  }catch(e){ local = ''; }
+  var d=new Date(ms);
+  var p=function(n){return String(n).padStart(2,'0');};
+  var mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var utc=mo[d.getUTCMonth()]+' '+d.getUTCDate()+', '+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+' UTC';
+  return local+' · '+utc;
+}
+// Hour-of-day bucketing in EDT/EST (for the heatmap)
+function getEDTHour(ms){
+  try{
+    var s=new Date(ms).toLocaleString('en-US',{timeZone:'America/New_York',hour:'2-digit',hour12:false});
+    return parseInt(s,10) % 24;  // "24" can happen at midnight transition in some locales
+  }catch(e){ return new Date(ms).getUTCHours(); }
+}
+
 var mechCfg = {
   rollingDays: 90,
   discoveryMinN: 10,
@@ -2782,7 +2895,7 @@ function renderAnalysisPage(){
   var byHour = {};
   for(var h=0;h<24;h++) byHour[h] = {n:0, wins:0, pnl:0};
   closed.forEach(function(t){
-    var hr = new Date(t.loggedAt).getUTCHours();
+    var hr = getEDTHour(t.loggedAt);
     byHour[hr].n++;
     if((t.finalPnlUsd||0) > 0) byHour[hr].wins++;
     byHour[hr].pnl += (t.finalPnlUsd||0);
@@ -2797,9 +2910,9 @@ function renderAnalysisPage(){
              pnl < 0 ? 'rgba(255,82,119,' + (.15 + intensity*.5) + ')' :
              'var(--s3)';
     var color = bucket.n > 0 ? 'var(--hi)' : 'var(--faint)';
-    var title = String(h2).padStart(2,'0') + ':00 UTC — ' + bucket.n + ' entries' +
+    var title = String(h2).padStart(2,'0') + ':00 EDT/EST (' + String((h2+4)%24).padStart(2,'0') + ':00–' + String((h2+5)%24).padStart(2,'0') + ':00 UTC depending on DST) — ' + bucket.n + ' entries' +
                 (bucket.n ? ' · ' + Math.round(bucket.wins/bucket.n*100) + '% win · ' + (pnl>=0?'+$':'-$') + Math.abs(pnl).toFixed(0) : '');
-    hmHtml += '<div class="hour-cell ' + cls + '" style="background:' + bg + ';color:' + color + ';" title="' + title + '">' + bucket.n + '</div>';
+    hmHtml += '<div class="hour-cell ' + cls + '" style="background:' + bg + ';color:' + color + ';" title="' + title + '" onclick="openDrilldownByHour(' + h2 + ')">' + bucket.n + '</div>';
   }
   hmHtml += '</div><div class="hour-row">';
   for(var h3=0;h3<24;h3++){ hmHtml += '<div class="hour-cell-label">' + h3 + '</div>'; }
@@ -2821,7 +2934,7 @@ function renderAnalysisPage(){
   rows.forEach(function(r){
     var wr = r.n ? (r.wins/r.n*100).toFixed(0) : '0';
     var mean = r.n ? (r.pnl/r.n) : 0;
-    tableHtml += '<tr>' +
+    tableHtml += '<tr data-mech-key="' + (r.mech+'|'+r.dir) + '" onclick="openDrilldownByMech(' + JSON.stringify(r.mech) + ',' + JSON.stringify(r.dir) + ')">' +
       '<td>' + r.mech + '</td>' +
       '<td class="dir-' + r.dir.toLowerCase() + '">' + r.dir + '</td>' +
       '<td class="num">' + r.n + '</td>' +
@@ -2837,29 +2950,6 @@ function renderAnalysisPage(){
   tableHtml += '</tbody></table>';
   document.getElementById('mech-table-container').innerHTML = tableHtml;
 
-  // Storage breakdown table — shows each localStorage key with its size and a
-  // risk-level color (high = trading data, low = regenerable / cosmetic).
-  var breakdown = getLocalStorageBreakdown();
-  var totalBytes = breakdown.reduce(function(a,r){return a + r.size;}, 0);
-  var bdHtml = '<table class="mech-table"><thead><tr><th>Key</th><th>What it stores</th><th class="num">Size</th><th class="num">% of total</th></tr></thead><tbody>';
-  breakdown.forEach(function(r){
-    var pct = totalBytes ? (r.size/totalBytes*100).toFixed(1) : '0';
-    var color = r.danger==='high' ? 'var(--red)' : r.danger==='medium' ? 'var(--amber)' : 'var(--faint)';
-    var sizeStr = r.size > 1024*1024 ? (r.size/1024/1024).toFixed(2)+' MB' :
-                  r.size > 1024 ? (r.size/1024).toFixed(1)+' KB' :
-                  r.size + ' B';
-    bdHtml += '<tr>' +
-      '<td style="font-family:var(--font-mono);font-size:10px;color:' + color + ';">' + r.key + '</td>' +
-      '<td style="font-size:11px;">' + r.description + '</td>' +
-      '<td class="num">' + sizeStr + '</td>' +
-      '<td class="num">' + pct + '%</td>' +
-      '</tr>';
-  });
-  if(!breakdown.length){
-    bdHtml += '<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--muted);">localStorage is empty</td></tr>';
-  }
-  bdHtml += '</tbody></table>';
-  document.getElementById('storage-breakdown-container').innerHTML = bdHtml;
 }
 
 // CSV export — same column set as the trading-tracker CSV so analysis can be
@@ -3548,10 +3638,7 @@ function editEntry(id,newVal){
   saveTracker();renderTracker();
 }
 // v16ab — format helpers for MFE/MAE timestamps
-function fmtClock(ts){
-  var d=new Date(ts);var pad=function(n){return String(n).padStart(2,'0');};
-  return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())+':'+pad(d.getUTCSeconds())+' UTC';
-}
+function fmtClock(ts){ return fmtTimeDual(ts); }
 function fmtAgo(extremeAt,tradeStart){
   var ms=extremeAt-tradeStart;
   if(ms<0)return '0m 0s';
@@ -3739,7 +3826,7 @@ async function pollPrices(){
       changed=true;
     });
     try{updateAnalysisLogFromPrices(byBase);}catch(e){console.warn('[Acress AutoLog poll]',e.message);}
-    if(pollEl){var ts=new Date();pollEl.textContent='updated '+updated+'/'+open.length+' · '+String(ts.getUTCHours()).padStart(2,'0')+':'+String(ts.getUTCMinutes()).padStart(2,'0')+':'+String(ts.getUTCSeconds()).padStart(2,'0')+' UTC';}
+    if(pollEl){var ts=new Date();pollEl.textContent='updated '+updated+'/'+open.length+' · '+fmtTimeDual(ts.getTime());}
     if(changed){saveTracker();renderTracker();}
     console.log('[Acress] Poll cycle complete: '+updated+'/'+open.length+' trades updated');
   }catch(e){
@@ -4410,6 +4497,223 @@ function updateCrossSummary(){
   };
 })();
 
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Settings modal
+// ════════════════════════════════════════════════════════════════════
+function openSettingsModal(){
+  var bg=document.getElementById('settings-modal-bg');
+  if(bg){ bg.classList.add('open'); renderSettingsModal(); }
+}
+function closeSettingsModal(){
+  var bg=document.getElementById('settings-modal-bg');
+  if(bg) bg.classList.remove('open');
+}
+function renderSettingsModal(){
+  var ct=document.getElementById('settings-current-time');
+  if(ct) ct.textContent = fmtTimeDual(Date.now());
+  var bd=document.getElementById('settings-storage-breakdown');
+  if(!bd) return;
+  var breakdown = getLocalStorageBreakdown();
+  var totalBytes = breakdown.reduce(function(a,r){return a + r.size;}, 0);
+  var html = '<table class="mech-table"><thead><tr><th>Key</th><th>What it stores</th><th class="num">Size</th><th class="num">% of total</th></tr></thead><tbody>';
+  breakdown.forEach(function(r){
+    var pct = totalBytes ? (r.size/totalBytes*100).toFixed(1) : '0';
+    var color = r.danger==='high' ? 'var(--red)' : r.danger==='medium' ? 'var(--amber)' : 'var(--faint)';
+    var sizeStr = r.size > 1024*1024 ? (r.size/1024/1024).toFixed(2)+' MB' :
+                  r.size > 1024 ? (r.size/1024).toFixed(1)+' KB' :
+                  r.size + ' B';
+    html += '<tr>' +
+      '<td style="font-family:var(--font-mono);font-size:10px;color:' + color + ';">' + r.key + '</td>' +
+      '<td style="font-size:11px;">' + r.description + '</td>' +
+      '<td class="num">' + sizeStr + '</td>' +
+      '<td class="num">' + pct + '%</td>' +
+      '</tr>';
+  });
+  if(!breakdown.length) html += '<tr><td colspan="4" style="padding:14px;text-align:center;color:var(--muted);">localStorage is empty</td></tr>';
+  html += '</tbody></table>';
+  bd.innerHTML = html;
+}
+// Close on Escape key
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeSettingsModal(); });
+
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Analysis drill-down: click hour cell or mech row → cards.
+// Capped at DRILLDOWN_INITIAL most-recent for performance, with show-more.
+// ════════════════════════════════════════════════════════════════════
+var DRILLDOWN_INITIAL = 50;
+var DRILLDOWN_INCREMENT = 50;
+var drilldownState = {
+  bucket: null,  // {type:'hour'|'mech', key:..., label:..., entries:[...], shown:N}
+};
+
+function openDrilldownByHour(hour){
+  var entries = analysisLog.filter(function(t){
+    return t.status !== 'open' && getEDTHour(t.loggedAt) === hour;
+  });
+  entries.sort(function(a,b){return (b.closedAt||b.loggedAt) - (a.closedAt||a.loggedAt);});
+  drilldownState.bucket = {
+    type: 'hour', key: hour,
+    label: String(hour).padStart(2,'0') + ':00 EDT/EST',
+    entries: entries, shown: DRILLDOWN_INITIAL,
+  };
+  // Highlight selected hour
+  document.querySelectorAll('.hour-cell.selected').forEach(function(c){c.classList.remove('selected');});
+  var cells = document.querySelectorAll('.hour-cell');
+  if(cells[hour]) cells[hour].classList.add('selected');
+  renderDrilldown();
+}
+
+function openDrilldownByMech(mech, dir){
+  var entries = analysisLog.filter(function(t){
+    return t.status !== 'open' && (t.mech||'(none)') === mech && (t.dir||'?') === dir;
+  });
+  entries.sort(function(a,b){return (b.closedAt||b.loggedAt) - (a.closedAt||a.loggedAt);});
+  drilldownState.bucket = {
+    type: 'mech', key: mech+'|'+dir,
+    label: mech + ' · ' + dir,
+    entries: entries, shown: DRILLDOWN_INITIAL,
+  };
+  // Highlight selected row (manual scan — CSS.escape isn't universal)
+  document.querySelectorAll('.mech-table tbody tr.selected').forEach(function(r){r.classList.remove('selected');});
+  var key = mech+'|'+dir;
+  document.querySelectorAll('.mech-table tbody tr[data-mech-key]').forEach(function(r){
+    if(r.getAttribute('data-mech-key') === key) r.classList.add('selected');
+  });
+  renderDrilldown();
+}
+
+function closeDrilldown(){
+  drilldownState.bucket = null;
+  var p=document.getElementById('drilldown-panel'); if(p) p.classList.remove('open');
+  document.querySelectorAll('.hour-cell.selected, .mech-table tbody tr.selected').forEach(function(el){el.classList.remove('selected');});
+}
+
+function renderDrilldown(){
+  var p=document.getElementById('drilldown-panel');
+  var titleEl=document.getElementById('drilldown-title');
+  var metaEl=document.getElementById('drilldown-meta');
+  var cardsEl=document.getElementById('drilldown-cards');
+  if(!p||!cardsEl||!drilldownState.bucket) return;
+  var b = drilldownState.bucket;
+  p.classList.add('open');
+  titleEl.textContent = b.label;
+  // Aggregate quick stats for this bucket
+  var wins = b.entries.filter(function(t){return (t.finalPnlUsd||0)>0;}).length;
+  var totalPnl = b.entries.reduce(function(a,t){return a+(t.finalPnlUsd||0);},0);
+  var wr = b.entries.length ? (wins/b.entries.length*100).toFixed(0) : '0';
+  metaEl.textContent = b.entries.length + ' closed entries · ' + wr + '% win · '
+                     + (totalPnl>=0?'+$':'-$') + Math.abs(totalPnl).toFixed(0) + ' net · showing '
+                     + Math.min(b.shown, b.entries.length) + ' most recent';
+  // Render cards (capped at b.shown)
+  var visible = b.entries.slice(0, b.shown);
+  var html = visible.map(function(t){
+    var dirCls = (t.dir||'').toLowerCase();
+    var statusCls = t.status || 'open';
+    var pnl = t.finalPnlUsd || 0;
+    var pnlCls = pnl>0?'pos':pnl<0?'neg':'';
+    var pnlStr = (pnl>=0?'+$':'-$')+Math.abs(pnl).toFixed(2);
+    var mfe = t.maxFavPct ? '+'+t.maxFavPct.toFixed(2)+'%' : '—';
+    var mae = t.maxAdvPct ? t.maxAdvPct.toFixed(2)+'%' : '—';
+    return '<div class="dd-card">'
+      + '<div class="row1">'
+        + '<span><span class="sym">'+(t.base||'?')+'</span> <span class="dir-'+dirCls+'">'+(t.dir||'?')+'</span></span>'
+        + '<span class="score">'+(t.score||0)+'</span>'
+        + '<span class="status '+statusCls+'">'+statusCls+'</span>'
+      + '</div>'
+      + '<div class="mech">'+(t.mech||'—')+'</div>'
+      + '<div class="stats">'
+        + '<div><div class="lbl">PnL</div><div class="val '+pnlCls+'">'+pnlStr+'</div></div>'
+        + '<div><div class="lbl">MFE</div><div class="val pos">'+mfe+'</div></div>'
+        + '<div><div class="lbl">MAE</div><div class="val neg">'+mae+'</div></div>'
+      + '</div>'
+      + '<div class="time">logged '+fmtDateTimeDual(t.loggedAt)+(t.closedAt?' · closed '+fmtTimeDualShort(t.closedAt):'')+'</div>'
+    + '</div>';
+  }).join('');
+  if(b.entries.length > b.shown){
+    html += '<button class="show-more-btn" onclick="showMoreDrilldown()">Show '+Math.min(DRILLDOWN_INCREMENT, b.entries.length-b.shown)+' more · '+(b.entries.length-b.shown)+' remaining</button>';
+  }
+  cardsEl.innerHTML = html || '<div style="padding:30px;text-align:center;color:var(--muted);">No closed entries in this bucket.</div>';
+}
+
+function showMoreDrilldown(){
+  if(!drilldownState.bucket) return;
+  drilldownState.bucket.shown += DRILLDOWN_INCREMENT;
+  renderDrilldown();
+}
+
+function downloadDrilldownCSV(){
+  if(!drilldownState.bucket || !drilldownState.bucket.entries.length){
+    toast('Nothing to export in this bucket','warn'); return;
+  }
+  var entries = drilldownState.bucket.entries;
+  var cols = ['id','sym','base','dir','status','score','mech','mechanismType',
+    'regimeAtLog','oiStageAtLog','oiAggregated','chg24AtLog',
+    'entryPrice','stopPrice','tpPrice','positionSize','leverage','riskPct',
+    'loggedAt_EDT','loggedAt_UTC','closedAt_EDT','closedAt_UTC',
+    'currentPnlPct','finalPnlPct','finalPnlUsd',
+    'maxFavPct','maxFavPrice','maxAdvPct','maxAdvPrice',
+    'holdHours','holdSource','reasonsJoined'];
+  var iso=function(ms){return ms?new Date(ms).toISOString():'';};
+  var edt=function(ms){return ms?fmtTimeEDT(ms):'';};
+  var rows = [cols.join(',')];
+  entries.forEach(function(t){
+    var reasons = (t.reasons||[]).map(function(r){return r.tag+':'+(r.text||'').replace(/[,\n]/g,' ');}).join(' | ');
+    rows.push(cols.map(function(c){
+      var v;
+      if(c==='loggedAt_EDT') v=edt(t.loggedAt);
+      else if(c==='loggedAt_UTC') v=iso(t.loggedAt);
+      else if(c==='closedAt_EDT') v=edt(t.closedAt);
+      else if(c==='closedAt_UTC') v=iso(t.closedAt);
+      else if(c==='reasonsJoined') v=reasons;
+      else v=t[c];
+      if(v==null) return '';
+      var sv=String(v);
+      return /[,"\n]/.test(sv) ? '"'+sv.replace(/"/g,'""')+'"' : sv;
+    }).join(','));
+  });
+  var blob = new Blob([rows.join('\n')],{type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var safe = drilldownState.bucket.label.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40);
+  var stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'acress-drilldown-'+safe+'-v16b-'+stamp+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);}, 5000);
+  toast('Exported ' + entries.length + ' entries (' + drilldownState.bucket.label + ')','ok');
+}
+
 </script>
+
+<div class="settings-modal-bg" id="settings-modal-bg" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="settings-modal">
+    <div class="settings-modal-head">
+      <div class="settings-modal-title">⚙ Settings · Storage Management</div>
+      <button class="settings-modal-close" onclick="closeSettingsModal()" title="Close (Esc)">×</button>
+    </div>
+    <div class="settings-modal-body">
+      <div class="settings-section">
+        <h4>🗄️ Storage breakdown — what's using your localStorage capacity</h4>
+        <div id="settings-storage-breakdown"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button class="pc-act" onclick="pruneAnalysisEntries(60*60*1000,'>1 hour');renderSettingsModal();" title="Remove closed analysis entries older than 1 hour">🗑 Prune &gt;1h</button>
+          <button class="pc-act" onclick="pruneAnalysisEntries(24*60*60*1000,'>1 day');renderSettingsModal();" title="Remove closed analysis entries older than 1 day">🗑 Prune &gt;24h</button>
+          <button class="pc-act" onclick="clearOldAnalysisEntries();renderSettingsModal();" title="Remove closed analysis entries older than 7 days">🗑 Prune &gt;7d</button>
+          <button class="pc-act" onclick="clearAllAnalysisEntries();renderSettingsModal();" title="Wipe the ENTIRE analysis log (trading tracker unaffected)" style="color:var(--red);border-color:rgba(255,82,119,.5);">💣 Clear ALL analysis</button>
+          <button class="pc-act" onclick="clearZBuffers();renderSettingsModal();" title="Clear Z-score baselines (regenerates from next scan — safe)">♻ Clear z-buffers</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h4>⏱️ Time display</h4>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.6;">
+          Times are shown in <span style="color:var(--cyan)">EDT/EST</span> (your local) followed by <span style="color:var(--cyan)">UTC</span> as secondary. DST is handled automatically.<br>
+          Current: <span id="settings-current-time" style="color:var(--hi);"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
