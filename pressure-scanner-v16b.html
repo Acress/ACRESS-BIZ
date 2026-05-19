@@ -665,7 +665,7 @@ input{font-family:var(--font-ui);}
     <button class="page-tab" data-page="tracker" onclick="switchPage('tracker')">📊 Performance Tracker <span class="badge" id="nav-tracker-badge">0</span></button>
     <button class="page-tab" data-page="analysis" onclick="switchPage('analysis')">📈 ANALYSIS <span class="badge" id="nav-analysis-badge">0</span></button>
   </nav>
-  <div class="hdr-right"><span class="profile-pill" style="color:#f0b341;border-color:#f0b341;background:rgba(240,179,65,.12);">V16B · EXPERIMENTAL</span>
+  <div class="hdr-right"><span class="profile-pill" style="color:#41d1ff;border-color:#41d1ff;background:rgba(65,209,255,.12);">V16A · TRUSTED</span>
     <span class="hdr-clock" id="clock"></span>
     <span class="hdr-status" id="status">Idle</span>
     <button class="settings-toggle" id="btn-open-settings" onclick="openSettingsModal()" title="Settings · storage management">⚙</button>
@@ -953,7 +953,7 @@ input{font-family:var(--font-ui);}
 </div>
 
 
-<div class="foot">Acress · Pressure Scanner · v16b · experimental · isolated storage · MFE/MAE timestamps · mechanism filters · CSV export</div>
+<div class="foot">Acress · Pressure Scanner · v16a · trusted · isolated storage · MFE/MAE timestamps · mechanism filters · CSV export</div>
 
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────
@@ -972,7 +972,7 @@ var clockTimer=null;
 var scoreRange={min:60,max:100};
 var scoreThreshold=60;
 try{var __sr=localStorage.getItem('acress_score_range');if(__sr){var __p=JSON.parse(__sr);if(__p&&typeof __p.min==='number'&&typeof __p.max==='number'){scoreRange=__p;scoreThreshold=__p.min;}}}catch(e){}
-var tracker=JSON.parse(localStorage.getItem('acress_pressure_log_v16b')||'[]');
+var tracker=JSON.parse(localStorage.getItem('acress_pressure_log_v16a')||'[]');
 var watchlist=JSON.parse(localStorage.getItem('acress_watchlist')||'[]');
 var scanMode=localStorage.getItem('acress_scan_mode')||'market';
 var validSymbolSet=null; // cached set of valid USDT perp bases from Binance
@@ -1537,8 +1537,8 @@ function applyRegimeFilter(signal){
 // equally meaningful on BTC and on a low-cap.
 // ════════════════════════════════════════════════════════════════════
 var zBuffers={};
-try{zBuffers=JSON.parse(localStorage.getItem('acress_v16b_zbuf')||'{}');}catch(e){zBuffers={};}
-function saveZBuffers(){try{localStorage.setItem('acress_v16b_zbuf',JSON.stringify(zBuffers));}catch(e){}}
+try{zBuffers=JSON.parse(localStorage.getItem('acress_v16a_zbuf')||'{}');}catch(e){zBuffers={};}
+function saveZBuffers(){try{localStorage.setItem('acress_v16a_zbuf',JSON.stringify(zBuffers));}catch(e){}}
 function getBaseline(base,metric){
   var key=base+'_'+metric;
   if(!zBuffers[key])zBuffers[key]={vals:[],updated:0};
@@ -1674,68 +1674,6 @@ function gateOI(klines5m,oiHist){
     transition:transition,
     detail:'Price '+fPct(recent.pCh,2)+' / OI '+fPct(recent.oiCh,2)+' — '+recent.desc+(transition?' · '+transition.desc:'')
   };
-}
-
-// ════════════════════════════════════════════════════════════════════
-// v16+ — OI VELOCITY & ACCELERATION (second derivatives)
-// Distinguishes early-stage continuations (OI accelerating) from late-stage
-// ones (OI decelerating). A continuation signal where OI is rising but the
-// RATE of rising is slowing is "running out of fuel" — exactly the failure
-// mode in batch-3 where high-score signals lost more than low-score ones.
-//
-// Returns: { velocity, prevVelocity, acceleration }
-// where velocity = % change in OI over the most recent 30 min
-//       prevVelocity = % change in OI in the 30 min before that
-//       acceleration = velocity − prevVelocity
-//                      (positive = accelerating, negative = decelerating)
-// ════════════════════════════════════════════════════════════════════
-function computeOIDerivatives(oiHist){
-  if(!oiHist||oiHist.length<13)return null;
-  var m=oiHist.length;
-  var oiNow=parseFloat(oiHist[m-1].sumOpenInterest);
-  var oi30=parseFloat(oiHist[m-7].sumOpenInterest);
-  var oi60=parseFloat(oiHist[m-13].sumOpenInterest);
-  if(!oiNow||!oi30||!oi60)return null;
-  var v1=(oiNow-oi30)/oi30*100;        // last 30 min % change
-  var v0=(oi30-oi60)/oi60*100;          // prior 30 min % change
-  var accel=v1-v0;
-  return{velocity:v1,prevVelocity:v0,acceleration:accel};
-}
-
-// Apply OI velocity / acceleration to a scored signal.
-// For continuation-class signals only:
-//   - If OI moving with-trend AND accelerating → early-stage, boost slightly
-//   - If OI moving with-trend BUT decelerating → late-stage, downgrade
-//   - If OI moving against trend (e.g. shorts adding to a long continuation) → noise
-//
-// Designed conservatively: only fires when the deceleration is meaningful
-// (acceleration < -0.4 for long continuations, > +0.4 for short continuations).
-function applyOIVelocityCheck(result,oiDerivs){
-  if(!result||!oiDerivs||!result.mechanism)return;
-  if(result.mechanism.type!=='continuation')return;
-  var v=oiDerivs.velocity,a=oiDerivs.acceleration;
-  if(!isFinite(v)||!isFinite(a))return;
-  var late=false,early=false,reason='';
-  if(result.dir==='LONG'){
-    if(v>0.05&&a<-0.4){late=true;reason='OI rising '+v.toFixed(2)+'% but DECELERATING '+a.toFixed(2)+'% — long continuation losing fuel';}
-    else if(v>0.05&&a>0.4){early=true;reason='OI rising '+v.toFixed(2)+'% and ACCELERATING +'+a.toFixed(2)+'% — long continuation gaining fuel';}
-    else if(v<-0.05){late=true;reason='OI falling '+v.toFixed(2)+'% during long continuation — contradicts thesis';}
-  }else if(result.dir==='SHORT'){
-    if(v<-0.05&&a>0.4){late=true;reason='OI falling '+v.toFixed(2)+'% but DECELERATING +'+a.toFixed(2)+'% — short continuation losing fuel';}
-    else if(v<-0.05&&a<-0.4){early=true;reason='OI falling '+v.toFixed(2)+'% and ACCELERATING '+a.toFixed(2)+'% — short continuation gaining fuel';}
-    else if(v>0.05){late=true;reason='OI rising +'+v.toFixed(2)+'% during short continuation — contradicts thesis';}
-  }
-  if(late){
-    result.score=Math.max(0,result.score-12);
-    result.reasons.push({lvl:'weak',tag:'OI-VEL',text:reason});
-    result.lateStageOI=true;
-  }else if(early){
-    result.score=Math.min(100,result.score+6);
-    result.reasons.push({lvl:'ok',tag:'OI-VEL',text:reason});
-    result.earlyStageOI=true;
-  }
-  result.oiVelocity=v;
-  result.oiAcceleration=a;
 }
 
 // ── GATE 2: Sustained Taker Imbalance ─────────────────────────────
@@ -2101,11 +2039,6 @@ async function analyzeCoin(symObj){
     var ctx=probable?gateContext(prem,probable):null;
     var result=scoreCoin(gates,ctx);
     if(!result)return null;
-    // v16+ — OI VELOCITY CHECK for continuation signals
-    // Catches late-stage continuations where OI is still moving in the
-    // expected direction but the RATE is slowing (running out of fuel).
-    var oiDerivs=computeOIDerivatives(oi);
-    if(oiDerivs)applyOIVelocityCheck(result,oiDerivs);
     // v16 — apply ABSORPTION GATE for reversal-class signals
     // Reversals require absorption confirmation. Without it, they're
     // catching falling knives. This is the single biggest precision fix.
@@ -2145,8 +2078,6 @@ async function analyzeCoin(symObj){
       mechanism:result.mechanism,reasons:result.reasons,
       regimeKind:result.regimeKind,regimeAction:result.regimeAction,
       absorbed:result.absorbed,
-      oiVelocity:result.oiVelocity,oiAcceleration:result.oiAcceleration,
-      lateStageOI:result.lateStageOI,earlyStageOI:result.earlyStageOI,
       atr5m:atr5m,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -2302,9 +2233,6 @@ async function analyzeCoinDiag(symObj,diag){
     var ctx=probable?gateContext(prem,probable):null;
     var result=scoreCoin(gates,ctx);
     if(!result)return null;
-    // v16+ — OI velocity check (continuation late-stage filter)
-    var oiDerivs=computeOIDerivatives(oiResult.oi);
-    if(oiDerivs)applyOIVelocityCheck(result,oiDerivs);
     // v16 — Absorption gate for reversal-class signals
     var mech=result.mechanism||{};
     if(mech.type==='reversal'){
@@ -2335,8 +2263,6 @@ async function analyzeCoinDiag(symObj,diag){
       mechanism:result.mechanism,reasons:result.reasons,
       regimeKind:marketRegime.kind,regimeAction:regimeAction.action,
       absorbed:result.absorbed,
-      oiVelocity:result.oiVelocity,oiAcceleration:result.oiAcceleration,
-      lateStageOI:result.lateStageOI,earlyStageOI:result.earlyStageOI,
       atr5m:atr5m,
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
@@ -2711,8 +2637,8 @@ var analysisLog = [];
 var autoLogMode = false;
 var autoLogScanTimer = null;
 var wakeLockSentinel = null;
-var ANALYSIS_LOG_KEY = 'acress_analysis_log_v16b';
-var ANALYSIS_MODE_KEY = 'acress_auto_log_mode_v16b';
+var ANALYSIS_LOG_KEY = 'acress_analysis_log_v16a';
+var ANALYSIS_MODE_KEY = 'acress_auto_log_mode_v16a';
 var ANALYSIS_DEDUP_MS = 60 * 60 * 1000;  // 1 hour
 var ANALYSIS_SCAN_MS = 5 * 60 * 1000;    // 5-min auto-scan
 var LOCAL_STORAGE_SOFT_CAP = 5 * 1024 * 1024;  // 5 MB conservative cap
@@ -3024,7 +2950,7 @@ function exportAnalysisLogCSV(){
   var url = URL.createObjectURL(blob);
   var stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
   var a = document.createElement('a');
-  a.href = url; a.download = 'acress-analysis-log-v16b-' + stamp + '.csv';
+  a.href = url; a.download = 'acress-analysis-log-v16a-' + stamp + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);}, 5000);
   toast('Exported ' + analysisLog.length + ' analysis entries','ok');
@@ -3062,7 +2988,7 @@ function clearAllAnalysisEntries(){
 }
 function clearZBuffers(){
   try{
-    var key = 'acress_v16' + ('v16b'.includes('a')?'a':'b') + '_zbuf';
+    var key = 'acress_v16' + ('v16a'.includes('a')?'a':'b') + '_zbuf';
     localStorage.removeItem(key);
     if(typeof zBuffers!=='undefined') zBuffers = {};
     toast('Z-score baselines cleared (regenerates from next scan)','ok');
@@ -3242,8 +3168,8 @@ function startCardTimers(){
 
 // ══ TRACKER v7 — Live Performance ══════════════════════════════════
 var trackerCfg={position:100,leverage:10,risk:10,fee:4,hold:(25/60),takeProfit:4};
-try{var savedCfg=JSON.parse(localStorage.getItem('acress_tk_cfg_v16b')||'null');if(savedCfg)trackerCfg=Object.assign(trackerCfg,savedCfg);}catch(e){}
-function saveTkCfg(){localStorage.setItem('acress_tk_cfg_v16b',JSON.stringify(trackerCfg));}
+try{var savedCfg=JSON.parse(localStorage.getItem('acress_tk_cfg_v16a')||'null');if(savedCfg)trackerCfg=Object.assign(trackerCfg,savedCfg);}catch(e){}
+function saveTkCfg(){localStorage.setItem('acress_tk_cfg_v16a',JSON.stringify(trackerCfg));}
 function onTkCfgChange(){
   trackerCfg.position=parseFloat(document.getElementById('cfg-position').value)||100;
   trackerCfg.leverage=parseFloat(document.getElementById('cfg-leverage').value)||10;
@@ -3320,17 +3246,9 @@ function updateDerivedDisplay(){
   var notional=trackerCfg.position*trackerCfg.leverage;
   var tpReward=notional*trackerCfg.takeProfit/100;
   var rr=(trackerCfg.takeProfit/stopPct).toFixed(2);
-  // v16+ — Risk sanity warning when stop is unreasonably wide or RRR is upside-down
-  var warnHtml='';
-  if(stopPct>5){
-    warnHtml=' · <span style="color:var(--red);font-weight:800;">⚠ Stop is '+stopPct.toFixed(1)+'% wide — near liquidation. Set Risk to 10 for a 0.96% stop.</span>';
-  }else if(parseFloat(rr)<1){
-    warnHtml=' · <span style="color:var(--amber);font-weight:700;">⚠ R:R '+rr+':1 inverted (stop wider than TP)</span>';
-  }
-  document.getElementById('tk-cfg-derived').innerHTML='Stop <strong>'+stopPct.toFixed(3)+'%</strong> ($'+riskUsd.toFixed(2)+' risk) · TP <strong>'+trackerCfg.takeProfit+'%</strong> ($'+tpReward.toFixed(2)+' target) · R:R <strong>'+rr+':1</strong> · notional $'+notional.toFixed(0)+warnHtml;
-  // v16ab — mirror to scanner-side derived display
+  document.getElementById('tk-cfg-derived').innerHTML='Stop <strong>'+stopPct.toFixed(3)+'%</strong> ($'+riskUsd.toFixed(2)+' risk) · TP <strong>'+trackerCfg.takeProfit+'%</strong> ($'+tpReward.toFixed(2)+' target) · R:R <strong>'+rr+':1</strong> · notional $'+notional.toFixed(0);
   var scanDerived=document.getElementById('scan-tk-derived');
-  if(scanDerived)scanDerived.innerHTML='Stop <strong>'+stopPct.toFixed(3)+'%</strong> · TP <strong>'+trackerCfg.takeProfit+'%</strong> · R:R <strong>'+rr+':1</strong> · notional $'+notional.toFixed(0)+warnHtml;
+  if(scanDerived)scanDerived.innerHTML='Stop <strong>'+stopPct.toFixed(3)+'%</strong> · TP <strong>'+trackerCfg.takeProfit+'%</strong> · R:R <strong>'+rr+':1</strong> · notional $'+notional.toFixed(0)+';';
 }
 function computeStopPct(){
   // Adverse price move at which stop is triggered.
@@ -3519,9 +3437,6 @@ function logToTracker(s){
     regimeAction:s.regimeAction||null,
     absorbed:s.absorbed,
     atrAtLog:s.atr5m,
-    oiVelocityAtLog:s.oiVelocity,
-    oiAccelerationAtLog:s.oiAcceleration,
-    oiStageAtLog:s.lateStageOI?'late':s.earlyStageOI?'early':null,
     oiAggregated:s.oiAggregated,
     // v16ab — capture OI stage + adaptive hold time.
     // Late-stage signals get a shorter (20-min) hold because data
@@ -3547,7 +3462,7 @@ function logToTracker(s){
   if(tracker.length>5000)tracker=tracker.slice(0,5000); // v16ab — raised from 50; CSV export covers history concerns
   saveTracker();renderTracker();
 }
-function saveTracker(){invalidateMechanismStats();localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(tracker));try{renderTrackerSummary();}catch(e){}}
+function saveTracker(){invalidateMechanismStats();localStorage.setItem('acress_pressure_log_v16a',JSON.stringify(tracker));try{renderTrackerSummary();}catch(e){}}
 function clearTracker(){if(!tracker.length)return;if(confirm('Clear '+tracker.length+' tracked signals?')){tracker=[];saveTracker();renderTracker();}}
 function removeFromTracker(id){tracker=tracker.filter(function(t){return t.id!==id;});saveTracker();renderTracker();}
 
@@ -3620,48 +3535,8 @@ function migrateTracker(){
   if(dropped>0||Object.keys(droppedReasons).length>0){
     console.warn('[Acress] Tracker migration: kept '+after+', dropped '+dropped+', reasons:',droppedReasons);
   }
-  // v16+ — retroactive wick reclassification
-  // For trades marked 'expired' but whose priceHistory actually breached the
-  // stop or TP at some point, reclassify them as stopped/target. The original
-  // poll-cycle may have missed the wick because /ticker/24hr only returns
-  // lastPrice, not bar high/low.
-  var reclassified=0;
-  tracker.forEach(function(t){
-    if(t.status!=='expired'||!t.priceHistory||t.priceHistory.length<2)return;
-    if(!t.stopPrice||!t.tpPrice)return;
-    var hitStopIdx=-1,hitTpIdx=-1;
-    for(var i=0;i<t.priceHistory.length;i++){
-      var p=t.priceHistory[i].p;
-      if(t.dir==='LONG'){
-        if(hitStopIdx<0&&p<=t.stopPrice)hitStopIdx=i;
-        if(hitTpIdx<0&&p>=t.tpPrice)hitTpIdx=i;
-      }else{
-        if(hitStopIdx<0&&p>=t.stopPrice)hitStopIdx=i;
-        if(hitTpIdx<0&&p<=t.tpPrice)hitTpIdx=i;
-      }
-    }
-    // Earlier-occurring outcome wins (whichever fired first)
-    var first=null;
-    if(hitStopIdx>=0&&(hitTpIdx<0||hitStopIdx<hitTpIdx))first='stopped';
-    else if(hitTpIdx>=0)first='target';
-    if(first){
-      var hitIdx=first==='stopped'?hitStopIdx:hitTpIdx;
-      var hitPrice=first==='stopped'?t.stopPrice:t.tpPrice;
-      t.status=first;
-      t.closedAt=t.priceHistory[hitIdx].t;
-      t.closedPrice=hitPrice;
-      // Recompute final PnL relative to closed price
-      var move=t.dir==='LONG'?(hitPrice-t.entryPrice)/t.entryPrice:(t.entryPrice-hitPrice)/t.entryPrice;
-      t.finalPnlPct=move*100;
-      t.finalPnlUsd=move*(t.positionSize||trackerCfg.position)*(t.leverage||trackerCfg.leverage);
-      classifyShape(t);
-      reclassified++;
-      console.log('[Acress v16+] Retroactive reclassify:',t.base,t.dir,'expired →',first,'@',hitPrice,'(detected from priceHistory)');
-    }
-  });
-  if(reclassified>0)console.log('[Acress v16+] Reclassified',reclassified,'expired trades to stopped/target based on priceHistory breach');
-  if(before!==after||tracker.some(function(t){return t._migrated!=='v16b-armed';})){
-    tracker.forEach(function(t){t._migrated='v16b-armed';});
+  if(before!==after||tracker.some(function(t){return t._migrated!=='v16a-armed';})){
+    tracker.forEach(function(t){t._migrated='v16a-armed';});
     saveTracker();
   }
 }
@@ -3699,9 +3574,7 @@ function updatePnl(t){
   if(move*100<t.maxAdvPct){t.maxAdvPct=move*100;t.maxAdvPrice=t.currentPrice;t.maxAdvAt=now;}
 }
 
-// Live price polling — single ticker/24hr call covers ALL open trades.
-// v16+ — Also fetches recent 1m klines per open trade so wicks that
-// pierced stop or TP between two ticker-polls are still detected.
+// Live price polling — single ticker/24hr call covers ALL open trades
 var pollTimer=null;
 async function pollPrices(){
   var open=tracker.filter(function(t){return t.status==='open';});
@@ -3714,28 +3587,6 @@ async function pollPrices(){
     var byBase={};
     if(Array.isArray(d))d.forEach(function(t){if(t.symbol.endsWith('USDT'))byBase[t.symbol.slice(0,-4)]=parseFloat(t.lastPrice);});
     var now=Date.now(),changed=false,updated=0;
-    // v16+ — kline-based wick detection
-    // For each open trade, fetch the last 3 minutes of 1m klines. The HIGH
-    // and LOW of each bar reveal wicks that the lastPrice didn't capture.
-    // This catches the "price wicked through stop and recovered before next
-    // poll" failure mode. Fired only for trades within 1% of stop OR TP to
-    // keep API cost bounded — most open trades won't trigger the fetch.
-    var wickCandidates=open.filter(function(t){
-      var p=byBase[t.base]; if(!p) return false;
-      var stopDist=Math.abs(p-t.stopPrice)/p;
-      var tpDist=t.tpPrice?Math.abs(p-t.tpPrice)/p:1;
-      return stopDist<0.015||tpDist<0.015; // within 1.5% of either boundary
-    });
-    var wickResults={};
-    if(wickCandidates.length){
-      var wickFetches=wickCandidates.slice(0,8).map(async function(t){ // cap at 8 per cycle
-        try{
-          var klines=await fetchKlines(t.base,'1m',4);
-          if(klines&&klines.length)wickResults[t.base]=klines;
-        }catch(e){}
-      });
-      await Promise.allSettled(wickFetches);
-    }
     open.forEach(function(t){
       var price=byBase[t.base];
       if(!price)return;
@@ -3747,63 +3598,6 @@ async function pollPrices(){
         if(t.priceHistory.length>300)t.priceHistory.shift();
       }
       updatePnl(t);
-      // v16+ — Check wicks FIRST (highest priority — closes most accurate)
-      // Each 1m bar has open, high, low, close. A LONG stops on bar.low <= stopPrice;
-      // a SHORT stops on bar.high >= stopPrice. Same with TP, inverted.
-      var wickBars=wickResults[t.base];
-      if(wickBars){
-        for(var i=0;i<wickBars.length;i++){
-          if(t.status!=='open')break;
-          var bar=wickBars[i];
-          var bHi=parseFloat(bar[2]),bLo=parseFloat(bar[3]);
-          var bClose=parseInt(bar[6]);
-          if(bClose<t.loggedAt)continue; // bar before this trade was logged
-          // v16ab — Wick detection LIMITED to stop hits on UNARMED trades.
-          //
-          // Earlier design had the wick block also handle arm/lift/floor events.
-          // That created a self-closing bug: if a 1-min bar wicked up to TP and
-          // back down, the wick logic armed the trade at rung 1 (floor = TP price),
-          // then the standard rolling-ceiling check ran in the same poll cycle
-          // using lastPrice (typically the bar's close, slightly below the wick
-          // high), saw `lastPrice <= floor`, and immediately closed the trade.
-          // Cost real money on BAS LONG (closed at +4%, missed extension to +8%).
-          //
-          // Fix: wick detection now fires ONLY for unarmed stop hits. The wick's
-          // value there is real — captures stops that lastPrice missed. For all
-          // arm/lift/floor events, the standard live-price logic handles things
-          // using poll-to-poll lastPrice, matching v16a's behavior. The rolling
-          // ceiling can now actually accumulate rungs.
-          var rungInBar=currentRungLevel(t);
-          if(rungInBar<1){
-            // Unarmed: stop is active. A wick through stop is a real stop hit.
-            if(t.dir==='LONG'){
-              if(bLo<=t.stopPrice){
-                t.status='stopped';t.closedAt=bClose;t.closedPrice=t.stopPrice;
-                t.currentPrice=t.stopPrice;updatePnl(t);
-                t.finalPnlPct=t.currentPnlPct;t.finalPnlUsd=t.currentPnlUsd;
-                classifyShape(t);
-                console.log('[Acress v16+] WICK STOP detected:',t.base,'LONG · bar.low',bLo,'<= stop',t.stopPrice);
-                toast(t.base+' '+t.dir+' STOPPED (wick) @ $'+fP(t.stopPrice)+' · '+t.shape,'warn');
-                break;
-              }
-            }else{ // SHORT
-              if(bHi>=t.stopPrice){
-                t.status='stopped';t.closedAt=bClose;t.closedPrice=t.stopPrice;
-                t.currentPrice=t.stopPrice;updatePnl(t);
-                t.finalPnlPct=t.currentPnlPct;t.finalPnlUsd=t.currentPnlUsd;
-                classifyShape(t);
-                console.log('[Acress v16+] WICK STOP detected:',t.base,'SHORT · bar.high',bHi,'>= stop',t.stopPrice);
-                toast(t.base+' '+t.dir+' STOPPED (wick) @ $'+fP(t.stopPrice)+' · '+t.shape,'warn');
-                break;
-              }
-            }
-          }
-          // Armed (rung ≥1): wick events deferred. Standard live-price logic
-          // below handles arm-lift, additional rung lifts, and floor-hit closes.
-          // This intentionally lets trades survive intra-bar wicks back to floor
-          // — they only close when lastPrice (poll-to-poll) drops below floor.
-        }
-      }
       // v16ab — ROLLING-CEILING closure logic (replaces stop/TP/expiry trio)
       //
       // Unarmed (rung 0): original stop is active; if price reaches first ceiling
@@ -4148,7 +3942,7 @@ function exportTrackerCSV(){
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');
   var stamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  a.href=url;a.download='acress-tracker-v16b-'+stamp+'.csv';
+  a.href=url;a.download='acress-tracker-v16a-'+stamp+'.csv';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
   toast('Exported '+tracker.length+' trade'+(tracker.length===1?'':'s')+' to CSV','ok');
@@ -4291,12 +4085,6 @@ function renderTracker(){
         }
         if(t.absorbed!=null&&t.mechanismType==='reversal'){
           rowParts.push('<span class="tk-r-ctx-item"><span class="lbl">Absorbed:</span><span class="val absorbed-'+(t.absorbed?'yes':'no')+'">'+(t.absorbed?'✓ yes':'✗ no')+'</span></span>');
-        }
-        if(t.oiStageAtLog&&t.mechanismType==='continuation'){
-          var stageCls=t.oiStageAtLog==='early'?'absorbed-yes':'absorbed-no';
-          var stageTxt=t.oiStageAtLog==='early'?'✓ early-stage':'⚠ late-stage';
-          var velTxt=t.oiVelocityAtLog!=null?' (vel '+(t.oiVelocityAtLog>=0?'+':'')+t.oiVelocityAtLog.toFixed(2)+'%, accel '+(t.oiAccelerationAtLog>=0?'+':'')+t.oiAccelerationAtLog.toFixed(2)+'%)':'';
-          rowParts.push('<span class="tk-r-ctx-item"><span class="lbl">OI stage:</span><span class="val '+stageCls+'">'+stageTxt+'</span><span style="color:var(--faint);font-size:9px;">'+velTxt+'</span></span>');
         }
         if(t.atrAtLog){
           rowParts.push('<span class="tk-r-ctx-item"><span class="lbl">ATR(5m):</span><span class="val">'+fP(t.atrAtLog)+'</span></span>');
@@ -4722,7 +4510,7 @@ function downloadDrilldownCSV(){
   var safe = drilldownState.bucket.label.replace(/[^a-zA-Z0-9]/g,'_').slice(0,40);
   var stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
   var a = document.createElement('a');
-  a.href = url; a.download = 'acress-drilldown-'+safe+'-v16b-'+stamp+'.csv';
+  a.href = url; a.download = 'acress-drilldown-'+safe+'-v16a-'+stamp+'.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);}, 5000);
   toast('Exported ' + entries.length + ' entries (' + drilldownState.bucket.label + ')','ok');
@@ -4981,7 +4769,7 @@ function downloadAnalyticsCSV(){
   var stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'acress-analytics-' + period + '-by-' + dim + '-v16b-' + stamp + '.csv';
+  a.download = 'acress-analytics-' + period + '-by-' + dim + '-v16a-' + stamp + '.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
   toast('Exported ' + rows.length + ' rows (' + period + ' / ' + dim + ')','ok');
@@ -4997,7 +4785,7 @@ function exportFullBackup(){
       schemaVersion: 1,
       exportedAt: new Date().toISOString(),
       exportedAtEDT: fmtTimeEDT(Date.now()),
-      profile: 'v16b',
+      profile: 'v16a',
       toolVersion: 'v16ab',
       counts: {
         analysisLog: (typeof analysisLog !== 'undefined' && analysisLog) ? analysisLog.length : 0,
@@ -5018,7 +4806,7 @@ function exportFullBackup(){
     var stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'acress-backup-v16b-' + stamp + '.json';
+    a.download = 'acress-backup-v16a-' + stamp + '.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -5049,7 +4837,7 @@ function importFullBackup(event){
       var msg = 'Restore backup?\n\n' +
         'Exported: ' + (backup.exportedAtEDT || backup.exportedAt) + '\n' +
         'Profile in backup: ' + (backup.profile || 'unknown') + '\n' +
-        'Current profile: ' + 'v16b' + '\n' +
+        'Current profile: ' + 'v16a' + '\n' +
         'Backup size: ' + sizeMB + ' MB (' + keys.length + ' keys)\n' +
         'Analysis entries: ' + (backup.counts ? backup.counts.analysisLog : '?') + '\n' +
         'Tracker entries: ' + (backup.counts ? backup.counts.trackerEntries : '?') + '\n\n' +
@@ -5114,7 +4902,7 @@ window.VPS = {
     return {
       url:     localStorage.getItem(this.KEYS.url)     || '',
       apiKey:  localStorage.getItem(this.KEYS.apiKey)  || '',
-      profile: localStorage.getItem(this.KEYS.profile) || 'v16b',
+      profile: localStorage.getItem(this.KEYS.profile) || 'v16a',
       enabled: localStorage.getItem(this.KEYS.enabled) === '1',
     };
   },
@@ -5223,7 +5011,7 @@ window.VPS = {
     return {
       url:     urlEl ? urlEl.value.trim() : '',
       apiKey:  keyEl ? keyEl.value.trim() : '',
-      profile: profEl ? profEl.value : 'v16b',
+      profile: profEl ? profEl.value : 'v16a',
       enabled: enaEl ? enaEl.checked : false,
     };
   },
@@ -5514,6 +5302,219 @@ function openDrilldownFromVPSAnalytics(idx){
   });
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Analysis-page-wide VPS awareness (cards + hour heatmap)
+// ════════════════════════════════════════════════════════════════════
+(function(){
+  if (typeof renderAnalysisPage !== 'function') return;
+  var origRender = renderAnalysisPage;
+  window.renderAnalysisPageLocal = origRender;
+
+  window.renderAnalysisPage = function(){
+    var page = document.getElementById('page-analysis');
+    if (!page) return;
+
+    if (window.VPS && window.VPS.isActive()){
+      return renderAnalysisPageFromVPS().catch(function(e){
+        console.warn('[VPS] AnalysisPage render failed, falling back to local:', e.message);
+        if (window.VPS) window.VPS.markUnreachable('AnalysisPage failed: ' + e.message);
+        try { toast('VPS unreachable, using local data', 'warn', 4000); } catch(_){}
+        origRender();
+      });
+    }
+    origRender();
+  };
+})();
+
+function renderAnalysisPageFromVPS(){
+  // Stats for the top cards come from /api/analysis/aggregate?period=all&dim=none
+  // (one row with the totals). For per-hour heatmap we use period=today, dim=hour.
+  // Storage card stays LOCAL since it describes the browser, not the VPS.
+  return Promise.all([
+    window.VPS.aggregate('all', 'none'),
+    window.VPS.aggregate('today', 'hour'),
+    window.VPS.fetchJson('/api/db-health'),
+  ]).then(function(results){
+    var allRow = (results[0] && results[0].rows && results[0].rows[0]) ||
+                 { n:0, wins:0, winRate:0, totalPnl:0, meanPnl:0, meanMfe:0, meanMae:0 };
+    var hourRows = (results[1] && results[1].rows) || [];
+    var dbHealth = results[2] || {};
+    var profile = window.VPS.getConfig().profile;
+    var profileData = (dbHealth.profiles && dbHealth.profiles[profile]) || {};
+    var totalCount = profileData.analysisCount || 0;
+    var firstAt = profileData.firstLoggedAt || null;
+    var rangeDays = firstAt ? ((Date.now() - firstAt) / (24*60*60*1000)).toFixed(1) : '0';
+
+    var closed = allRow.n;
+    var open = Math.max(0, totalCount - closed);
+
+    // Storage card stays local — that's information about the browser
+    var cap = (typeof getAnalysisLogCapacity === 'function') ? getAnalysisLogCapacity()
+                                                              : { used:0, cap:1, pct:0 };
+
+    var winPct = (allRow.winRate*100).toFixed(0);
+    var pnlCls = allRow.totalPnl >= 0 ? 'pos' : 'neg';
+    var rateCls = allRow.winRate >= 0.5 ? 'pos' : 'neg';
+    var pnlPrefix = allRow.totalPnl >= 0 ? '+$' : '-$';
+
+    var summaryEl = document.getElementById('analysis-summary');
+    if (summaryEl){
+      summaryEl.innerHTML = [
+        '<div class="analysis-stat"><div class="lbl">Entries · VPS</div>'
+          + '<div class="val">' + totalCount + '</div>'
+          + '<div class="sub">' + open + ' open · ' + closed + ' closed</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Win rate · VPS</div>'
+          + '<div class="val ' + rateCls + '">' + winPct + '%</div>'
+          + '<div class="sub">' + allRow.wins + ' / ' + closed + '</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Total PnL · VPS</div>'
+          + '<div class="val ' + pnlCls + '">' + pnlPrefix + Math.abs(allRow.totalPnl).toFixed(0) + '</div>'
+          + '<div class="sub">across closed entries</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Coverage · VPS</div>'
+          + '<div class="val">' + rangeDays + 'd</div>'
+          + '<div class="sub">' + (firstAt ? new Date(firstAt).toUTCString().slice(0,17) : '—') + '</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Storage · local</div>'
+          + '<div class="val">' + cap.pct.toFixed(0) + '%</div>'
+          + '<div class="sub">' + (cap.used/1024/1024).toFixed(2) + ' MB / ' + (cap.cap/1024/1024).toFixed(0) + ' MB</div></div>'
+      ].join('');
+    }
+
+    // Footer counters
+    var entCount = document.getElementById('analysis-entry-count');
+    var storPct = document.getElementById('analysis-storage-pct');
+    if (entCount) entCount.textContent = totalCount + ' (VPS) · ' + (typeof analysisLog !== 'undefined' ? analysisLog.length : 0) + ' (local)';
+    if (storPct) storPct.textContent = cap.pct.toFixed(0) + '%';
+
+    // Hour heatmap from VPS data — labels are hour-of-day in EDT (00-23)
+    var byHour = {};
+    for(var h=0;h<24;h++) byHour[h] = {n:0, wins:0, pnl:0};
+    hourRows.forEach(function(r){
+      var hr = parseInt(r.label, 10);
+      if (isNaN(hr) || hr < 0 || hr > 23) return;
+      byHour[hr] = { n: r.n, wins: r.wins, pnl: r.totalPnl };
+    });
+
+    var hmHtml = '<div class="hour-heatmap">';
+    for(var h2=0;h2<24;h2++){
+      var bucket = byHour[h2];
+      var pnl = bucket.pnl;
+      var cls = bucket.n === 0 ? '' : pnl > 0 ? 'win' : pnl < 0 ? 'loss' : '';
+      var intensity = bucket.n === 0 ? 0 : Math.min(1, Math.abs(pnl) / 50);
+      var bg = pnl > 0 ? 'rgba(46,232,160,' + (.15 + intensity*.5) + ')' :
+               pnl < 0 ? 'rgba(255,82,119,' + (.15 + intensity*.5) + ')' :
+               'var(--s3)';
+      var color = bucket.n > 0 ? 'var(--hi)' : 'var(--faint)';
+      var title = String(h2).padStart(2,'0') + ':00 EDT — ' + bucket.n + ' entries' +
+                  (bucket.n ? ' · ' + Math.round(bucket.wins/bucket.n*100) + '% win · ' + (pnl>=0?'+$':'-$') + Math.abs(pnl).toFixed(0) : '');
+      hmHtml += '<div class="hour-cell ' + cls + '" style="background:' + bg + ';color:' + color + ';" title="' + title + '">' + bucket.n + '</div>';
+    }
+    hmHtml += '</div><div class="hour-row">';
+    for(var h3=0;h3<24;h3++){ hmHtml += '<div class="hour-cell-label">' + h3 + '</div>'; }
+    hmHtml += '</div>';
+    var heatmapEl = document.getElementById('hour-heatmap-container');
+    if (heatmapEl) heatmapEl.innerHTML = hmHtml;
+
+    // Tag the hour heatmap section header to clarify it's EDT + VPS source
+    var heatmapH3 = document.querySelector('#page-analysis .analysis-section h3');
+    // Find the h3 whose text contains "hour" — that's the heatmap one
+    var allH3 = document.querySelectorAll('#page-analysis .analysis-section h3');
+    for (var hi=0; hi<allH3.length; hi++){
+      if (allH3[hi].textContent && allH3[hi].textContent.toLowerCase().indexOf('hour of day') >= 0){
+        allH3[hi].innerHTML = 'Activity by hour of day (EDT) · '
+                            + '<span style="color:#bfa3ff;font-weight:600;font-size:10px;">VPS · Today</span>';
+        break;
+      }
+    }
+  });
+}
+
+// When the user actively interacts with VPS (toggles, tests, switches profile),
+// refresh the analysis page so it reflects the new state immediately. We hook
+// only EXPLICIT user actions, NOT repaintStatusPill — because repaint is also
+// triggered by failure paths (markUnreachable) and we don't want a failure to
+// trigger another render that might fail again.
+(function(){
+  if (!window.VPS) return;
+
+  function refreshPage(){
+    if (typeof window.renderAnalysisPage === 'function'){
+      try {
+        var ret = window.renderAnalysisPage();
+        if (ret && ret.catch) ret.catch(function(){});
+      } catch(_){}
+    }
+  }
+
+  // Wrap saveAndTest: refresh page after the user clicks "Save & test"
+  if (typeof window.VPS.saveAndTest === 'function'){
+    var origSaveAndTest = window.VPS.saveAndTest;
+    window.VPS.saveAndTest = function(){
+      var result = origSaveAndTest.apply(this, arguments);
+      // testConnection inside saveAndTest is async — schedule refresh after it settles
+      setTimeout(refreshPage, 50);
+      return result;
+    };
+  }
+
+  // Wrap toggleEnabled: refresh page after toggle
+  if (typeof window.VPS.toggleEnabled === 'function'){
+    var origToggle = window.VPS.toggleEnabled;
+    window.VPS.toggleEnabled = function(on){
+      var result = origToggle.apply(this, arguments);
+      setTimeout(refreshPage, 50);
+      return result;
+    };
+  }
+})();
+
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Pause local analysis-log writes when VPS is active+connected
+// ════════════════════════════════════════════════════════════════════
+(function(){
+  if (typeof saveAnalysisLog !== 'function') return;
+  var origSave = saveAnalysisLog;
+  window.saveAnalysisLogLocal = origSave;
+
+  var __lastPauseLog = 0;
+  window.saveAnalysisLog = function(){
+    if (window.VPS && window.VPS.isActive()){
+      // Throttled console hint so it doesn't spam
+      var now = Date.now();
+      if (now - __lastPauseLog > 5*60*1000){
+        try { console.log('[VPS] Local analysis-log writes paused (VPS is source of truth)'); } catch(_){}
+        __lastPauseLog = now;
+      }
+      return { ok: true, bytes: 0, paused: true };
+    }
+    return origSave();
+  };
+})();
+
+// Repaint the local-writes status indicator whenever VPS state changes
+(function(){
+  if (!window.VPS || typeof window.VPS.repaintStatusPill !== 'function') return;
+  var origRepaint = window.VPS.repaintStatusPill;
+  window.VPS.repaintStatusPill = function(){
+    origRepaint.apply(this, arguments);
+    var indicator = document.getElementById('local-writes-status');
+    if (!indicator) return;
+    if (this.isActive()){
+      indicator.innerHTML = '<span style="color:#bfa3ff;">⏸ Local writes paused · VPS is source of truth</span>';
+      indicator.title = 'Local analysis-log writes are suspended because the VPS is active. Storage growth will stop. Old local entries remain — use the prune buttons below to free space.';
+    } else {
+      var cfg = this.getConfig();
+      if (cfg.enabled){
+        indicator.innerHTML = '<span style="color:var(--amber);">▶ Local writes active · VPS configured but unreachable</span>';
+        indicator.title = 'Falling back to local writes because the VPS connection failed. Will pause again when VPS is reachable.';
+      } else {
+        indicator.innerHTML = '<span style="color:var(--muted);">▶ Local writes active · VPS disabled</span>';
+        indicator.title = 'Writing to local browser storage as normal. Enable VPS in settings to pause local writes.';
+      }
+    }
+  };
+})();
+
 </script>
 
 <div class="settings-modal-bg" id="settings-modal-bg" onclick="if(event.target===this)closeSettingsModal()">
@@ -5568,6 +5569,7 @@ function openDrilldownFromVPSAnalytics(idx){
       </div>
       <div class="settings-section">
         <h4>🗄️ Storage breakdown — what's using your localStorage capacity</h4>
+        <div id="local-writes-status" style="font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin:8px 0 12px;padding:6px 10px;background:var(--s2);border-radius:4px;display:inline-block;">▶ Local writes active</div>
         <div id="settings-storage-breakdown"></div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
           <button class="pc-act" onclick="pruneAnalysisEntries(60*60*1000,'>1 hour');renderSettingsModal();" title="Remove closed analysis entries older than 1 hour">🗑 Prune &gt;1h</button>
