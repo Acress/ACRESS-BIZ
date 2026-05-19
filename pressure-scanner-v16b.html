@@ -960,7 +960,14 @@ input{font-family:var(--font-ui);}
 var SIGNAL_TTL_MS=30*60*1000;       // 30-min signal validity
 var AUTO_REFRESH_MS=5*60*1000;      // 5-min auto-scan cycle
 var SURGICAL_THR=85,HIGH_THR=72;    // score tiers
-var EXCLUDE_BASES=new Set(['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX']);
+var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
+var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','SOL','BNB','XRP'];
+var EXCLUDE_BASES_MEGACAPS = (function(){
+  try { var v = localStorage.getItem('acress_megacap_excludes');
+        return v ? JSON.parse(v) : EXCLUDE_BASES_MEGACAPS_DEFAULT; }
+  catch(_){ return EXCLUDE_BASES_MEGACAPS_DEFAULT; }
+})();
+var EXCLUDE_BASES=new Set(EXCLUDE_BASES_STABLES.concat(EXCLUDE_BASES_MEGACAPS));
 
 // ── STATE ──────────────────────────────────────────────────────────
 var signals=[];
@@ -1331,17 +1338,40 @@ function showWlError(msg){
 }
 
 // ── BINANCE FUTURES API ────────────────────────────────────────────
+// v16b — Pool-level volatility floor.
+// Skip coins whose 24h high-to-low range is below MIN_24H_RANGE_PCT.
+// User-tunable via console: localStorage.setItem('acress_min_range_pct', '3')
+var MIN_24H_RANGE_PCT = (function(){
+  try { var v = localStorage.getItem('acress_min_range_pct');
+        return v != null ? parseFloat(v) : 4; }
+  catch(_){ return 4; }
+})();
+
 async function fetchTopCoins(n){
   var d=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json();});
-  return d.filter(function(t){
+  var excludedMegacap = 0, excludedLowRange = 0;
+  var filtered = d.filter(function(t){
     var sym=t.symbol;
     if(!sym.endsWith('USDT'))return false;
     if(sym.includes('_'))return false;
     var base=sym.slice(0,-4);
-    if(EXCLUDE_BASES.has(base))return false;
+    if(EXCLUDE_BASES.has(base)){
+      // Track megacap exclusions separately for diagnostics
+      if(EXCLUDE_BASES_MEGACAPS.indexOf(base)>=0) excludedMegacap++;
+      return false;
+    }
     if(parseFloat(t.quoteVolume)<500000)return false;
+    // 24h range gate
+    var hi = parseFloat(t.highPrice), lo = parseFloat(t.lowPrice);
+    if(!isFinite(hi)||!isFinite(lo)||lo<=0)return false;
+    var rangePct = (hi - lo) / lo * 100;
+    if(rangePct < MIN_24H_RANGE_PCT){ excludedLowRange++; return false; }
     return true;
   }).sort(function(a,b){return parseFloat(b.quoteVolume)-parseFloat(a.quoteVolume);}).slice(0,n);
+  try {
+    console.log('[Acress] Pool · kept ' + filtered.length + ' coins · excluded ' + excludedMegacap + ' megacap, ' + excludedLowRange + ' below ' + MIN_24H_RANGE_PCT + '% 24h-range');
+  } catch(_){}
+  return filtered;
 }
 // Watchlist mode: fetch the full ticker array then filter to only watchlisted bases.
 // Preserves the same {symbol,lastPrice,priceChangePercent,quoteVolume} shape downstream.
@@ -1354,8 +1384,20 @@ async function fetchWatchlistCoins(bases){
     if(t.symbol.includes('_'))return false;
     return baseSet.has(t.symbol.slice(0,-4));
   });
-  // Preserve watchlist order
-  var byBase={};found.forEach(function(t){byBase[t.symbol.slice(0,-4)]=t;});
+  // Warn for watchlisted coins that fall below the 24h-range floor — they're
+  // explicitly chosen, so we don't drop them, but the user should know.
+  var byBase={};
+  found.forEach(function(t){
+    byBase[t.symbol.slice(0,-4)]=t;
+    var hi = parseFloat(t.highPrice), lo = parseFloat(t.lowPrice);
+    if(isFinite(hi)&&isFinite(lo)&&lo>0){
+      var rangePct = (hi - lo) / lo * 100;
+      if(rangePct < MIN_24H_RANGE_PCT){
+        try { console.warn('[Acress] Watchlist coin ' + t.symbol.slice(0,-4) +
+          ' has only ' + rangePct.toFixed(1) + '% 24h range (below ' + MIN_24H_RANGE_PCT + '% floor) — keeping it but low signal quality likely'); } catch(_){}
+      }
+    }
+  });
   return bases.map(function(b){return byBase[b];}).filter(Boolean);
 }
 async function fetchKlines(base,interval,limit){
@@ -1730,7 +1772,10 @@ function applyOIVelocityCheck(result,oiDerivs){
     result.reasons.push({lvl:'weak',tag:'OI-VEL',text:reason});
     result.lateStageOI=true;
   }else if(early){
-    result.score=Math.min(100,result.score+6);
+    // v16b · 2026-05-19: removed the +6 score boost. The "early stage / gaining fuel"
+    // reason is preserved as a tag so we can analyze outcomes by OI-velocity bucket
+    // without inflating the score itself. Boost may return in a future build if
+    // clean v4-tracker data shows early-stage signals out-perform.
     result.reasons.push({lvl:'ok',tag:'OI-VEL',text:reason});
     result.earlyStageOI=true;
   }
