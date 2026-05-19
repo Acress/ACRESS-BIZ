@@ -5302,6 +5302,219 @@ function openDrilldownFromVPSAnalytics(idx){
   });
 }
 
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Analysis-page-wide VPS awareness (cards + hour heatmap)
+// ════════════════════════════════════════════════════════════════════
+(function(){
+  if (typeof renderAnalysisPage !== 'function') return;
+  var origRender = renderAnalysisPage;
+  window.renderAnalysisPageLocal = origRender;
+
+  window.renderAnalysisPage = function(){
+    var page = document.getElementById('page-analysis');
+    if (!page) return;
+
+    if (window.VPS && window.VPS.isActive()){
+      return renderAnalysisPageFromVPS().catch(function(e){
+        console.warn('[VPS] AnalysisPage render failed, falling back to local:', e.message);
+        if (window.VPS) window.VPS.markUnreachable('AnalysisPage failed: ' + e.message);
+        try { toast('VPS unreachable, using local data', 'warn', 4000); } catch(_){}
+        origRender();
+      });
+    }
+    origRender();
+  };
+})();
+
+function renderAnalysisPageFromVPS(){
+  // Stats for the top cards come from /api/analysis/aggregate?period=all&dim=none
+  // (one row with the totals). For per-hour heatmap we use period=today, dim=hour.
+  // Storage card stays LOCAL since it describes the browser, not the VPS.
+  return Promise.all([
+    window.VPS.aggregate('all', 'none'),
+    window.VPS.aggregate('today', 'hour'),
+    window.VPS.fetchJson('/api/db-health'),
+  ]).then(function(results){
+    var allRow = (results[0] && results[0].rows && results[0].rows[0]) ||
+                 { n:0, wins:0, winRate:0, totalPnl:0, meanPnl:0, meanMfe:0, meanMae:0 };
+    var hourRows = (results[1] && results[1].rows) || [];
+    var dbHealth = results[2] || {};
+    var profile = window.VPS.getConfig().profile;
+    var profileData = (dbHealth.profiles && dbHealth.profiles[profile]) || {};
+    var totalCount = profileData.analysisCount || 0;
+    var firstAt = profileData.firstLoggedAt || null;
+    var rangeDays = firstAt ? ((Date.now() - firstAt) / (24*60*60*1000)).toFixed(1) : '0';
+
+    var closed = allRow.n;
+    var open = Math.max(0, totalCount - closed);
+
+    // Storage card stays local — that's information about the browser
+    var cap = (typeof getAnalysisLogCapacity === 'function') ? getAnalysisLogCapacity()
+                                                              : { used:0, cap:1, pct:0 };
+
+    var winPct = (allRow.winRate*100).toFixed(0);
+    var pnlCls = allRow.totalPnl >= 0 ? 'pos' : 'neg';
+    var rateCls = allRow.winRate >= 0.5 ? 'pos' : 'neg';
+    var pnlPrefix = allRow.totalPnl >= 0 ? '+$' : '-$';
+
+    var summaryEl = document.getElementById('analysis-summary');
+    if (summaryEl){
+      summaryEl.innerHTML = [
+        '<div class="analysis-stat"><div class="lbl">Entries · VPS</div>'
+          + '<div class="val">' + totalCount + '</div>'
+          + '<div class="sub">' + open + ' open · ' + closed + ' closed</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Win rate · VPS</div>'
+          + '<div class="val ' + rateCls + '">' + winPct + '%</div>'
+          + '<div class="sub">' + allRow.wins + ' / ' + closed + '</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Total PnL · VPS</div>'
+          + '<div class="val ' + pnlCls + '">' + pnlPrefix + Math.abs(allRow.totalPnl).toFixed(0) + '</div>'
+          + '<div class="sub">across closed entries</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Coverage · VPS</div>'
+          + '<div class="val">' + rangeDays + 'd</div>'
+          + '<div class="sub">' + (firstAt ? new Date(firstAt).toUTCString().slice(0,17) : '—') + '</div></div>',
+        '<div class="analysis-stat"><div class="lbl">Storage · local</div>'
+          + '<div class="val">' + cap.pct.toFixed(0) + '%</div>'
+          + '<div class="sub">' + (cap.used/1024/1024).toFixed(2) + ' MB / ' + (cap.cap/1024/1024).toFixed(0) + ' MB</div></div>'
+      ].join('');
+    }
+
+    // Footer counters
+    var entCount = document.getElementById('analysis-entry-count');
+    var storPct = document.getElementById('analysis-storage-pct');
+    if (entCount) entCount.textContent = totalCount + ' (VPS) · ' + (typeof analysisLog !== 'undefined' ? analysisLog.length : 0) + ' (local)';
+    if (storPct) storPct.textContent = cap.pct.toFixed(0) + '%';
+
+    // Hour heatmap from VPS data — labels are hour-of-day in EDT (00-23)
+    var byHour = {};
+    for(var h=0;h<24;h++) byHour[h] = {n:0, wins:0, pnl:0};
+    hourRows.forEach(function(r){
+      var hr = parseInt(r.label, 10);
+      if (isNaN(hr) || hr < 0 || hr > 23) return;
+      byHour[hr] = { n: r.n, wins: r.wins, pnl: r.totalPnl };
+    });
+
+    var hmHtml = '<div class="hour-heatmap">';
+    for(var h2=0;h2<24;h2++){
+      var bucket = byHour[h2];
+      var pnl = bucket.pnl;
+      var cls = bucket.n === 0 ? '' : pnl > 0 ? 'win' : pnl < 0 ? 'loss' : '';
+      var intensity = bucket.n === 0 ? 0 : Math.min(1, Math.abs(pnl) / 50);
+      var bg = pnl > 0 ? 'rgba(46,232,160,' + (.15 + intensity*.5) + ')' :
+               pnl < 0 ? 'rgba(255,82,119,' + (.15 + intensity*.5) + ')' :
+               'var(--s3)';
+      var color = bucket.n > 0 ? 'var(--hi)' : 'var(--faint)';
+      var title = String(h2).padStart(2,'0') + ':00 EDT — ' + bucket.n + ' entries' +
+                  (bucket.n ? ' · ' + Math.round(bucket.wins/bucket.n*100) + '% win · ' + (pnl>=0?'+$':'-$') + Math.abs(pnl).toFixed(0) : '');
+      hmHtml += '<div class="hour-cell ' + cls + '" style="background:' + bg + ';color:' + color + ';" title="' + title + '">' + bucket.n + '</div>';
+    }
+    hmHtml += '</div><div class="hour-row">';
+    for(var h3=0;h3<24;h3++){ hmHtml += '<div class="hour-cell-label">' + h3 + '</div>'; }
+    hmHtml += '</div>';
+    var heatmapEl = document.getElementById('hour-heatmap-container');
+    if (heatmapEl) heatmapEl.innerHTML = hmHtml;
+
+    // Tag the hour heatmap section header to clarify it's EDT + VPS source
+    var heatmapH3 = document.querySelector('#page-analysis .analysis-section h3');
+    // Find the h3 whose text contains "hour" — that's the heatmap one
+    var allH3 = document.querySelectorAll('#page-analysis .analysis-section h3');
+    for (var hi=0; hi<allH3.length; hi++){
+      if (allH3[hi].textContent && allH3[hi].textContent.toLowerCase().indexOf('hour of day') >= 0){
+        allH3[hi].innerHTML = 'Activity by hour of day (EDT) · '
+                            + '<span style="color:#bfa3ff;font-weight:600;font-size:10px;">VPS · Today</span>';
+        break;
+      }
+    }
+  });
+}
+
+// When the user actively interacts with VPS (toggles, tests, switches profile),
+// refresh the analysis page so it reflects the new state immediately. We hook
+// only EXPLICIT user actions, NOT repaintStatusPill — because repaint is also
+// triggered by failure paths (markUnreachable) and we don't want a failure to
+// trigger another render that might fail again.
+(function(){
+  if (!window.VPS) return;
+
+  function refreshPage(){
+    if (typeof window.renderAnalysisPage === 'function'){
+      try {
+        var ret = window.renderAnalysisPage();
+        if (ret && ret.catch) ret.catch(function(){});
+      } catch(_){}
+    }
+  }
+
+  // Wrap saveAndTest: refresh page after the user clicks "Save & test"
+  if (typeof window.VPS.saveAndTest === 'function'){
+    var origSaveAndTest = window.VPS.saveAndTest;
+    window.VPS.saveAndTest = function(){
+      var result = origSaveAndTest.apply(this, arguments);
+      // testConnection inside saveAndTest is async — schedule refresh after it settles
+      setTimeout(refreshPage, 50);
+      return result;
+    };
+  }
+
+  // Wrap toggleEnabled: refresh page after toggle
+  if (typeof window.VPS.toggleEnabled === 'function'){
+    var origToggle = window.VPS.toggleEnabled;
+    window.VPS.toggleEnabled = function(on){
+      var result = origToggle.apply(this, arguments);
+      setTimeout(refreshPage, 50);
+      return result;
+    };
+  }
+})();
+
+
+// ════════════════════════════════════════════════════════════════════
+// v16ab — Pause local analysis-log writes when VPS is active+connected
+// ════════════════════════════════════════════════════════════════════
+(function(){
+  if (typeof saveAnalysisLog !== 'function') return;
+  var origSave = saveAnalysisLog;
+  window.saveAnalysisLogLocal = origSave;
+
+  var __lastPauseLog = 0;
+  window.saveAnalysisLog = function(){
+    if (window.VPS && window.VPS.isActive()){
+      // Throttled console hint so it doesn't spam
+      var now = Date.now();
+      if (now - __lastPauseLog > 5*60*1000){
+        try { console.log('[VPS] Local analysis-log writes paused (VPS is source of truth)'); } catch(_){}
+        __lastPauseLog = now;
+      }
+      return { ok: true, bytes: 0, paused: true };
+    }
+    return origSave();
+  };
+})();
+
+// Repaint the local-writes status indicator whenever VPS state changes
+(function(){
+  if (!window.VPS || typeof window.VPS.repaintStatusPill !== 'function') return;
+  var origRepaint = window.VPS.repaintStatusPill;
+  window.VPS.repaintStatusPill = function(){
+    origRepaint.apply(this, arguments);
+    var indicator = document.getElementById('local-writes-status');
+    if (!indicator) return;
+    if (this.isActive()){
+      indicator.innerHTML = '<span style="color:#bfa3ff;">⏸ Local writes paused · VPS is source of truth</span>';
+      indicator.title = 'Local analysis-log writes are suspended because the VPS is active. Storage growth will stop. Old local entries remain — use the prune buttons below to free space.';
+    } else {
+      var cfg = this.getConfig();
+      if (cfg.enabled){
+        indicator.innerHTML = '<span style="color:var(--amber);">▶ Local writes active · VPS configured but unreachable</span>';
+        indicator.title = 'Falling back to local writes because the VPS connection failed. Will pause again when VPS is reachable.';
+      } else {
+        indicator.innerHTML = '<span style="color:var(--muted);">▶ Local writes active · VPS disabled</span>';
+        indicator.title = 'Writing to local browser storage as normal. Enable VPS in settings to pause local writes.';
+      }
+    }
+  };
+})();
+
 </script>
 
 <div class="settings-modal-bg" id="settings-modal-bg" onclick="if(event.target===this)closeSettingsModal()">
@@ -5356,6 +5569,7 @@ function openDrilldownFromVPSAnalytics(idx){
       </div>
       <div class="settings-section">
         <h4>🗄️ Storage breakdown — what's using your localStorage capacity</h4>
+        <div id="local-writes-status" style="font-family:var(--font-mono);font-size:10.5px;color:var(--muted);margin:8px 0 12px;padding:6px 10px;background:var(--s2);border-radius:4px;display:inline-block;">▶ Local writes active</div>
         <div id="settings-storage-breakdown"></div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
           <button class="pc-act" onclick="pruneAnalysisEntries(60*60*1000,'>1 hour');renderSettingsModal();" title="Remove closed analysis entries older than 1 hour">🗑 Prune &gt;1h</button>
