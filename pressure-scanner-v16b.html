@@ -5278,11 +5278,11 @@ window.VPS = {
     if (!el) return;
     if (this.isActive()){
       el.className = 'vps-status-pill is-vps';
-      el.innerHTML = '<span class="dot"></span>VPS DATA';
-      el.title = 'Analytics is reading from your VPS database';
+      el.innerHTML = '<span class="dot"></span>VPS · ' + this.getConfig().profile;
+      el.title = 'Reading from VPS · profile=' + this.getConfig().profile + ' · click the gear icon to change';
     } else {
       var cfg = this.getConfig();
-      var label = cfg.enabled ? 'LOCAL · VPS UNREACHABLE' : 'LOCAL DATA';
+      var label = cfg.enabled ? ('LOCAL · VPS ' + cfg.profile + ' UNREACHABLE') : ('LOCAL · profile=' + cfg.profile);
       el.className = 'vps-status-pill is-local';
       el.innerHTML = '<span class="dot"></span>' + label;
       el.title = cfg.enabled
@@ -5726,6 +5726,64 @@ function renderAnalysisPageFromVPS(){
     }
   };
 })();
+
+
+// ════════════════════════════════════════════════════════════════════
+// v16b — VPS-aware hour-cell drill-down
+// ════════════════════════════════════════════════════════════════════
+// When VPS is active, clicking an hour cell on the heatmap should query
+// VPS entries for that hour, not filter the (mostly empty) local log.
+// Mirrors the openDrilldownFromVPSAnalytics pattern from patch_vps_sync.
+(function(){
+  if (typeof openDrilldownByHour !== 'function') return;
+  var origByHour = openDrilldownByHour;
+  window.openDrilldownByHourLocal = origByHour;
+
+  window.openDrilldownByHour = function(hour){
+    if (window.VPS && window.VPS.isActive()){
+      return openDrilldownByHourFromVPS(hour).catch(function(e){
+        console.warn('[VPS] hour drill-down failed, falling back to local:', e.message);
+        if (window.VPS) window.VPS.markUnreachable('Hour drill-down failed: ' + e.message);
+        try { toast('VPS unreachable for drill-down, using local', 'warn', 4000); } catch(_){}
+        origByHour(hour);
+      });
+    }
+    return origByHour(hour);
+  };
+})();
+
+function openDrilldownByHourFromVPS(hour){
+  // Fetch all of today's entries (one day fits comfortably under 2000 rows)
+  // then filter to the chosen EDT hour client-side.
+  return window.VPS.entries('today', { limit: 2000, offset: 0 }).then(function(resp){
+    var all = (resp && resp.entries) || [];
+    var filtered = all.filter(function(e){
+      if (e.status === 'open') return false;
+      try {
+        var h = (typeof getEDTHour === 'function')
+                  ? getEDTHour(e.loggedAt)
+                  : new Date(e.loggedAt).getUTCHours();
+        return h === hour;
+      } catch(_){ return false; }
+    });
+    filtered.sort(function(a,b){
+      return (b.closedAt || b.loggedAt) - (a.closedAt || a.loggedAt);
+    });
+
+    drilldownState.bucket = {
+      type: 'hour-vps', key: hour,
+      label: String(hour).padStart(2,'0') + ':00 EDT · VPS · Today',
+      entries: filtered, shown: DRILLDOWN_INITIAL,
+    };
+
+    // Highlight selected hour cell
+    document.querySelectorAll('.hour-cell.selected').forEach(function(c){ c.classList.remove('selected'); });
+    var cells = document.querySelectorAll('.hour-cell');
+    if (cells[hour]) cells[hour].classList.add('selected');
+
+    renderDrilldown();
+  });
+}
 
 </script>
 
