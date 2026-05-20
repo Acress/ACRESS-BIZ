@@ -967,6 +967,8 @@ var EXCLUDE_BASES_MEGACAPS = (function(){
         return v ? JSON.parse(v) : EXCLUDE_BASES_MEGACAPS_DEFAULT; }
   catch(_){ return EXCLUDE_BASES_MEGACAPS_DEFAULT; }
 })();
+var EXCLUDE_BASES_STOCKS=['TSLA','INTC','HOOD','MSTR','AMZN','CRCL','COIN','PLTR','SOXL','MRVL','CRWV','WMT','JPM','V','BRKB','TSM','NVDA','MU','SNDK','META','GOOGL','MSFT','ORCL','AAPL'];
+var EXCLUDE_BASES_TRADFI=['XAU','XAG','XPT','XPD','QQQ','EWJ','EWY'];
 var EXCLUDE_BASES=new Set(EXCLUDE_BASES_STABLES.concat(EXCLUDE_BASES_MEGACAPS));
 
 // ── STATE ──────────────────────────────────────────────────────────
