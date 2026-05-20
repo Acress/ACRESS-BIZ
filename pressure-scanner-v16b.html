@@ -1134,6 +1134,94 @@ function renderMarketMoodBanner(){
   banner.innerHTML=html;
 }
 
+// ── TOP COMBOS WIDGET ──────────────────────────────────────────────
+function injectTopCombosCSS(){
+  if(document.getElementById('tc-css'))return;
+  var s=document.createElement('style');
+  s.id='tc-css';
+  s.textContent=
+    '#top-combos-widget{width:100%;background:rgba(20,20,30,0.5);}'+
+    '.top-combos{padding:8px 20px;font-family:var(--font-mono);font-size:11px;}'+
+    '.tc-header{font-size:10px;letter-spacing:1px;color:var(--faint);margin-bottom:6px;opacity:0.7;}'+
+    '.tc-rows{display:flex;flex-direction:column;gap:3px;}'+
+    '.tc-row{display:flex;align-items:center;gap:12px;padding:4px 8px;background:rgba(255,255,255,0.02);border-radius:4px;flex-wrap:wrap;}'+
+    '.tc-rank{font-weight:700;color:var(--faint);width:16px;}'+
+    '.tc-mech{flex:1;min-width:180px;}'+
+    '.tc-dir{padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;}'+
+    '.tc-dir-long{background:rgba(0,200,100,0.15);color:var(--green);}'+
+    '.tc-dir-short{background:rgba(255,60,60,0.15);color:var(--red);}'+
+    '.tc-verdict{padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700;}'+
+    '.tc-trade-it{background:rgba(0,200,100,0.18);color:var(--green);}'+
+    '.tc-wait{background:rgba(255,170,0,0.18);color:var(--amber);}'+
+    '.tc-skip{background:rgba(255,60,60,0.18);color:var(--red);}'+
+    '.tc-neutral{background:rgba(128,128,128,0.15);color:var(--faint);}'+
+    '.tc-n,.tc-win{color:var(--faint);font-size:10px;}'+
+    '.tc-pnl{font-weight:700;min-width:90px;text-align:right;}'+
+    '.tc-pnl.pos{color:var(--green);}'+
+    '.tc-pnl.neg{color:var(--red);}'+
+    '.tc-empty{padding:6px;color:var(--faint);font-style:italic;font-size:11px;}';
+  document.head.appendChild(s);
+}
+function buildTopCombosWidget(){
+  if(!pulseCache||!pulseCache.byMechDir)return '';
+  var rows=[];
+  for(var k in pulseCache.byMechDir){
+    var e=pulseCache.byMechDir[k];
+    var r30=e.recent30m||{};
+    if(!r30.n||r30.n<5)continue;
+    var parts=k.split('|');
+    rows.push({
+      mech:parts[0]||'Unknown',
+      dir:parts[1]||'?',
+      verdict:e.verdict||'?',
+      n:r30.n,
+      winPct:r30.winPct||0,
+      perTrade:r30.perTrade||0
+    });
+  }
+  if(rows.length===0){
+    var hasAny=Object.keys(pulseCache.byMechDir).length>0;
+    if(!hasAny)return '';
+    return '<div class="top-combos"><div class="tc-header">TOP COMBOS · LAST 30 MIN · N&ge;5</div><div class="tc-empty">No mechanism has 5+ closed trades in the last 30 min yet</div></div>';
+  }
+  rows.sort(function(a,b){return b.perTrade-a.perTrade;});
+  var top=rows.slice(0,5);
+  var rowsHtml=top.map(function(r,i){
+    var verdictCls=r.verdict==='TRADE IT'?'tc-trade-it':r.verdict==='SKIP'?'tc-skip':r.verdict==='WAIT'?'tc-wait':'tc-neutral';
+    var pnlSign=r.perTrade>=0?'+':'';
+    var pnlCls=r.perTrade>=0?'pos':'neg';
+    return '<div class="tc-row">'+
+      '<span class="tc-rank">'+(i+1)+'</span>'+
+      '<span class="tc-mech">'+r.mech+'</span>'+
+      '<span class="tc-dir tc-dir-'+r.dir.toLowerCase()+'">'+r.dir+'</span>'+
+      '<span class="tc-verdict '+verdictCls+'">'+r.verdict+'</span>'+
+      '<span class="tc-n">N='+r.n+'</span>'+
+      '<span class="tc-win">'+(r.winPct*100).toFixed(0)+'% win</span>'+
+      '<span class="tc-pnl '+pnlCls+'">'+pnlSign+'$'+r.perTrade.toFixed(2)+'/trade</span>'+
+    '</div>';
+  }).join('');
+  return '<div class="top-combos">'+
+    '<div class="tc-header">TOP COMBOS · LAST 30 MIN · N&ge;5 · sorted by $/trade</div>'+
+    '<div class="tc-rows">'+rowsHtml+'</div>'+
+  '</div>';
+}
+function renderTopCombosWidget(){
+  injectTopCombosCSS();
+  var html=buildTopCombosWidget();
+  var widget=document.getElementById('top-combos-widget');
+  if(!widget){
+    widget=document.createElement('div');
+    widget.id='top-combos-widget';
+    var banner=document.getElementById('market-mood-banner');
+    if(banner&&banner.parentNode){
+      banner.parentNode.insertBefore(widget,banner.nextSibling);
+    }else{
+      document.body.insertBefore(widget,document.body.firstChild);
+    }
+  }
+  widget.innerHTML=html;
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -4620,13 +4708,13 @@ try{schedulePolling();}catch(e){console.warn('[Acress] init: schedule polling',e
 try{
   // ── PULSE WIDGET — keep cache warm so buildPulseWidget can render ──
   fetchPulse().then(function(){
-    try{renderMarketMoodBanner();}catch(e){}
+    try{renderMarketMoodBanner();renderTopCombosWidget();}catch(e){}
     if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
     if(typeof renderResults==='function'){try{renderResults();}catch(e){}}
   }).catch(function(){});
   setInterval(function(){
     fetchPulse().then(function(){
-      try{renderMarketMoodBanner();}catch(e){}
+      try{renderMarketMoodBanner();renderTopCombosWidget();}catch(e){}
       var rc=document.getElementById('results');
       if(rc&&rc.children.length>0&&typeof renderResults==='function'){
         try{renderResults();}catch(e){}
