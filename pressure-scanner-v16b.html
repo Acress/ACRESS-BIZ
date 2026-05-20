@@ -2360,6 +2360,141 @@ window.tbFindOriginalByText=function(targetText){
 };
 
 
+
+// ── TOP MOVERS + STICKY DECISION PANELS ───────────────────────────
+window.topMoversCache={movers:[],asOf:0};
+function injectTopMoversCSS(){
+  if(document.getElementById('top-movers-css'))return;
+  var s=document.createElement('style');
+  s.id='top-movers-css';
+  s.textContent=
+    // Pin mood + top combos + top movers as fixed below topbar
+    'body.with-acress-topbar #market-mood-banner{position:fixed !important;top:54px !important;left:0 !important;right:0 !important;z-index:480 !important;margin:0 !important;}'+
+    'body.with-acress-topbar #top-combos-widget{position:fixed !important;top:var(--combos-top,86px) !important;left:0 !important;right:0 !important;z-index:470 !important;margin:0 !important;}'+
+    'body.with-acress-topbar #top-movers-widget{position:fixed !important;top:var(--movers-top,226px) !important;left:0 !important;right:0 !important;z-index:460 !important;margin:0 !important;}'+
+    // Top movers strip
+    '#top-movers-widget{padding:7px 16px;background:rgba(11,15,26,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,0.06);font-family:var(--font-mono);display:flex;align-items:center;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:thin;}'+
+    '#top-movers-widget::-webkit-scrollbar{height:4px;}'+
+    '#top-movers-widget::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:2px;}'+
+    '#top-movers-widget .tm-label{font-size:9px;color:var(--faint);letter-spacing:2px;flex-shrink:0;font-weight:600;}'+
+    '#top-movers-widget .tm-asof{font-size:9px;color:var(--faint);margin-left:6px;flex-shrink:0;opacity:0.6;}'+
+    '#top-movers-widget .tm-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:10px;font-weight:700;flex-shrink:0;cursor:pointer;transition:all 0.15s;}'+
+    '#top-movers-widget .tm-pill:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.25);transform:translateY(-1px);}'+
+    '#top-movers-widget .tm-pill.gain{color:var(--green);border-color:rgba(46,232,160,0.25);}'+
+    '#top-movers-widget .tm-pill.loss{color:var(--red);border-color:rgba(255,82,119,0.25);}'+
+    '#top-movers-widget .tm-sym{font-weight:800;letter-spacing:0.3px;color:#fff;}'+
+    // Card highlight when symbol is a top mover
+    '.pcard.top-mover{box-shadow:0 0 0 1px var(--amber),0 2px 16px rgba(255,170,0,0.32) !important;}'+
+    '.pcard.top-mover::after{content:"\1F525 TOP MOVER";position:absolute;top:8px;left:50%;transform:translateX(-50%);background:var(--amber);color:#000;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:800;letter-spacing:0.5px;font-family:var(--font-mono);z-index:2;pointer-events:none;white-space:nowrap;}';
+  document.head.appendChild(s);
+}
+
+function fetchTopMovers(){
+  return fetch('https://api.bybit.com/v5/market/tickers?category=linear')
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(data){
+      if(!data.result||!data.result.list)return null;
+      var movers=data.result.list
+        .filter(function(t){return t.symbol&&t.symbol.endsWith('USDT');})
+        .map(function(t){
+          return {
+            symbol:t.symbol.replace(/USDT$/,''),
+            price:parseFloat(t.lastPrice),
+            change24h:parseFloat(t.price24hPcnt||0)*100,
+            volume:parseFloat(t.turnover24h||0)
+          };
+        })
+        .filter(function(t){return !isNaN(t.change24h)&&t.volume>5000000;})
+        .sort(function(a,b){return Math.abs(b.change24h)-Math.abs(a.change24h);})
+        .slice(0,10);
+      window.topMoversCache={movers:movers,asOf:Date.now()};
+      return movers;
+    })
+    .catch(function(e){console.warn('[Acress] fetchTopMovers',e.message);return null;});
+}
+
+function renderTopMoversWidget(){
+  var widget=document.getElementById('top-movers-widget');
+  if(!widget){
+    widget=document.createElement('div');
+    widget.id='top-movers-widget';
+    document.body.appendChild(widget);
+  }
+  var movers=(window.topMoversCache&&window.topMoversCache.movers)||[];
+  if(movers.length===0){
+    widget.innerHTML='<span class="tm-label">TOP MOVERS \u00B7 24h \u00B7 loading...</span>';
+    return;
+  }
+  var html='<span class="tm-label">TOP MOVERS \u00B7 24h</span>';
+  movers.forEach(function(m){
+    var cls=m.change24h>=0?'gain':'loss';
+    var sign=m.change24h>=0?'+':'';
+    var priceStr=m.price<1?m.price.toFixed(6):m.price.toFixed(4);
+    html+='<span class="tm-pill '+cls+'" title="$'+priceStr+' \u00B7 click to find in results"><span class="tm-sym">'+m.symbol+'</span>'+sign+m.change24h.toFixed(1)+'%</span>';
+  });
+  var ageMin=Math.round((Date.now()-window.topMoversCache.asOf)/60000);
+  html+='<span class="tm-asof">'+(ageMin===0?'just now':ageMin+'m ago')+'</span>';
+  widget.innerHTML=html;
+}
+
+function markTopMoverCards(){
+  var movers=(window.topMoversCache&&window.topMoversCache.movers)||[];
+  if(movers.length===0)return;
+  var symbols={};
+  movers.forEach(function(m){symbols[m.symbol]=true;});
+  var cards=document.querySelectorAll('.pcard');
+  cards.forEach(function(card){
+    var symEl=card.querySelector('.pc-sym');
+    if(!symEl){card.classList.remove('top-mover');return;}
+    var sym=(symEl.textContent||'').trim().replace(/USDT$/,'').replace(/\/USDT$/,'').replace(/PERP$/,'').trim();
+    if(symbols[sym]){card.classList.add('top-mover');}
+    else{card.classList.remove('top-mover');}
+  });
+}
+
+// Click pill → scroll to matching card in scan results
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var pill=e.target.closest('#top-movers-widget .tm-pill');
+  if(!pill)return;
+  var symEl=pill.querySelector('.tm-sym');
+  if(!symEl)return;
+  var sym=symEl.textContent.trim();
+  var cards=document.querySelectorAll('.pcard');
+  for(var i=0;i<cards.length;i++){
+    var c=cards[i];
+    var cs=c.querySelector('.pc-sym');
+    if(!cs)continue;
+    var cardSym=(cs.textContent||'').trim().replace(/USDT$/,'').replace(/\/USDT$/,'').replace(/PERP$/,'').trim();
+    if(cardSym===sym){
+      c.scrollIntoView({behavior:'smooth',block:'center'});
+      var prevOutline=c.style.outline;
+      c.style.outline='3px solid var(--amber)';
+      c.style.outlineOffset='2px';
+      setTimeout(function(){c.style.outline=prevOutline;c.style.outlineOffset='';},2500);
+      return;
+    }
+  }
+},false);
+
+// Dynamically position sticky panels (heights vary based on content)
+function positionStickyPanels(){
+  var topbar=document.getElementById('acress-topbar');
+  if(!topbar)return;
+  var topbarH=topbar.offsetHeight;
+  var moodH=0,combosH=0,moversH=0;
+  var mood=document.getElementById('market-mood-banner');
+  if(mood)moodH=mood.offsetHeight;
+  var combos=document.getElementById('top-combos-widget');
+  if(combos)combosH=combos.offsetHeight;
+  var movers=document.getElementById('top-movers-widget');
+  if(movers)moversH=movers.offsetHeight;
+  document.body.style.setProperty('--combos-top',(topbarH+moodH)+'px');
+  document.body.style.setProperty('--movers-top',(topbarH+moodH+combosH)+'px');
+  document.body.style.setProperty('padding-top',(topbarH+moodH+combosH+moversH)+'px','important');
+}
+
+
 function ensureTopbar(){
   injectTopbarCSS();
   var bar=document.getElementById('acress-topbar');
@@ -5884,7 +6019,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
-try{injectUIPolishCSS();ensureTopbar();setInterval(function(){injectUIPolishCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();},500);}catch(e){console.warn('[Acress] init: topbar polish',e.message);}
+try{injectUIPolishCSS();injectTopMoversCSS();ensureTopbar();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();},500);}catch(e){console.warn('[Acress] init: topbar + movers',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
