@@ -1066,6 +1066,74 @@ function buildPulseWidget(mechName, dir){
   + '</div>';
   return html;
 }
+
+// ── MARKET MOOD BANNER ─────────────────────────────────────────────
+function injectMarketMoodCSS(){
+  if(document.getElementById('mmb-css'))return;
+  var s=document.createElement('style');
+  s.id='mmb-css';
+  s.textContent=
+    '#market-mood-banner{position:sticky;top:0;z-index:200;width:100%;}'+
+    '.market-mood-banner{padding:10px 20px;display:flex;gap:16px;align-items:center;font-family:var(--font-mono);font-size:13px;border-bottom:2px solid;backdrop-filter:blur(8px);flex-wrap:wrap;}'+
+    '.market-mood-banner.mood-hot{background:rgba(0,200,100,0.18);border-color:var(--green);color:var(--green);}'+
+    '.market-mood-banner.mood-mixed{background:rgba(255,170,0,0.18);border-color:var(--amber);color:var(--amber);}'+
+    '.market-mood-banner.mood-hostile{background:rgba(255,60,60,0.18);border-color:var(--red);color:var(--red);}'+
+    '.market-mood-banner.mood-dead{background:rgba(128,128,128,0.15);border-color:var(--faint);color:var(--faint);}'+
+    '.market-mood-banner .mood-label{font-weight:700;font-size:15px;letter-spacing:0.5px;white-space:nowrap;}'+
+    '.market-mood-banner .mood-msg{flex:1;opacity:0.9;min-width:200px;}'+
+    '.market-mood-banner .mood-stats{font-size:11px;opacity:0.65;white-space:nowrap;}';
+  document.head.appendChild(s);
+}
+function buildMarketMoodBanner(){
+  var counts={tradeIt:0,wait:0,skip:0,notEnoughData:0,total:0};
+  if(pulseCache&&pulseCache.byMechDir){
+    for(var k in pulseCache.byMechDir){
+      var e=pulseCache.byMechDir[k];
+      counts.total++;
+      var v=e.verdict;
+      if(v==='TRADE IT')counts.tradeIt++;
+      else if(v==='WAIT')counts.wait++;
+      else if(v==='SKIP')counts.skip++;
+      else counts.notEnoughData++;
+    }
+  }
+  if(counts.total===0)return '';
+  var populated=counts.tradeIt+counts.wait+counts.skip;
+  var populatedRatio=populated/counts.total;
+  var tradeItPct=populated>0?counts.tradeIt/populated*100:0;
+  var waitSkipPct=populated>0?(counts.wait+counts.skip)/populated*100:0;
+  var mood,moodCls,msg;
+  if(populatedRatio<0.3){
+    mood='MARKET DEAD';moodCls='mood-dead';
+    msg='Too few recent trades to read the market — high uncertainty, sit out';
+  }else if(tradeItPct>=25){
+    mood='MARKET HOT';moodCls='mood-hot';
+    msg='Multiple mechanisms paying — selective trading favorable';
+  }else if(tradeItPct<10&&waitSkipPct>=60){
+    mood='MARKET HOSTILE';moodCls='mood-hostile';
+    msg='Most setups not paying — consider sitting out';
+  }else{
+    mood='MIXED';moodCls='mood-mixed';
+    msg='Some mechanisms working, many not — trade only TRADE IT verdicts';
+  }
+  return '<div class="market-mood-banner '+moodCls+'">'+
+    '<span class="mood-label">'+mood+'</span>'+
+    '<span class="mood-msg">'+msg+'</span>'+
+    '<span class="mood-stats">TRADE IT '+counts.tradeIt+' · WAIT '+counts.wait+' · SKIP '+counts.skip+' · '+populated+'/'+counts.total+' active</span>'+
+  '</div>';
+}
+function renderMarketMoodBanner(){
+  injectMarketMoodCSS();
+  var html=buildMarketMoodBanner();
+  var banner=document.getElementById('market-mood-banner');
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id='market-mood-banner';
+    document.body.insertBefore(banner,document.body.firstChild);
+  }
+  banner.innerHTML=html;
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -4552,11 +4620,13 @@ try{schedulePolling();}catch(e){console.warn('[Acress] init: schedule polling',e
 try{
   // ── PULSE WIDGET — keep cache warm so buildPulseWidget can render ──
   fetchPulse().then(function(){
+    try{renderMarketMoodBanner();}catch(e){}
     if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
     if(typeof renderResults==='function'){try{renderResults();}catch(e){}}
   }).catch(function(){});
   setInterval(function(){
     fetchPulse().then(function(){
+      try{renderMarketMoodBanner();}catch(e){}
       var rc=document.getElementById('results');
       if(rc&&rc.children.length>0&&typeof renderResults==='function'){
         try{renderResults();}catch(e){}
