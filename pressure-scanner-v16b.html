@@ -904,6 +904,9 @@ input{font-family:var(--font-ui);}
             <option value="all">All time</option>
             <option value="today">Today (EDT)</option>
             <option value="yesterday">Yesterday</option>
+            <option value="last1h">Last 1 hour</option>
+            <option value="last4h">Last 4 hours</option>
+            <option value="last12h">Last 12 hours</option>
             <option value="last24h">Last 24 hours</option>
             <option value="thisWeek">This week</option>
             <option value="last7days">Last 7 days</option>
@@ -2054,6 +2057,54 @@ function setupTrackerRenderHooks(){
     return result;
   };
 }
+
+// ── ANALYTICS TABLE CLICK-HEADER SORT ──────────────────────────────
+(function(){
+  if(document.getElementById('analytics-sort-css'))return;
+  var s=document.createElement('style');
+  s.id='analytics-sort-css';
+  s.textContent=
+    '#analytics-table th{cursor:pointer;user-select:none;}'+
+    '#analytics-table th:hover{color:var(--green);}'+
+    '#analytics-table th.ana-sort-asc::after{content:" \u25B2";color:var(--green);}'+
+    '#analytics-table th.ana-sort-desc::after{content:" \u25BC";color:var(--green);}';
+  document.head.appendChild(s);
+})();
+var __anaSortCol=null;
+var __anaSortDir='desc';
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var th=e.target.closest('#analytics-table th');
+  if(!th)return;
+  var table=th.closest('table');
+  if(!table)return;
+  var headerRow=th.parentElement;
+  var thArr=Array.from(headerRow.querySelectorAll('th'));
+  var colIdx=thArr.indexOf(th);
+  if(colIdx<0)return;
+  if(__anaSortCol===colIdx){__anaSortDir=__anaSortDir==='desc'?'asc':'desc';}
+  else{__anaSortCol=colIdx;__anaSortDir='desc';}
+  var allRows=Array.from(table.querySelectorAll('tr'));
+  var dataRows=allRows.filter(function(r){return !r.querySelector('th');});
+  if(dataRows.length<2)return;
+  dataRows.sort(function(a,b){
+    var aCell=a.children[colIdx];
+    var bCell=b.children[colIdx];
+    if(!aCell||!bCell)return 0;
+    var aText=(aCell.textContent||'').trim();
+    var bText=(bCell.textContent||'').trim();
+    var aNum=parseFloat(aText.replace(/[$,%+\s]/g,''));
+    var bNum=parseFloat(bText.replace(/[$,%+\s]/g,''));
+    var aIsNum=!isNaN(aNum)&&/\d/.test(aText);
+    var bIsNum=!isNaN(bNum)&&/\d/.test(bText);
+    if(aIsNum&&bIsNum)return __anaSortDir==='desc'?bNum-aNum:aNum-bNum;
+    return __anaSortDir==='desc'?bText.localeCompare(aText):aText.localeCompare(bText);
+  });
+  var parent=dataRows[0].parentElement;
+  dataRows.forEach(function(r){parent.appendChild(r);});
+  thArr.forEach(function(t){t.classList.remove('ana-sort-asc','ana-sort-desc');});
+  th.classList.add('ana-sort-'+__anaSortDir);
+},false);
 
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
