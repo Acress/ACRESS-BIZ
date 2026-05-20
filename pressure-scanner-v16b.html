@@ -2652,6 +2652,241 @@ function injectSolidBgCSS(){
 }
 
 
+
+// ── TRACKER VISUAL POLISH ──────────────────────────────────────────
+function injectTrackerCardCSS(){
+  if(document.getElementById('tracker-card-css'))return;
+  var s=document.createElement('style');
+  s.id='tracker-card-css';
+  s.textContent=
+    '#tracker-body > *{position:relative !important;border:1px solid rgba(255,255,255,0.08) !important;border-radius:12px !important;background:rgba(20,25,40,0.45) !important;padding:14px 16px !important;margin-bottom:10px !important;box-shadow:0 2px 10px rgba(0,0,0,0.22) !important;transition:border-color 0.15s,transform 0.15s,box-shadow 0.15s !important;}'+
+    '#tracker-body > *:hover{border-color:rgba(255,255,255,0.2) !important;transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.32) !important;}'+
+    '#tracker-body > *.tk-long{border-left:4px solid var(--green) !important;}'+
+    '#tracker-body > *.tk-short{border-left:4px solid var(--red) !important;}'+
+    '#tracker-body > *.tk-win{background:linear-gradient(rgba(46,232,160,0.04),rgba(46,232,160,0.04)),rgba(20,25,40,0.45) !important;}'+
+    '#tracker-body > *.tk-loss{background:linear-gradient(rgba(255,82,119,0.04),rgba(255,82,119,0.04)),rgba(20,25,40,0.45) !important;}'+
+    '#tracker-body > * .pc-arrow,#tracker-body > * [class*="arrow"]{font-weight:900 !important;}'+
+    '#tracker-body > *.tk-long .pc-arrow,#tracker-body > *.tk-long [class*="arrow"]{color:var(--green) !important;}'+
+    '#tracker-body > *.tk-short .pc-arrow,#tracker-body > *.tk-short [class*="arrow"]{color:var(--red) !important;}';
+  document.head.appendChild(s);
+}
+
+function styleTrackerRows(){
+  var body=document.getElementById('tracker-body');
+  if(!body)return;
+  Array.from(body.children).forEach(function(row){
+    if(row.dataset.tkStyled==='1')return;
+    var t=(row.textContent||'').toUpperCase();
+    var hasLong=/\bLONG\b/.test(t);
+    var hasShort=/\bSHORT\b/.test(t);
+    row.classList.remove('tk-long','tk-short','tk-win','tk-loss');
+    if(hasLong&&!hasShort)row.classList.add('tk-long');
+    else if(hasShort)row.classList.add('tk-short');
+    // Outcome detection by P&L text
+    var pnlMatch=t.match(/([+\-])\$\s*([\d,]+\.?\d*)/);
+    if(pnlMatch){
+      if(pnlMatch[1]==='+')row.classList.add('tk-win');
+      else row.classList.add('tk-loss');
+    }
+    row.dataset.tkStyled='1';
+  });
+}
+
+// ── NOTIFICATIONS ──────────────────────────────────────────────────
+window.notifications=JSON.parse(localStorage.getItem('acress_notifications')||'[]');
+window.notifLastState={signals:{},topMovers:{},pnlBracket:null,breakerActive:null,mode:null,initialized:false};
+
+function emitNotif(type,title,message){
+  var notif={id:Date.now()+'-'+Math.random().toString(36).slice(2,6),type:type,title:title,message:message,ts:Date.now(),read:false};
+  window.notifications.unshift(notif);
+  if(window.notifications.length>50)window.notifications=window.notifications.slice(0,50);
+  localStorage.setItem('acress_notifications',JSON.stringify(window.notifications));
+  updateNotifBadge();
+  pulseNotifBell();
+}
+
+function pulseNotifBell(){
+  var btn=document.getElementById('tb-notif-btn');
+  if(!btn)return;
+  btn.classList.add('notif-pulse');
+  setTimeout(function(){btn.classList.remove('notif-pulse');},1500);
+}
+
+function updateNotifBadge(){
+  var badge=document.getElementById('notif-badge');
+  if(!badge)return;
+  var unread=window.notifications.filter(function(n){return !n.read;}).length;
+  if(unread===0){badge.style.display='none';}
+  else{badge.style.display='';badge.textContent=unread>99?'99+':String(unread);}
+}
+
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function buildNotifPanelHTML(){
+  var notifs=window.notifications||[];
+  var html='<div class="np-header"><span>NOTIFICATIONS</span><button class="np-clear" onclick="clearAllNotifs()">Clear all</button></div><div class="np-list">';
+  if(notifs.length===0){html+='<div class="np-empty">No notifications yet</div>';}
+  else{
+    var iconMap={trade:'\u26A1',mover:'\u{1F525}',pnl:'\u26A0',breaker:'\u{1F6D1}',mode:'\u21BB'};
+    notifs.forEach(function(n){
+      var icon=iconMap[n.type]||'\u2022';
+      var ageMs=Date.now()-n.ts;
+      var ageStr=ageMs<60000?'just now':ageMs<3600000?Math.round(ageMs/60000)+'m ago':Math.floor(ageMs/3600000)+'h ago';
+      html+='<div class="np-item '+(n.read?'read':'unread')+' type-'+n.type+'"><div class="np-icon">'+icon+'</div><div class="np-body"><div class="np-title">'+escHtml(n.title)+'</div><div class="np-msg">'+escHtml(n.message)+'</div><div class="np-time">'+ageStr+'</div></div></div>';
+    });
+  }
+  return html+'</div>';
+}
+
+function clearAllNotifs(){
+  window.notifications=[];
+  localStorage.setItem('acress_notifications','[]');
+  updateNotifBadge();
+  var panel=document.getElementById('notif-panel');
+  if(panel&&panel.style.display==='block')panel.innerHTML=buildNotifPanelHTML();
+}
+
+function toggleNotifPanel(){
+  var panel=document.getElementById('notif-panel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='notif-panel';
+    document.body.appendChild(panel);
+  }
+  if(panel.style.display==='block'){panel.style.display='none';return;}
+  panel.innerHTML=buildNotifPanelHTML();
+  panel.style.display='block';
+  var btn=document.getElementById('tb-notif-btn');
+  if(btn){
+    var rect=btn.getBoundingClientRect();
+    panel.style.top=(rect.bottom+8)+'px';
+    panel.style.right=Math.max(8,(window.innerWidth-rect.right))+'px';
+  }
+  setTimeout(function(){
+    window.notifications.forEach(function(n){n.read=true;});
+    localStorage.setItem('acress_notifications',JSON.stringify(window.notifications));
+    updateNotifBadge();
+  },1200);
+}
+
+function ensureNotifButton(){
+  var topbar=document.getElementById('acress-topbar');
+  if(!topbar)return;
+  if(document.getElementById('tb-notif-btn'))return;
+  var scanBtn=document.getElementById('tb-scan');
+  var btn=document.createElement('button');
+  btn.id='tb-notif-btn';
+  btn.className='tb-notif-btn';
+  btn.title='Notifications';
+  btn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22a2 2 0 002-2H10a2 2 0 002 2zm6-6V10a6 6 0 00-12 0v6l-2 2v1h16v-1l-2-2z"/></svg><span id="notif-badge" class="tb-notif-badge" style="display:none;">0</span>';
+  btn.addEventListener('click',function(e){e.stopPropagation();toggleNotifPanel();});
+  if(scanBtn&&scanBtn.parentNode){scanBtn.parentNode.insertBefore(btn,scanBtn);}
+  else{topbar.appendChild(btn);}
+  updateNotifBadge();
+}
+
+document.addEventListener('click',function(e){
+  var panel=document.getElementById('notif-panel');
+  if(!panel||panel.style.display!=='block')return;
+  if(e.target.closest('#notif-panel')||e.target.closest('#tb-notif-btn'))return;
+  panel.style.display='none';
+},false);
+
+function injectNotifCSS(){
+  if(document.getElementById('notif-css'))return;
+  var s=document.createElement('style');
+  s.id='notif-css';
+  s.textContent=
+    '.tb-notif-btn{position:relative;padding:6px 9px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--faint);border:1px solid rgba(255,255,255,0.08);cursor:pointer;display:inline-flex;align-items:center;margin-right:4px;transition:all 0.15s;}'+
+    '.tb-notif-btn:hover{color:#fff;background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);}'+
+    '.tb-notif-btn.notif-pulse{animation:notifPulse 0.6s ease-out;}'+
+    '@keyframes notifPulse{0%{transform:scale(1);}50%{transform:scale(1.15);box-shadow:0 0 12px var(--amber);}100%{transform:scale(1);}}'+
+    '.tb-notif-badge{position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;min-width:14px;text-align:center;line-height:1.3;font-family:var(--font-mono);}'+
+    '#notif-panel{display:none;position:fixed;width:360px;max-height:480px;background:#0B0F1A;border:1px solid rgba(255,255,255,0.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.6);z-index:9999;overflow:hidden;font-family:var(--font-mono);}'+
+    '.np-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:10px;letter-spacing:1.5px;font-weight:700;color:var(--faint);}'+
+    '.np-header button{background:none;border:none;color:var(--faint);font-size:10px;cursor:pointer;padding:4px 8px;border-radius:4px;font-family:var(--font-mono);letter-spacing:0.5px;}'+
+    '.np-header button:hover{background:rgba(255,82,119,0.1);color:var(--red);}'+
+    '.np-list{max-height:400px;overflow-y:auto;}'+
+    '.np-empty{padding:40px 20px;text-align:center;color:var(--faint);font-size:11px;opacity:0.6;}'+
+    '.np-item{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.05);}'+
+    '.np-item.unread{background:rgba(46,232,160,0.03);border-left:2px solid var(--green);}'+
+    '.np-icon{flex-shrink:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);border-radius:50%;font-size:14px;}'+
+    '.np-body{flex:1;min-width:0;}'+
+    '.np-title{font-size:11px;font-weight:800;letter-spacing:0.5px;color:#fff;margin-bottom:3px;}'+
+    '.np-msg{font-size:11px;color:#bbb;line-height:1.4;margin-bottom:4px;font-family:system-ui,sans-serif;}'+
+    '.np-time{font-size:9px;color:var(--faint);opacity:0.65;}'+
+    '.np-item.type-trade .np-icon{color:var(--green);background:rgba(46,232,160,0.12);}'+
+    '.np-item.type-mover .np-icon{color:var(--amber);background:rgba(255,170,0,0.12);}'+
+    '.np-item.type-pnl .np-icon,.np-item.type-breaker .np-icon{color:var(--red);background:rgba(255,82,119,0.12);}'+
+    '.np-item.type-mode .np-icon{color:#6ec3ff;background:rgba(110,195,255,0.12);}';
+  document.head.appendChild(s);
+}
+
+function checkAndEmitNotifs(){
+  try{
+    // New TRADE IT signals
+    var cards=document.querySelectorAll('#results .pcard');
+    var currentTradeItKeys={};
+    cards.forEach(function(card){
+      if(typeof extractPulseInfo!=='function')return;
+      var info=extractPulseInfo(card);
+      if(!info||info.verdict!=='TRADE IT')return;
+      var symEl=card.querySelector('.pc-sym');
+      if(!symEl)return;
+      var sym=symEl.textContent.trim();
+      var dir=card.classList.contains('long')?'LONG':(card.classList.contains('short')?'SHORT':'');
+      var key=sym+'|'+dir;
+      currentTradeItKeys[key]=true;
+      if(notifLastState.initialized&&!notifLastState.signals[key]){
+        emitNotif('trade','TRADE IT — '+sym,dir+' signal just hit TRADE IT verdict');
+      }
+    });
+    notifLastState.signals=currentTradeItKeys;
+
+    // Top movers — new entries
+    if(window.topMoversCache&&window.topMoversCache.movers){
+      var currentMoverKeys={};
+      window.topMoversCache.movers.forEach(function(m){currentMoverKeys[m.symbol]=m;});
+      if(notifLastState.initialized){
+        Object.keys(currentMoverKeys).forEach(function(sym){
+          if(!notifLastState.topMovers[sym]){
+            var m=currentMoverKeys[sym];
+            var sign=m.change24h>=0?'+':'';
+            emitNotif('mover','New top mover',sym+' '+sign+m.change24h.toFixed(1)+'% (24h)');
+          }
+        });
+      }
+      notifLastState.topMovers=currentMoverKeys;
+    }
+
+    // Daily PnL bracket
+    if(typeof computeDailyStats==='function'&&typeof getDailyLossLimit==='function'){
+      var stats=computeDailyStats();
+      var limit=getDailyLossLimit();
+      var lossPct=Math.abs(Math.min(0,stats.pnl))/limit*100;
+      var bracket=lossPct>=100?'breaker':lossPct>=75?'w75':lossPct>=50?'w50':null;
+      if(bracket!==notifLastState.pnlBracket&&notifLastState.initialized){
+        if(bracket==='w50')emitNotif('pnl','Drawdown at 50%','Daily PnL is at -50% of your $'+limit+' limit');
+        else if(bracket==='w75')emitNotif('pnl','Drawdown at 75%','One more loss may trip the circuit breaker');
+        else if(bracket==='breaker')emitNotif('breaker','Circuit breaker hit','Daily limit reached. No more trades today.');
+      }
+      notifLastState.pnlBracket=bracket;
+    }
+
+    // Mode change
+    if(typeof getTradeMode==='function'){
+      var mode=getTradeMode();
+      if(notifLastState.mode!==null&&notifLastState.mode!==mode){
+        emitNotif('mode','Mode switched','Now in '+mode.toUpperCase()+' mode');
+      }
+      notifLastState.mode=mode;
+    }
+
+    notifLastState.initialized=true;
+  }catch(e){console.warn('[ACRESS] checkAndEmitNotifs:',e.message);}
+}
+
+
 function ensureTopbar(){
   injectTopbarCSS();
   var bar=document.getElementById('acress-topbar');
@@ -6176,7 +6411,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
-try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();ensureTopbar();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();},500);}catch(e){console.warn('[Acress] init: topbar + movers + verdict lock',e.message);}
+try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();ensureTopbar();ensureNotifButton();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();ensureTopbar();ensureNotifButton();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();styleTrackerRows();},500);setInterval(checkAndEmitNotifs,3000);}catch(e){console.warn('[Acress] init: full',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
