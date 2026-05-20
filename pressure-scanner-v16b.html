@@ -4175,7 +4175,7 @@ async function pollPrices(){
     console.warn('[Acress] price poll fail:',e.message);
   }
 }
-function schedulePolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(pollPrices,30000);pollPrices();}
+function schedulePolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(pollPrices,2000);pollPrices();}
 
 // Sparkline SVG builder
 // Compute "nice round" tick values for a numeric axis (price)
