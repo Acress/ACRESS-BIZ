@@ -1300,6 +1300,123 @@ function renderLivenessIndicator(){
   el.title=asOf>0?'Last bridge fetch: '+new Date(asOf).toLocaleTimeString()+'  Age: '+(ageMs/1000).toFixed(1)+'s':'No data fetched yet';
 }
 
+// ── DAILY PNL + CIRCUIT BREAKER ────────────────────────────────────
+var DAILY_LIMIT_KEY='acress_daily_loss_limit';
+function getDailyLossLimit(){
+  var v=parseFloat(localStorage.getItem(DAILY_LIMIT_KEY));
+  return isNaN(v)||v<=0?400:v;
+}
+function setDailyLossLimit(v){
+  if(isNaN(v)||v<=0)return;
+  localStorage.setItem(DAILY_LIMIT_KEY,String(v));
+}
+function isDateToday(ts){
+  if(!ts)return false;
+  try{
+    var d1=new Date(ts).toLocaleDateString('en-US',{timeZone:'America/New_York'});
+    var d2=new Date().toLocaleDateString('en-US',{timeZone:'America/New_York'});
+    return d1===d2;
+  }catch(e){return false;}
+}
+function computeDailyStats(){
+  var pnl=0,trades=0,wins=0,losses=0;
+  if(typeof tracker!=='undefined'&&tracker&&tracker.length){
+    for(var i=0;i<tracker.length;i++){
+      var t=tracker[i];
+      var loggedToday=isDateToday(t.loggedAt);
+      var closedToday=t.closedAt&&isDateToday(t.closedAt);
+      if(!loggedToday&&!closedToday)continue;
+      trades++;
+      var p=(t.status==='open')?(t.currentPnlUsd||0):((t.finalPnlUsd!=null?t.finalPnlUsd:t.currentPnlUsd)||0);
+      pnl+=p;
+      if(p>0.01)wins++;
+      else if(p<-0.01)losses++;
+    }
+  }
+  return {pnl:pnl,trades:trades,wins:wins,losses:losses};
+}
+function isCircuitBreakerActive(){
+  var s=computeDailyStats();
+  return s.pnl<=-getDailyLossLimit();
+}
+function injectDailyPnlCSS(){
+  if(document.getElementById('daily-pnl-css'))return;
+  var s=document.createElement('style');
+  s.id='daily-pnl-css';
+  s.textContent=
+    '#daily-pnl-widget{width:100%;background:rgba(20,20,30,0.55);border-bottom:1px solid rgba(255,255,255,0.04);padding:8px 20px;font-family:var(--font-mono);font-size:11px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}'+
+    '#daily-pnl-widget.breaker-active{background:rgba(255,40,40,0.18);border-bottom:2px solid var(--red);animation:bkrFlash 2s infinite;}'+
+    '@keyframes bkrFlash{0%,100%{background:rgba(255,40,40,0.18);}50%{background:rgba(255,40,40,0.28);}}'+
+    '.dp-label{font-size:10px;letter-spacing:1px;color:var(--faint);}'+
+    '.dp-pnl{font-weight:700;font-size:14px;min-width:90px;}'+
+    '.dp-pnl.pos{color:var(--green);}'+
+    '.dp-pnl.neg{color:var(--red);}'+
+    '.dp-pnl.zero{color:var(--faint);}'+
+    '.dp-stats{color:var(--faint);}'+
+    '.dp-limit{margin-left:auto;font-size:11px;color:var(--faint);cursor:pointer;text-decoration:underline dotted;}'+
+    '.dp-limit:hover{color:#fff;}'+
+    '.dp-breaker-msg{color:var(--red);font-weight:700;letter-spacing:0.5px;}';
+  document.head.appendChild(s);
+}
+function buildDailyPnlWidget(){
+  var s=computeDailyStats();
+  var limit=getDailyLossLimit();
+  var breakerOn=s.pnl<=-limit;
+  var pnlSign=s.pnl>=0?'+':'';
+  var pnlCls=Math.abs(s.pnl)<0.01?'zero':(s.pnl>0?'pos':'neg');
+  var winPct=s.trades>0?Math.round(s.wins/s.trades*100):0;
+  var html='<span class="dp-label">TODAY (EDT)</span>'+
+    '<span class="dp-pnl '+pnlCls+'">'+pnlSign+'$'+s.pnl.toFixed(2)+'</span>'+
+    '<span class="dp-stats">'+s.trades+' trades &middot; '+winPct+'% win &middot; '+s.wins+'W/'+s.losses+'L</span>';
+  if(breakerOn){
+    html+='<span class="dp-breaker-msg">&#x26A0; CIRCUIT BREAKER &middot; DAILY LIMIT REACHED &middot; TRADING BLOCKED</span>';
+  }
+  html+='<span class="dp-limit" id="dp-edit-limit" title="Click to change daily loss limit">limit: -$'+limit.toFixed(0)+' (click to edit)</span>';
+  return html;
+}
+function renderDailyPnlWidget(){
+  injectDailyPnlCSS();
+  var el=document.getElementById('daily-pnl-widget');
+  if(!el){
+    el=document.createElement('div');
+    el.id='daily-pnl-widget';
+    var anchor=document.getElementById('market-mood-banner');
+    if(anchor&&anchor.parentNode){
+      if(anchor.nextSibling)anchor.parentNode.insertBefore(el,anchor.nextSibling);
+      else anchor.parentNode.appendChild(el);
+    }else{
+      document.body.insertBefore(el,document.body.firstChild);
+    }
+  }
+  el.innerHTML=buildDailyPnlWidget();
+  if(isCircuitBreakerActive())el.classList.add('breaker-active');
+  else el.classList.remove('breaker-active');
+  var editEl=document.getElementById('dp-edit-limit');
+  if(editEl&&!editEl.dataset.wired){
+    editEl.dataset.wired='1';
+    editEl.addEventListener('click',function(){
+      var current=getDailyLossLimit();
+      var input=prompt('Daily loss limit in dollars (positive number)\nCurrent: -$'+current.toFixed(0),String(current));
+      if(input===null)return;
+      var v=parseFloat(input);
+      if(isNaN(v)||v<=0){alert('Invalid value. Must be a positive number.');return;}
+      setDailyLossLimit(v);
+      renderDailyPnlWidget();
+    });
+  }
+}
+document.addEventListener('click',function(e){
+  var t=e.target;
+  if(!t||!t.closest)return;
+  var btn=t.closest('[data-log-sig], button.pc-act.log:not(.tracked)');
+  if(btn&&isCircuitBreakerActive()){
+    e.preventDefault();
+    e.stopPropagation();
+    alert('\u26A0 Circuit breaker active.\n\nDaily loss limit (-$'+getDailyLossLimit().toFixed(0)+') has been reached.\n\nTrading is blocked until either:\n  - Tomorrow (resets at midnight EDT)\n  - You manually raise the limit (click the limit text in the daily PnL bar)');
+    return false;
+  }
+},true);
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -4786,13 +4903,13 @@ try{schedulePolling();}catch(e){console.warn('[Acress] init: schedule polling',e
 try{
   // ── PULSE WIDGET — keep cache warm so buildPulseWidget can render ──
   fetchPulse().then(function(){
-    try{renderMarketMoodBanner();renderTopCombosWidget();}catch(e){}
+    try{renderMarketMoodBanner();renderTopCombosWidget();renderDailyPnlWidget();}catch(e){}
     if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
     if(typeof renderResults==='function'){try{renderResults();}catch(e){}}
   }).catch(function(){});
   setInterval(function(){
     fetchPulse().then(function(){
-      try{renderMarketMoodBanner();renderTopCombosWidget();}catch(e){}
+      try{renderMarketMoodBanner();renderTopCombosWidget();renderDailyPnlWidget();}catch(e){}
       var rc=document.getElementById('results');
       if(rc&&rc.children.length>0&&typeof renderResults==='function'){
         try{renderResults();}catch(e){}
@@ -4802,6 +4919,7 @@ try{
   },10000);
 }catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
 try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
+try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
