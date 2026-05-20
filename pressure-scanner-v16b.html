@@ -4549,6 +4549,22 @@ try{
 try{migrateTracker();}catch(e){console.warn('[Acress] init: migrate tracker',e.message);}
 try{renderTracker();renderTrackerSummary();}catch(e){console.warn('[Acress] init: render tracker',e.message);}
 try{schedulePolling();}catch(e){console.warn('[Acress] init: schedule polling',e.message);}
+try{
+  // ── PULSE WIDGET — keep cache warm so buildPulseWidget can render ──
+  fetchPulse().then(function(){
+    if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
+    if(typeof renderResults==='function'){try{renderResults();}catch(e){}}
+  }).catch(function(){});
+  setInterval(function(){
+    fetchPulse().then(function(){
+      var rc=document.getElementById('results');
+      if(rc&&rc.children.length>0&&typeof renderResults==='function'){
+        try{renderResults();}catch(e){}
+      }
+      if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
+    }).catch(function(){});
+  },10000);
+}catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
