@@ -1727,6 +1727,156 @@ document.addEventListener('click',function(e){
   });
 },true);
 
+// ── PULSE FILTERS + COMPOSITE SORT ─────────────────────────────────
+var PULSE_FILTERS_KEY='acress_pulse_filters';
+function getPulseFilters(){
+  try{return JSON.parse(localStorage.getItem(PULSE_FILTERS_KEY)||'{}');}catch(e){return {};}
+}
+function savePulseFilters(){
+  try{
+    localStorage.setItem(PULSE_FILTERS_KEY,JSON.stringify({
+      topCombos:!!document.getElementById('pf-top-combos')?.checked,
+      hideSkip:!!document.getElementById('pf-hide-skip')?.checked,
+      hideNed:!!document.getElementById('pf-hide-ned')?.checked,
+      onlyTradeIt:!!document.getElementById('pf-only-tradeit')?.checked
+    }));
+  }catch(e){}
+}
+function extractPulseInfo(card){
+  var mech=card.querySelector('.pc-mech-name');
+  var dir=card.classList.contains('long')?'LONG':(card.classList.contains('short')?'SHORT':'LONG');
+  if(!mech)return {verdict:'UNKNOWN',perTrade:0,n:0,mechName:'',dir:dir};
+  var mechName=(mech.textContent||'').replace(/\s*OI.*$/,'').replace(/\s*no OI.*$/,'').trim();
+  var key=mechName+'|'+dir;
+  var entry=(typeof pulseCache!=='undefined'&&pulseCache&&pulseCache.byMechDir)?pulseCache.byMechDir[key]:null;
+  if(!entry)return {verdict:'UNKNOWN',perTrade:0,n:0,mechName:mechName,dir:dir};
+  return {
+    verdict:entry.verdict||'UNKNOWN',
+    perTrade:(entry.recent30m&&entry.recent30m.perTrade)||0,
+    n:(entry.recent30m&&entry.recent30m.n)||0,
+    mechName:mechName,
+    dir:dir
+  };
+}
+function computeTopCombosSet(){
+  var set=new Set();
+  if(typeof pulseCache==='undefined'||!pulseCache||!pulseCache.byMechDir)return set;
+  var rows=[];
+  for(var k in pulseCache.byMechDir){
+    var e=pulseCache.byMechDir[k];
+    var r30=e.recent30m;
+    if(!r30||r30.n<5||(r30.perTrade||0)<=0)continue;
+    rows.push({key:k,perTrade:r30.perTrade});
+  }
+  rows.sort(function(a,b){return b.perTrade-a.perTrade;});
+  rows.slice(0,5).forEach(function(r){set.add(r.key);});
+  return set;
+}
+function applyPulseSorting(){
+  if(typeof pulseCache==='undefined'||!pulseCache||!pulseCache.byMechDir)return;
+  if(Object.keys(pulseCache.byMechDir).length===0)return;
+  var container=document.getElementById('results');
+  if(!container)return;
+  var cards=Array.from(container.querySelectorAll('.pcard'));
+  if(cards.length===0)return;
+  var vOrder={'TRADE IT':0,'WAIT':1,'SKIP':2,'NOT ENOUGH DATA':3,'UNKNOWN':4};
+  var enriched=cards.map(function(card){
+    var info=extractPulseInfo(card);
+    return {card:card,v:vOrder[info.verdict]!==undefined?vOrder[info.verdict]:4};
+  });
+  enriched.sort(function(a,b){return a.v-b.v;});
+  enriched.forEach(function(item){container.appendChild(item.card);});
+}
+function applyPulseFilters(){
+  var container=document.getElementById('results');
+  if(!container)return;
+  var topCombosOnly=document.getElementById('pf-top-combos')?.checked;
+  var hideSkip=document.getElementById('pf-hide-skip')?.checked;
+  var hideNed=document.getElementById('pf-hide-ned')?.checked;
+  var onlyTradeIt=document.getElementById('pf-only-tradeit')?.checked;
+  var hasData=typeof pulseCache!=='undefined'&&pulseCache&&pulseCache.byMechDir&&Object.keys(pulseCache.byMechDir).length>0;
+  var topSet=(topCombosOnly&&hasData)?computeTopCombosSet():null;
+  var cards=container.querySelectorAll('.pcard');
+  cards.forEach(function(card){
+    if(!hasData){card.style.display='';return;}
+    var info=extractPulseInfo(card);
+    var hide=false;
+    if(topSet){
+      var key=info.mechName+'|'+info.dir;
+      if(!topSet.has(key))hide=true;
+    }
+    if(hideSkip&&info.verdict==='SKIP')hide=true;
+    if(hideNed&&(info.verdict==='NOT ENOUGH DATA'||info.verdict==='UNKNOWN'))hide=true;
+    if(onlyTradeIt&&info.verdict!=='TRADE IT')hide=true;
+    card.style.display=hide?'none':'';
+  });
+  var total=cards.length;
+  var visible=Array.from(cards).filter(function(c){return c.style.display!=='none';}).length;
+  var countEl=document.getElementById('pf-visible-count');
+  if(countEl)countEl.textContent=visible+' of '+total+' visible';
+}
+function injectPulseFiltersCSS(){
+  if(document.getElementById('pf-css'))return;
+  var s=document.createElement('style');
+  s.id='pf-css';
+  s.textContent=
+    '#pulse-filters{width:100%;background:rgba(20,20,30,0.4);border-bottom:1px solid rgba(255,255,255,0.04);padding:6px 20px;font-family:var(--font-mono);font-size:11px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}'+
+    '#pulse-filters .pf-label{font-size:10px;letter-spacing:1px;color:var(--faint);}'+
+    '#pulse-filters label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none;color:#fff;font-weight:600;}'+
+    '#pulse-filters label:hover{color:var(--green);}'+
+    '#pulse-filters input[type=checkbox]{cursor:pointer;accent-color:var(--green);}'+
+    '#pulse-filters .pf-active-count{margin-left:auto;color:var(--faint);font-size:10px;font-weight:700;}';
+  document.head.appendChild(s);
+}
+function buildPulseFiltersWidget(){
+  return '<span class="pf-label">PULSE FILTERS</span>'+
+    '<label><input type="checkbox" id="pf-top-combos"> Top combos only</label>'+
+    '<label><input type="checkbox" id="pf-hide-skip"> Hide SKIP</label>'+
+    '<label><input type="checkbox" id="pf-hide-ned"> Hide NED</label>'+
+    '<label><input type="checkbox" id="pf-only-tradeit"> Only TRADE IT</label>'+
+    '<span class="pf-active-count" id="pf-visible-count"></span>';
+}
+function renderPulseFiltersWidget(){
+  injectPulseFiltersCSS();
+  var el=document.getElementById('pulse-filters');
+  if(el)return;
+  el=document.createElement('div');
+  el.id='pulse-filters';
+  var anchor=document.getElementById('risk-settings-widget');
+  if(anchor&&anchor.parentNode){
+    if(anchor.nextSibling)anchor.parentNode.insertBefore(el,anchor.nextSibling);
+    else anchor.parentNode.appendChild(el);
+  }else{
+    document.body.appendChild(el);
+  }
+  el.innerHTML=buildPulseFiltersWidget();
+  var saved=getPulseFilters();
+  if(document.getElementById('pf-top-combos'))document.getElementById('pf-top-combos').checked=!!saved.topCombos;
+  if(document.getElementById('pf-hide-skip'))document.getElementById('pf-hide-skip').checked=!!saved.hideSkip;
+  if(document.getElementById('pf-hide-ned'))document.getElementById('pf-hide-ned').checked=!!saved.hideNed;
+  if(document.getElementById('pf-only-tradeit'))document.getElementById('pf-only-tradeit').checked=!!saved.onlyTradeIt;
+  ['pf-top-combos','pf-hide-skip','pf-hide-ned','pf-only-tradeit'].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e)e.addEventListener('change',function(){
+      savePulseFilters();
+      applyPulseSorting();
+      applyPulseFilters();
+    });
+  });
+}
+function setupPulseRenderHooks(){
+  if(window.__pulseRenderHooked)return;
+  if(typeof window.renderResults!=='function')return;
+  window.__pulseRenderHooked=true;
+  var orig=window.renderResults;
+  window.renderResults=function(){
+    var result=orig.apply(this,arguments);
+    try{applyPulseSorting();}catch(e){}
+    try{applyPulseFilters();}catch(e){}
+    return result;
+  };
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -5232,6 +5382,7 @@ try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e)
 try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
 try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeBadge();tagUntaggedEntries();},1000);}catch(e){console.warn('[Acress] init: paper mode',e.message);}
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
+try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
