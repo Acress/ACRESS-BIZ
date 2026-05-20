@@ -1222,6 +1222,52 @@ function renderTopCombosWidget(){
   widget.innerHTML=html;
 }
 
+// ── LIVENESS INDICATOR ─────────────────────────────────────────────
+function injectLivenessCSS(){
+  if(document.getElementById('liveness-css'))return;
+  var s=document.createElement('style');
+  s.id='liveness-css';
+  s.textContent=
+    '#liveness-indicator{position:fixed;top:12px;right:12px;z-index:300;padding:5px 10px;background:rgba(0,0,0,0.78);border:1px solid rgba(255,255,255,0.08);border-radius:14px;font-family:var(--font-mono);font-size:11px;display:flex;align-items:center;gap:7px;cursor:default;backdrop-filter:blur(8px);}'+
+    '.liveness-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}'+
+    '.liveness-dot.live-fresh{background:var(--green);box-shadow:0 0 6px var(--green);}'+
+    '.liveness-dot.live-warm{background:var(--amber);box-shadow:0 0 4px var(--amber);}'+
+    '.liveness-dot.live-stale{background:var(--red);box-shadow:0 0 6px var(--red);animation:pulseRed 1s infinite;}'+
+    '.liveness-dot.live-dead{background:#555;}'+
+    '.liveness-text{color:var(--faint);letter-spacing:0.5px;}'+
+    '.liveness-text.live-fresh{color:var(--green);}'+
+    '.liveness-text.live-warm{color:var(--amber);}'+
+    '.liveness-text.live-stale,.liveness-text.live-dead{color:var(--red);}'+
+    '@keyframes pulseRed{0%,100%{opacity:1;}50%{opacity:0.4;}}';
+  document.head.appendChild(s);
+}
+function renderLivenessIndicator(){
+  injectLivenessCSS();
+  var el=document.getElementById('liveness-indicator');
+  if(!el){
+    el=document.createElement('div');
+    el.id='liveness-indicator';
+    document.body.appendChild(el);
+  }
+  var now=Date.now();
+  var asOf=(typeof pulseCache!=='undefined'&&pulseCache.asOf)?pulseCache.asOf:0;
+  var ageMs=asOf>0?now-asOf:Infinity;
+  var cls,label;
+  if(asOf===0){
+    cls='live-dead';label='NO DATA';
+  }else if(ageMs<3000){
+    cls='live-fresh';label='LIVE · '+Math.max(0,Math.round(ageMs/1000))+'s';
+  }else if(ageMs<10000){
+    cls='live-warm';label='OK · '+Math.round(ageMs/1000)+'s';
+  }else if(ageMs<60000){
+    cls='live-stale';label='STALE · '+Math.round(ageMs/1000)+'s';
+  }else{
+    cls='live-dead';label='DEAD · '+Math.round(ageMs/60000)+'m';
+  }
+  el.innerHTML='<span class="liveness-dot '+cls+'"></span><span class="liveness-text '+cls+'">'+label+'</span>';
+  el.title=asOf>0?'Last bridge fetch: '+new Date(asOf).toLocaleTimeString()+'  Age: '+(ageMs/1000).toFixed(1)+'s':'No data fetched yet';
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -4723,6 +4769,7 @@ try{
     }).catch(function(){});
   },10000);
 }catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
+try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
