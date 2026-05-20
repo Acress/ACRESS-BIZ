@@ -1496,6 +1496,237 @@ function renderModeBadge(){
   el.title=mode==='live'?'LIVE MODE: New trades will be tagged for real-money execution. Click to switch back to PAPER.':'PAPER MODE: All trades are virtual. Click to switch to LIVE (requires confirmation).';
 }
 
+// ── RISK GATE — POSITION SIZING + PRE-TRADE CONFIRMATION ──────────
+var ACCT_BAL_KEY='acress_account_balance';
+var MAX_RISK_KEY='acress_max_risk_pct';
+function getAcctBalance(){
+  var v=parseFloat(localStorage.getItem(ACCT_BAL_KEY));
+  return isNaN(v)||v<=0?5000:v;
+}
+function setAcctBalance(v){
+  if(isNaN(v)||v<=0)return;
+  localStorage.setItem(ACCT_BAL_KEY,String(v));
+}
+function getMaxRiskPct(){
+  var v=parseFloat(localStorage.getItem(MAX_RISK_KEY));
+  return isNaN(v)||v<=0||v>50?1.5:v;
+}
+function setMaxRiskPct(v){
+  if(isNaN(v)||v<=0||v>50)return;
+  localStorage.setItem(MAX_RISK_KEY,String(v));
+}
+function extractSignalFromCard(btn){
+  var card=btn.closest('.pcard');
+  if(!card)return null;
+  var sym=card.querySelector('.pc-sym');
+  var price=card.querySelector('.pc-price');
+  var mech=card.querySelector('.pc-mech-name');
+  var dir=card.classList.contains('long')?'LONG':(card.classList.contains('short')?'SHORT':'LONG');
+  var ezVals=card.querySelectorAll('.entry-zone .ez-val');
+  var entryStr=ezVals[0]?ezVals[0].textContent:null;
+  var entry=entryStr?parseFloat(entryStr.replace('$','').replace(/,/g,'')):null;
+  return {
+    base:sym?sym.textContent.trim():'UNKNOWN',
+    dir:dir,
+    price:price?parseFloat(price.textContent.replace('$','').replace(/,/g,'')):null,
+    mech:mech?(mech.textContent||'').replace(/\s*OI.*$/,'').trim():'Unknown',
+    entry:entry||(price?parseFloat(price.textContent.replace('$','').replace(/,/g,'')):0)
+  };
+}
+function computeSizing(signal){
+  var slPct=(typeof trackerCfg!=='undefined'&&trackerCfg.risk)?trackerCfg.risk/100:0.0192;
+  var tpPct=(typeof trackerCfg!=='undefined'&&trackerCfg.takeProfit)?trackerCfg.takeProfit/100:0.04;
+  var leverage=(typeof trackerCfg!=='undefined'&&trackerCfg.leverage)?trackerCfg.leverage:1;
+  var positionSize=(typeof trackerCfg!=='undefined'&&trackerCfg.position)?trackerCfg.position:1000;
+  var notional=positionSize*leverage;
+  var entry=signal.entry||0;
+  var stopPrice=signal.dir==='LONG'?entry*(1-slPct):entry*(1+slPct);
+  var tpPrice=signal.dir==='LONG'?entry*(1+tpPct):entry*(1-tpPct);
+  var maxLossUsd=notional*slPct;
+  var maxGainUsd=notional*tpPct;
+  var acctBal=getAcctBalance();
+  var lossPctOfAcct=(maxLossUsd/acctBal)*100;
+  var maxRiskPct=getMaxRiskPct();
+  var maxAllowedLoss=acctBal*(maxRiskPct/100);
+  var oversized=maxLossUsd>maxAllowedLoss;
+  return {positionSize:positionSize,notional:notional,leverage:leverage,entry:entry,stopPrice:stopPrice,tpPrice:tpPrice,slPct:slPct,tpPct:tpPct,maxLossUsd:maxLossUsd,maxGainUsd:maxGainUsd,acctBal:acctBal,lossPctOfAcct:lossPctOfAcct,maxRiskPct:maxRiskPct,maxAllowedLoss:maxAllowedLoss,oversized:oversized};
+}
+function injectRiskGateCSS(){
+  if(document.getElementById('risk-gate-css'))return;
+  var s=document.createElement('style');
+  s.id='risk-gate-css';
+  s.textContent=
+    '#risk-settings-widget{width:100%;background:rgba(20,20,30,0.4);border-bottom:1px solid rgba(255,255,255,0.04);padding:6px 20px;font-family:var(--font-mono);font-size:11px;display:flex;gap:14px;align-items:center;color:var(--faint);flex-wrap:wrap;}'+
+    '#risk-settings-widget .rs-label{font-size:10px;letter-spacing:1px;}'+
+    '#risk-settings-widget .rs-val{color:#fff;cursor:pointer;text-decoration:underline dotted;font-weight:700;}'+
+    '#risk-settings-widget .rs-val:hover{color:var(--green);}'+
+    '#rg-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}'+
+    '.rg-modal{background:#1a1a25;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:24px;font-family:var(--font-mono);font-size:13px;min-width:380px;max-width:520px;width:100%;color:#fff;}'+
+    '.rg-modal h2{margin:0 0 16px 0;font-size:13px;letter-spacing:1px;color:var(--faint);}'+
+    '.rg-sym-line{font-size:17px;font-weight:700;margin-bottom:4px;}'+
+    '.rg-sym-line .dir-long{color:var(--green);}'+
+    '.rg-sym-line .dir-short{color:var(--red);}'+
+    '.rg-mech{font-size:11px;color:var(--faint);margin-bottom:16px;}'+
+    '.rg-section{margin-bottom:14px;}'+
+    '.rg-section-title{font-size:10px;letter-spacing:1px;color:var(--faint);margin-bottom:5px;}'+
+    '.rg-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px;}'+
+    '.rg-row .lbl{color:var(--faint);}'+
+    '.rg-row .val{font-weight:700;}'+
+    '.rg-row .val.pos{color:var(--green);}'+
+    '.rg-row .val.neg{color:var(--red);}'+
+    '.rg-acct-row{padding:8px 0;border-top:1px solid rgba(255,255,255,0.08);margin-top:8px;}'+
+    '.rg-editable{cursor:pointer;text-decoration:underline dotted;color:#fff;}'+
+    '.rg-editable:hover{color:var(--green);}'+
+    '.rg-warning{background:rgba(255,170,0,0.15);border:1px solid var(--amber);color:var(--amber);padding:8px 12px;border-radius:6px;font-size:11px;margin:12px 0;}'+
+    '.rg-actions{display:flex;gap:10px;margin-top:18px;}'+
+    '.rg-btn{flex:1;padding:10px 16px;border:none;border-radius:8px;font-family:var(--font-mono);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.5px;}'+
+    '.rg-btn.cancel{background:rgba(255,255,255,0.08);color:#fff;}'+
+    '.rg-btn.cancel:hover{background:rgba(255,255,255,0.15);}'+
+    '.rg-btn.confirm{background:var(--green);color:#000;}'+
+    '.rg-btn.confirm:hover{filter:brightness(1.15);}';
+  document.head.appendChild(s);
+}
+function buildRiskSettingsWidget(){
+  var ab=getAcctBalance();
+  var mr=getMaxRiskPct();
+  return '<span class="rs-label">RISK</span>'+
+    '<span>Account: <span class="rs-val" id="rs-edit-acct">$'+ab.toLocaleString()+'</span></span>'+
+    '<span>Max risk per trade: <span class="rs-val" id="rs-edit-risk">'+mr.toFixed(2)+'%</span></span>'+
+    '<span style="opacity:0.55;font-size:10px;">(click any value to edit)</span>';
+}
+function renderRiskSettingsWidget(){
+  injectRiskGateCSS();
+  var el=document.getElementById('risk-settings-widget');
+  if(!el){
+    el=document.createElement('div');
+    el.id='risk-settings-widget';
+    var anchor=document.getElementById('daily-pnl-widget');
+    if(anchor&&anchor.parentNode){
+      if(anchor.nextSibling)anchor.parentNode.insertBefore(el,anchor.nextSibling);
+      else anchor.parentNode.appendChild(el);
+    }else{
+      document.body.appendChild(el);
+    }
+  }
+  el.innerHTML=buildRiskSettingsWidget();
+  var ea=document.getElementById('rs-edit-acct');
+  if(ea&&!ea.dataset.wired){
+    ea.dataset.wired='1';
+    ea.addEventListener('click',function(){
+      var cur=getAcctBalance();
+      var inp=prompt('Account balance in USD (used for risk % calculations)\nCurrent: $'+cur.toLocaleString(),String(cur));
+      if(inp===null)return;
+      var v=parseFloat(inp.replace(/,/g,''));
+      if(isNaN(v)||v<=0){alert('Invalid value. Must be positive.');return;}
+      setAcctBalance(v);
+      renderRiskSettingsWidget();
+    });
+  }
+  var er=document.getElementById('rs-edit-risk');
+  if(er&&!er.dataset.wired){
+    er.dataset.wired='1';
+    er.addEventListener('click',function(){
+      var cur=getMaxRiskPct();
+      var inp=prompt('Maximum risk per trade as % of account\nCurrent: '+cur.toFixed(2)+'%\nTypical range: 0.5 - 3%',String(cur));
+      if(inp===null)return;
+      var v=parseFloat(inp);
+      if(isNaN(v)||v<=0||v>50){alert('Invalid value. Must be 0 < x <= 50.');return;}
+      setMaxRiskPct(v);
+      renderRiskSettingsWidget();
+    });
+  }
+}
+function showRiskGateModal(btn,callback){
+  if(document.getElementById('rg-overlay'))return;
+  var signal=extractSignalFromCard(btn);
+  if(!signal||!signal.entry){callback(true);return;}
+  injectRiskGateCSS();
+  var overlay=document.createElement('div');
+  overlay.id='rg-overlay';
+  function fmtPrice(p){return p<0.1?p.toFixed(6):(p<10?p.toFixed(4):p.toFixed(2));}
+  function buildModalHTML(){
+    var sz=computeSizing(signal);
+    var dirCls=signal.dir==='LONG'?'dir-long':'dir-short';
+    var dirArrow=signal.dir==='LONG'?'\u25B2':'\u25BC';
+    var modeBadge=(typeof getTradeMode==='function'&&getTradeMode()==='live')?'<span style="color:var(--red);font-weight:700;">LIVE</span>':'<span style="color:var(--amber);font-weight:700;">PAPER</span>';
+    var warning=sz.oversized?'<div class="rg-warning">\u26A0 Trade risk ($'+sz.maxLossUsd.toFixed(2)+') exceeds your max risk per trade ($'+sz.maxAllowedLoss.toFixed(2)+', '+sz.maxRiskPct.toFixed(2)+'% of account). Reduce position size in TRADE CONFIG, or raise max risk %.</div>':'';
+    return '<div class="rg-modal">'+
+      '<h2>CONFIRM TRADE &middot; '+modeBadge+'</h2>'+
+      '<div class="rg-sym-line"><span class="'+dirCls+'">'+dirArrow+' '+signal.base+' &middot; '+signal.dir+'</span></div>'+
+      '<div class="rg-mech">'+signal.mech+'</div>'+
+      '<div class="rg-section">'+
+        '<div class="rg-section-title">POSITION</div>'+
+        '<div class="rg-row"><span class="lbl">Size</span><span class="val">$'+sz.positionSize.toLocaleString()+'</span></div>'+
+        '<div class="rg-row"><span class="lbl">Leverage</span><span class="val">'+sz.leverage+'x</span></div>'+
+        '<div class="rg-row"><span class="lbl">Notional</span><span class="val">$'+sz.notional.toLocaleString()+'</span></div>'+
+      '</div>'+
+      '<div class="rg-section">'+
+        '<div class="rg-section-title">PRICES</div>'+
+        '<div class="rg-row"><span class="lbl">Entry</span><span class="val">$'+fmtPrice(sz.entry)+'</span></div>'+
+        '<div class="rg-row"><span class="lbl">Stop ('+(sz.slPct*100).toFixed(2)+'%)</span><span class="val neg">$'+fmtPrice(sz.stopPrice)+'</span></div>'+
+        '<div class="rg-row"><span class="lbl">Target ('+(sz.tpPct*100).toFixed(2)+'%)</span><span class="val pos">$'+fmtPrice(sz.tpPrice)+'</span></div>'+
+      '</div>'+
+      '<div class="rg-section">'+
+        '<div class="rg-section-title">OUTCOME</div>'+
+        '<div class="rg-row"><span class="lbl">Max loss</span><span class="val neg">-$'+sz.maxLossUsd.toFixed(2)+' ('+sz.lossPctOfAcct.toFixed(2)+'% of acct)</span></div>'+
+        '<div class="rg-row"><span class="lbl">Max gain</span><span class="val pos">+$'+sz.maxGainUsd.toFixed(2)+' ('+((sz.maxGainUsd/sz.acctBal)*100).toFixed(2)+'% of acct)</span></div>'+
+        '<div class="rg-row"><span class="lbl">R:R</span><span class="val">'+(sz.tpPct/sz.slPct).toFixed(2)+' : 1</span></div>'+
+      '</div>'+
+      warning+
+      '<div class="rg-acct-row">'+
+        '<div class="rg-row"><span class="lbl">Account</span><span class="val rg-editable" id="rg-edit-acct">$'+sz.acctBal.toLocaleString()+'</span></div>'+
+        '<div class="rg-row"><span class="lbl">Max risk per trade</span><span class="val rg-editable" id="rg-edit-risk">'+sz.maxRiskPct.toFixed(2)+'%</span></div>'+
+      '</div>'+
+      '<div class="rg-actions">'+
+        '<button class="rg-btn cancel" id="rg-cancel">Cancel</button>'+
+        '<button class="rg-btn confirm" id="rg-confirm">Confirm and Log</button>'+
+      '</div>'+
+    '</div>';
+  }
+  function refresh(){overlay.innerHTML=buildModalHTML();wire();}
+  function close(result){overlay.remove();callback(result);}
+  function wire(){
+    document.getElementById('rg-cancel').addEventListener('click',function(){close(false);});
+    document.getElementById('rg-confirm').addEventListener('click',function(){close(true);});
+    document.getElementById('rg-edit-acct').addEventListener('click',function(){
+      var cur=getAcctBalance();
+      var inp=prompt('Account balance in USD',String(cur));
+      if(inp===null)return;
+      var v=parseFloat(inp.replace(/,/g,''));
+      if(isNaN(v)||v<=0){alert('Invalid value');return;}
+      setAcctBalance(v);renderRiskSettingsWidget();refresh();
+    });
+    document.getElementById('rg-edit-risk').addEventListener('click',function(){
+      var cur=getMaxRiskPct();
+      var inp=prompt('Max risk per trade as % of account',String(cur));
+      if(inp===null)return;
+      var v=parseFloat(inp);
+      if(isNaN(v)||v<=0||v>50){alert('Invalid value');return;}
+      setMaxRiskPct(v);renderRiskSettingsWidget();refresh();
+    });
+    overlay.addEventListener('click',function(e){if(e.target===overlay)close(false);});
+  }
+  overlay.innerHTML=buildModalHTML();
+  document.body.appendChild(overlay);
+  wire();
+}
+var rgApproved=null;
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var btn=e.target.closest('[data-log-sig]');
+  if(!btn||btn.disabled||btn.classList.contains('tracked'))return;
+  if(typeof isCircuitBreakerActive==='function'&&isCircuitBreakerActive())return;
+  if(rgApproved===btn){rgApproved=null;return;}
+  e.preventDefault();
+  e.stopPropagation();
+  showRiskGateModal(btn,function(confirmed){
+    if(confirmed){
+      rgApproved=btn;
+      setTimeout(function(){btn.click();rgApproved=null;},0);
+    }
+  });
+},true);
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -5000,6 +5231,7 @@ try{
 try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
 try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
 try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeBadge();tagUntaggedEntries();},1000);}catch(e){console.warn('[Acress] init: paper mode',e.message);}
+try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
