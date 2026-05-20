@@ -2186,8 +2186,17 @@ function tbSetupTabs(){
     btn.dataset.match=t.match;
     btn.addEventListener('click',function(){
       var orig=tbFindOriginalByText(t.match);
-      if(orig)orig.click();
-      setTimeout(tbUpdateActive,80);
+      if(orig){
+        try{orig.click();}catch(e){}
+        try{
+          var ev=new MouseEvent('click',{bubbles:true,cancelable:true,view:window,button:0});
+          orig.dispatchEvent(ev);
+        }catch(e){}
+        console.log('[ACRESS tab]',t.match,'-> '+orig.tagName+' "'+(orig.textContent||'').trim().substring(0,40)+'"');
+      }else{
+        console.warn('[ACRESS tab] no element found for',t.match);
+      }
+      setTimeout(tbUpdateActive,120);
     });
     tabsEl.appendChild(btn);
   });
@@ -2275,8 +2284,8 @@ function injectUIPolishCSS(){
     // Mood banner: stop being sticky (was overlapping content)
     'body.with-acress-topbar #market-mood-banner{position:relative !important;top:auto !important;z-index:auto !important;}'+
     // Original brand+tabs row: demote visually but KEEP CLICKABLE (so topbar tab forwarding works)
-    '.acress-hidden-by-topbar{display:flex !important;opacity:0.32 !important;filter:saturate(0.4);transform:scale(0.85);transform-origin:left center;margin-bottom:-6px;}'+
-    '.acress-hidden-by-topbar:hover{opacity:0.7;filter:none;}'+
+    '.acress-hidden-by-topbar{opacity:0.55 !important;}'+
+    '.acress-hidden-by-topbar:hover{opacity:1 !important;}'+
     // Scanner results: 2-column grid
     '#results,.pcard-grid,.results-grid,[id*="results"]:not(#tracker-body):not(#analytics-table){gap:14px !important;}'+
     '#results{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;align-items:start !important;}'+
@@ -2310,30 +2319,44 @@ window.applyPulseSorting=function(){
     var info=extractPulseInfo(card);
     return {card:card,v:vOrder[info.verdict]!==undefined?vOrder[info.verdict]:4,pt:info.perTrade||0};
   });
-  enriched.sort(function(a,b){
+  var sorted=enriched.slice().sort(function(a,b){
     if(a.v!==b.v)return a.v-b.v;
     return b.pt-a.pt;
   });
-  enriched.forEach(function(item){container.appendChild(item.card);});
+  var same=true;
+  for(var i=0;i<sorted.length;i++){
+    if(sorted[i].card!==enriched[i].card){same=false;break;}
+  }
+  if(same)return;
+  sorted.forEach(function(item){container.appendChild(item.card);});
 };
 
 // Topbar tab forwarding — find clickable tab even if demoted
 window.tbFindOriginalByText=function(targetText){
-  var t=targetText.toUpperCase();
-  var els=document.querySelectorAll('button, [role=button], [data-tab], li, a, .tab');
+  var t=targetText.toUpperCase().trim();
+  var els=document.querySelectorAll('button, a, li, [role=button], [data-tab], [onclick], .tab, .nav-item, span, div');
+  var candidates=[];
   for(var i=0;i<els.length;i++){
     var el=els[i];
     if(el.closest('#acress-topbar'))continue;
-    var txt=(el.textContent||'').trim().toUpperCase().replace(/\s+\d+$/, '').replace(/[\u26A1\u2328\u270D]/g,'').trim();
-    if(txt===t)return el;
+    if(el.children.length>5)continue;
+    var raw=(el.textContent||'').trim();
+    if(raw.length>80)continue;
+    var txt=raw.toUpperCase().replace(/\s+\d+$/, '').replace(/[\u26A1\u2328\u270D\u270F\u2699\u23F1\u2630]/g,'').trim();
+    if(txt===t){
+      var score=raw.length;
+      if(el.tagName==='BUTTON'||el.tagName==='A')score-=1000;
+      if(el.getAttribute('role')==='button')score-=500;
+      if(el.onclick||el.getAttribute('onclick'))score-=500;
+      if(el.tagName==='LI')score-=200;
+      if(el.tagName==='DIV')score+=100;
+      if(el.tagName==='SPAN')score+=200;
+      candidates.push({el:el,score:score});
+    }
   }
-  for(var i=0;i<els.length;i++){
-    var el=els[i];
-    if(el.closest('#acress-topbar'))continue;
-    var txt=(el.textContent||'').trim().toUpperCase();
-    if(txt.indexOf(t)===0&&txt.length<t.length+5)return el;
-  }
-  return null;
+  if(candidates.length===0)return null;
+  candidates.sort(function(a,b){return a.score-b.score;});
+  return candidates[0].el;
 };
 
 
@@ -5861,7 +5884,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
-try{injectUIPolishCSS();ensureTopbar();setInterval(function(){injectUIPolishCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();if(typeof applyPulseSorting==='function')applyPulseSorting();},500);}catch(e){console.warn('[Acress] init: topbar polish',e.message);}
+try{injectUIPolishCSS();ensureTopbar();setInterval(function(){injectUIPolishCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();},500);}catch(e){console.warn('[Acress] init: topbar polish',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
