@@ -2129,8 +2129,8 @@ function injectTopbarCSS(){
     '#acress-topbar .tb-chip.live-fresh{color:var(--green);background:rgba(46,232,160,0.12);border-color:rgba(46,232,160,0.3);}'+
     '#acress-topbar .tb-chip.live-warm{color:var(--amber);}'+
     '#acress-topbar .tb-chip.live-stale,#acress-topbar .tb-chip.live-dead{color:var(--red);background:rgba(255,82,119,0.12);border-color:rgba(255,82,119,0.4);}'+
-    '#acress-topbar .tb-chip.mode-paper{background:rgba(255,170,0,0.15);color:var(--amber);border-color:rgba(255,170,0,0.3);}'+
-    '#acress-topbar .tb-chip.mode-live{background:rgba(255,82,119,0.18);color:var(--red);border-color:var(--red);animation:tbPulse 2s infinite;}'+
+    '#acress-topbar .tb-chip.mode-paper{background:rgba(255,170,0,0.15);color:var(--amber);border-color:rgba(255,170,0,0.3);cursor:pointer;}'+
+    '#acress-topbar .tb-chip.mode-live{background:rgba(255,82,119,0.18);color:var(--red);border-color:var(--red);animation:tbPulse 2s infinite;cursor:pointer;}'+
     '@keyframes tbPulse{0%,100%{opacity:1;}50%{opacity:0.65;}}'+
     '#acress-topbar .tb-chip.pnl-pos{color:var(--green);background:rgba(46,232,160,0.08);}'+
     '#acress-topbar .tb-chip.pnl-neg{color:var(--red);background:rgba(255,82,119,0.10);}'+
@@ -2336,13 +2336,20 @@ window.tbFindOriginalByText=function(targetText){
   var t=targetText.toUpperCase().trim();
   var els=document.querySelectorAll('button, a, li, [role=button], [data-tab], [onclick], .tab, .nav-item, span, div');
   var candidates=[];
+  function tbNormalize(s){
+    return s.toUpperCase()
+      .replace(/\s+\d+$/, '')
+      .replace(/[^\x20-\x7E]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   for(var i=0;i<els.length;i++){
     var el=els[i];
     if(el.closest('#acress-topbar'))continue;
     if(el.children.length>5)continue;
     var raw=(el.textContent||'').trim();
-    if(raw.length>80)continue;
-    var txt=raw.toUpperCase().replace(/\s+\d+$/, '').replace(/[\u26A1\u2328\u270D\u270F\u2699\u23F1\u2630]/g,'').trim();
+    if(raw.length>100)continue;
+    var txt=tbNormalize(raw);
     if(txt===t){
       var score=raw.length;
       if(el.tagName==='BUTTON'||el.tagName==='A')score-=1000;
@@ -2356,7 +2363,20 @@ window.tbFindOriginalByText=function(targetText){
   }
   if(candidates.length===0)return null;
   candidates.sort(function(a,b){return a.score-b.score;});
-  return candidates[0].el;
+  var best=candidates[0].el;
+  if(best.tagName==='BUTTON'||best.tagName==='A'||best.getAttribute('role')==='button'||best.onclick||best.getAttribute('onclick')){
+    return best;
+  }
+  var node=best.parentElement;
+  var hops=0;
+  while(node&&node!==document.body&&hops<5){
+    if(node.tagName==='BUTTON'||node.tagName==='A'||node.getAttribute('role')==='button'||node.onclick||node.getAttribute('onclick')){
+      return node;
+    }
+    node=node.parentElement;
+    hops++;
+  }
+  return best;
 };
 
 
@@ -2451,6 +2471,28 @@ function markTopMoverCards(){
     else{card.classList.remove('top-mover');}
   });
 }
+
+// Click mode chip in topbar → toggle paper/live via the original mode-badge
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var chip=e.target.closest('#tb-status .tb-chip');
+  if(!chip)return;
+  if(chip.classList.contains('mode-paper')||chip.classList.contains('mode-live')){
+    var orig=document.getElementById('mode-badge');
+    if(orig){
+      try{orig.click();}catch(err){}
+      try{
+        var ev=new MouseEvent('click',{bubbles:true,cancelable:true,view:window,button:0});
+        orig.dispatchEvent(ev);
+      }catch(err){}
+      console.log('[ACRESS topbar] mode chip -> mode-badge.click()');
+      setTimeout(function(){if(typeof tbUpdateStatus==='function')tbUpdateStatus();},150);
+    }else{
+      console.warn('[ACRESS topbar] mode-badge element not found in DOM');
+    }
+    e.stopPropagation();
+  }
+},false);
 
 // Click pill → scroll to matching card in scan results
 document.addEventListener('click',function(e){
