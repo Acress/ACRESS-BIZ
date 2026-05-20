@@ -2537,6 +2537,121 @@ function positionStickyPanels(){
 }
 
 
+
+// ── PULSE VERDICT SNAPSHOT AT LOG TIME ─────────────────────────────
+// Captures the current pulse verdict when +Log is clicked and writes
+// it to the entry, so the tracker can show why the trade was taken.
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var btn=e.target.closest('[data-log-sig]');
+  if(!btn)return;
+  var card=btn.closest('.pcard');
+  setTimeout(function(){
+    try{
+      var raw=localStorage.getItem('acress_pressure_log_v16b');
+      if(!raw)return;
+      var entries=JSON.parse(raw);
+      if(!Array.isArray(entries)||entries.length===0)return;
+      var last=entries[entries.length-1];
+      if(last.pulseV)return;
+      var mech=last.mech;
+      var dir=last.dir;
+      if((!mech||!dir)&&card){
+        var mEl=card.querySelector('.pc-mech-name');
+        if(mEl&&!mech)mech=mEl.textContent.trim().replace(/\s+OI$/,'');
+        if(!dir)dir=card.classList.contains('long')?'LONG':(card.classList.contains('short')?'SHORT':'LONG');
+      }
+      if(typeof pulseCache!=='undefined'&&pulseCache&&pulseCache.byMechDir&&mech&&dir){
+        var key=mech+'|'+dir;
+        var pe=pulseCache.byMechDir[key];
+        if(pe){
+          last.pulseV=pe.verdict||'UNKNOWN';
+          last.pulseTs=Date.now();
+          if(pe.recent30m){
+            last.pulseN=pe.recent30m.N||0;
+            last.pulseWR=pe.recent30m.winRate||0;
+            last.pulsePerTrade=pe.recent30m.perTrade||0;
+          }
+          localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(entries));
+          console.log('[ACRESS] verdict snapshot:',mech,dir,'->',last.pulseV);
+        }
+      }
+    }catch(err){console.warn('[ACRESS] snapshot failed:',err.message);}
+  },150);
+},true);
+
+// Lock displayed verdict in tracker to the snapshotted one
+function lockTrackerVerdicts(){
+  try{
+    var raw=localStorage.getItem('acress_pressure_log_v16b');
+    if(!raw)return;
+    var entries=JSON.parse(raw);
+    var body=document.getElementById('tracker-body');
+    if(!body)return;
+    var rows=Array.from(body.children);
+    rows.forEach(function(row){
+      var idEl=row.querySelector('[data-tk-remove-id]');
+      if(!idEl)return;
+      var idx=parseInt(idEl.getAttribute('data-tk-remove-id'));
+      if(isNaN(idx)||idx<0||idx>=entries.length)return;
+      var entry=entries[idx];
+      if(!entry||!entry.pulseV)return;
+      if(row.dataset.verdictLocked===entry.pulseV)return;
+      // Find pulse widget area and replace verdict text
+      var pulseAreas=row.querySelectorAll('.pulse-widget, .pc-pulse, [class*="pulse"]');
+      var replaced=false;
+      pulseAreas.forEach(function(area){
+        if(replaced)return;
+        var html=area.innerHTML;
+        var verdicts=['NOT ENOUGH DATA','TRADE IT','WAIT','SKIP','NED','UNKNOWN'];
+        for(var i=0;i<verdicts.length;i++){
+          var v=verdicts[i];
+          if(html.indexOf(v)>-1){
+            area.innerHTML=html.split(v).join(entry.pulseV);
+            replaced=true;
+            break;
+          }
+        }
+      });
+      if(replaced)row.dataset.verdictLocked=entry.pulseV;
+    });
+  }catch(e){console.warn('[ACRESS] lockTrackerVerdicts:',e.message);}
+}
+
+// Hook into renderTracker to lock verdicts after each render
+(function(){
+  var attempts=0;
+  var hookInterval=setInterval(function(){
+    attempts++;
+    if(attempts>20){clearInterval(hookInterval);return;}
+    if(typeof window.renderTracker==='function'&&!window.renderTracker.__verdictHook){
+      var orig=window.renderTracker;
+      window.renderTracker=function(){
+        var r=orig.apply(this,arguments);
+        setTimeout(lockTrackerVerdicts,80);
+        return r;
+      };
+      window.renderTracker.__verdictHook=true;
+      clearInterval(hookInterval);
+      console.log('[ACRESS] renderTracker hook installed for verdict locking');
+    }
+  },500);
+})();
+
+// Solid backgrounds for sticky panels — no more see-through
+function injectSolidBgCSS(){
+  if(document.getElementById('solid-bg-css'))return;
+  var s=document.createElement('style');
+  s.id='solid-bg-css';
+  s.textContent=
+    '#acress-topbar{background:#0B0F1A !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}'+
+    '#market-mood-banner{background:#0B0F1A !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}'+
+    '#top-combos-widget{background:#0B0F1A !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}'+
+    '#top-movers-widget{background:#0B0F1A !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;}';
+  document.head.appendChild(s);
+}
+
+
 function ensureTopbar(){
   injectTopbarCSS();
   var bar=document.getElementById('acress-topbar');
@@ -6061,7 +6176,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
-try{injectUIPolishCSS();injectTopMoversCSS();ensureTopbar();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();},500);}catch(e){console.warn('[Acress] init: topbar + movers',e.message);}
+try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();ensureTopbar();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();ensureTopbar();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();},500);}catch(e){console.warn('[Acress] init: topbar + movers + verdict lock',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
