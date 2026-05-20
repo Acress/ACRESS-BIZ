@@ -1877,6 +1877,184 @@ function setupPulseRenderHooks(){
   };
 }
 
+// ── TRACKER EXTRA FILTERS + SORT ──────────────────────────────────
+var TF_KEY='acress_tracker_pulse_filters';
+function getTrackerExtraFilters(){
+  try{return JSON.parse(localStorage.getItem(TF_KEY)||'{}');}catch(e){return {};}
+}
+function saveTrackerExtraFilters(){
+  try{
+    var m=document.getElementById('tpf-mode');
+    var v=document.getElementById('tpf-verdict');
+    var d=document.getElementById('tpf-date');
+    var s=document.getElementById('tpf-sort');
+    localStorage.setItem(TF_KEY,JSON.stringify({
+      mode:m?m.value:'all',
+      verdict:v?v.value:'all',
+      dateRange:d?d.value:'all',
+      sort:s?s.value:'default'
+    }));
+  }catch(e){}
+}
+function findTrackerForRow(row){
+  var xBtn=row.querySelector('[data-tk-remove-id]');
+  if(!xBtn)return null;
+  var id=xBtn.getAttribute('data-tk-remove-id');
+  if(typeof tracker==='undefined'||!tracker)return null;
+  for(var i=0;i<tracker.length;i++){
+    if(tracker[i].id===id)return tracker[i];
+  }
+  return null;
+}
+function getPulseVerdictForTracker(t){
+  var mech=t.mech||'';
+  var dir=t.dir||'LONG';
+  var key=mech+'|'+dir;
+  var entry=(typeof pulseCache!=='undefined'&&pulseCache&&pulseCache.byMechDir)?pulseCache.byMechDir[key]:null;
+  if(!entry)return {verdict:'UNKNOWN',perTrade:0};
+  return {verdict:entry.verdict||'UNKNOWN',perTrade:(entry.recent30m&&entry.recent30m.perTrade)||0};
+}
+function matchesDateRange(t,range){
+  var ts=t.closedAt||t.loggedAt;
+  if(!ts)return false;
+  var now=Date.now();
+  if(range==='today')return typeof isDateToday==='function'?isDateToday(ts):false;
+  if(range==='7d')return (now-ts)<=7*86400000;
+  if(range==='30d')return (now-ts)<=30*86400000;
+  return true;
+}
+function applyTrackerExtraFilters(){
+  var body=document.getElementById('tracker-body');
+  if(!body)return;
+  var mEl=document.getElementById('tpf-mode');
+  var vEl=document.getElementById('tpf-verdict');
+  var dEl=document.getElementById('tpf-date');
+  if(!mEl||!vEl||!dEl)return;
+  var modeVal=mEl.value,verdictVal=vEl.value,dateVal=dEl.value;
+  var rows=body.querySelectorAll('.tk-row');
+  var visible=0;
+  rows.forEach(function(row){
+    var t=findTrackerForRow(row);
+    if(!t){row.style.display='';visible++;return;}
+    var hide=false;
+    if(modeVal!=='all'){
+      var tMode=t.mode||'paper';
+      if(tMode!==modeVal)hide=true;
+    }
+    if(verdictVal!=='all'&&!hide){
+      var info=getPulseVerdictForTracker(t);
+      var match=verdictVal==='NED'?(info.verdict==='NOT ENOUGH DATA'||info.verdict==='UNKNOWN'):info.verdict===verdictVal;
+      if(!match)hide=true;
+    }
+    if(dateVal!=='all'&&!hide){
+      if(!matchesDateRange(t,dateVal))hide=true;
+    }
+    row.style.display=hide?'none':'';
+    if(!hide)visible++;
+  });
+  var c=document.getElementById('tpf-visible-count');
+  if(c)c.textContent=visible+' visible';
+}
+function applyTrackerExtraSort(){
+  var sEl=document.getElementById('tpf-sort');
+  if(!sEl)return;
+  var sortVal=sEl.value;
+  if(sortVal==='default')return;
+  var body=document.getElementById('tracker-body');
+  if(!body)return;
+  var rc=body.querySelector('.tk-rows');
+  if(!rc)return;
+  var rows=Array.from(rc.querySelectorAll('.tk-row'));
+  if(rows.length===0)return;
+  var enriched=rows.map(function(row){
+    return {row:row,t:findTrackerForRow(row)};
+  }).filter(function(e){return e.t;});
+  enriched.sort(function(a,b){
+    var ta=a.t,tb=b.t;
+    if(sortVal==='newest')return (tb.loggedAt||0)-(ta.loggedAt||0);
+    if(sortVal==='oldest')return (ta.loggedAt||0)-(tb.loggedAt||0);
+    if(sortVal==='pnl-desc')return (tb.currentPnlUsd||0)-(ta.currentPnlUsd||0);
+    if(sortVal==='pnl-asc')return (ta.currentPnlUsd||0)-(tb.currentPnlUsd||0);
+    if(sortVal==='mfe-desc')return (tb.maxFavPct||0)-(ta.maxFavPct||0);
+    if(sortVal==='mae-asc')return (ta.maxAdvPct||0)-(tb.maxAdvPct||0);
+    if(sortVal==='hold-desc'){
+      var ah=(ta.closedAt||Date.now())-(ta.loggedAt||Date.now());
+      var bh=(tb.closedAt||Date.now())-(tb.loggedAt||Date.now());
+      return bh-ah;
+    }
+    if(sortVal==='mech-az')return (ta.mech||'').localeCompare(tb.mech||'');
+    if(sortVal==='pulse-desc'){
+      var ai=getPulseVerdictForTracker(ta);
+      var bi=getPulseVerdictForTracker(tb);
+      return (bi.perTrade||0)-(ai.perTrade||0);
+    }
+    return 0;
+  });
+  enriched.forEach(function(e){rc.appendChild(e.row);});
+}
+function injectTrackerPulseCSS(){
+  if(document.getElementById('tpf-css'))return;
+  var s=document.createElement('style');
+  s.id='tpf-css';
+  s.textContent=
+    '#tracker-pulse-filters{margin:8px 0;padding:8px 14px;background:rgba(20,20,30,0.5);border-radius:8px;font-family:var(--font-mono);font-size:11px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;border:1px solid rgba(255,255,255,0.05);}'+
+    '#tracker-pulse-filters .tpf-label{font-size:10px;letter-spacing:1px;color:var(--faint);font-weight:700;}'+
+    '#tracker-pulse-filters .tpf-group{display:inline-flex;align-items:center;gap:5px;color:var(--faint);}'+
+    '#tracker-pulse-filters select{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:3px 8px;color:#fff;font-family:var(--font-mono);font-size:11px;cursor:pointer;}'+
+    '#tracker-pulse-filters select:hover,#tracker-pulse-filters select:focus{border-color:var(--green);outline:none;}'+
+    '#tracker-pulse-filters .tpf-count{margin-left:auto;color:var(--faint);font-size:10px;font-weight:700;}';
+  document.head.appendChild(s);
+}
+function buildTrackerExtraFilters(){
+  return '<span class="tpf-label">EXTRA FILTERS</span>'+
+    '<span class="tpf-group">Mode: <select id="tpf-mode"><option value="all">All</option><option value="paper">Paper</option><option value="live">Live</option></select></span>'+
+    '<span class="tpf-group">Verdict (now): <select id="tpf-verdict"><option value="all">All</option><option value="TRADE IT">TRADE IT</option><option value="WAIT">WAIT</option><option value="SKIP">SKIP</option><option value="NED">NOT ENOUGH DATA</option></select></span>'+
+    '<span class="tpf-group">Date: <select id="tpf-date"><option value="all">All time</option><option value="today">Today (EDT)</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select></span>'+
+    '<span class="tpf-group">Sort: <select id="tpf-sort"><option value="default">Default</option><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="pnl-desc">Best PnL</option><option value="pnl-asc">Worst PnL</option><option value="mfe-desc">Best MFE</option><option value="mae-asc">Worst MAE</option><option value="hold-desc">Longest hold</option><option value="mech-az">Mechanism A-Z</option><option value="pulse-desc">Pulse $/trade</option></select></span>'+
+    '<span class="tpf-count" id="tpf-visible-count"></span>';
+}
+function wireTrackerExtraFilters(){
+  var saved=getTrackerExtraFilters();
+  var m=document.getElementById('tpf-mode');if(m)m.value=saved.mode||'all';
+  var v=document.getElementById('tpf-verdict');if(v)v.value=saved.verdict||'all';
+  var d=document.getElementById('tpf-date');if(d)d.value=saved.dateRange||'all';
+  var s=document.getElementById('tpf-sort');if(s)s.value=saved.sort||'default';
+  ['tpf-mode','tpf-verdict','tpf-date','tpf-sort'].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e&&!e.dataset.wired){
+      e.dataset.wired='1';
+      e.addEventListener('change',function(){
+        saveTrackerExtraFilters();
+        applyTrackerExtraSort();
+        applyTrackerExtraFilters();
+      });
+    }
+  });
+}
+function ensureTrackerExtraFilters(){
+  if(document.getElementById('tracker-pulse-filters'))return;
+  var anchor=document.getElementById('tracker-body');
+  if(!anchor||!anchor.parentNode)return;
+  injectTrackerPulseCSS();
+  var el=document.createElement('div');
+  el.id='tracker-pulse-filters';
+  anchor.parentNode.insertBefore(el,anchor);
+  el.innerHTML=buildTrackerExtraFilters();
+  wireTrackerExtraFilters();
+}
+function setupTrackerRenderHooks(){
+  if(window.__trackerRenderHooked)return;
+  if(typeof window.renderTracker!=='function')return;
+  window.__trackerRenderHooked=true;
+  var orig=window.renderTracker;
+  window.renderTracker=function(){
+    var result=orig.apply(this,arguments);
+    try{applyTrackerExtraSort();}catch(e){}
+    try{applyTrackerExtraFilters();}catch(e){}
+    return result;
+  };
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -5383,6 +5561,7 @@ try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){cons
 try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeBadge();tagUntaggedEntries();},1000);}catch(e){console.warn('[Acress] init: paper mode',e.message);}
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
+try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
