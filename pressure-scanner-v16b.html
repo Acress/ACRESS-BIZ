@@ -972,6 +972,7 @@ var EXCLUDE_BASES=new Set(EXCLUDE_BASES_STABLES.concat(EXCLUDE_BASES_MEGACAPS));
 // ── STATE ──────────────────────────────────────────────────────────
 var signals=[];
 var isScanning=false;
+var scanAborted=false;
 var autoTimer=null;
 var clockTimer=null;
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
@@ -2205,6 +2206,7 @@ async function analyzeCoin(symObj){
 async function runScan(){
   if(isScanning)return;
   isScanning=true;
+  scanAborted=false;
   signals=signals.filter(function(s){return s.validUntil>Date.now()-60000;});
   var btn=document.getElementById('scan-btn');
   btn.disabled=true;btn.textContent='Scanning…';
@@ -2253,6 +2255,12 @@ async function runScan(){
   // Concurrent batches of 8 — no CORS proxies in the loop anymore, so we can run full speed.
   var BATCH_SIZE=8;
   for(var i=0;i<pool.length;i+=BATCH_SIZE){
+    if(scanAborted){
+      console.log('[Acress] Scan aborted by user — stopping at batch '+(i/BATCH_SIZE+1));
+      setProgress('Scan stopped — '+checked+'/'+pool.length+' analyzed before user unchecked auto-scan');
+      setStatus('Scan aborted','idle');
+      break;
+    }
     var batch=pool.slice(i,i+BATCH_SIZE);
     await Promise.allSettled(batch.map(async function(s){
       try{
@@ -2501,25 +2509,23 @@ function renderResults(){invalidateMechanismStats();
   if(dirFilter==='short')filtered=filtered.filter(function(s){return s.dir==='SHORT';});
   if(mechFilter&&mechFilter!=='all')filtered=filtered.filter(function(s){return s.mechanism&&s.mechanism.name===mechFilter;});
   if(!filtered.length){
-    // Fallback: show top scored regardless of threshold for diagnostic visibility
-    var topAny=live.slice().sort(function(a,b){return b.score-a.score;}).slice(0,8);
-    if(topAny.length){
-      var html='<div style="background:var(--amber2);border:1px solid rgba(249,200,70,.35);border-radius:var(--r);padding:12px 16px;margin-bottom:16px;font-size:11px;color:var(--amber);"><strong>Nothing passes the '+scoreThreshold+' threshold right now.</strong> Showing top '+topAny.length+' scored coins below as diagnostic — lower the slider or wait for stronger pressure to emerge.</div>';
-      html+='<div class="col-grid">';
-      var longs=topAny.filter(function(s){return s.dir==='LONG';});
-      var shorts=topAny.filter(function(s){return s.dir==='SHORT';});
-      if(dirFilter!=='short'&&longs.length){
-        html+='<div class="col"><div class="col-hdr long"><span class="col-title long">▲ Long (below threshold)</span><span class="col-count">'+longs.length+'</span></div><div class="col-cards">'+longs.map(buildCard).join('')+'</div></div>';
-      }
-      if(dirFilter!=='long'&&shorts.length){
-        html+='<div class="col"><div class="col-hdr short"><span class="col-title short">▼ Short (below threshold)</span><span class="col-count">'+shorts.length+'</span></div><div class="col-cards">'+shorts.map(buildCard).join('')+'</div></div>';
-      }
-      html+='</div>';
-      document.getElementById('results').innerHTML=html;
-      startCardTimers();
-      return;
+    // v16b — Honor the user's filter. If nothing matches, show empty state.
+    // The old "diagnostic fallback" that showed top 8 cards regardless of
+    // threshold has been removed — it made the score range filter appear broken.
+    var msgTitle, msgBody;
+    if(live.length){
+      msgTitle='No signals match your filter';
+      var rangeStr=__sr.min+'–'+__sr.max;
+      var bits=['score range '+rangeStr];
+      if(dirFilter==='long')bits.push('direction: long only');
+      if(dirFilter==='short')bits.push('direction: short only');
+      if(mechFilter&&mechFilter!=='all')bits.push('mechanism: '+mechFilter);
+      msgBody='You have '+live.length+' live signal'+(live.length!==1?'s':'')+', but none match your current filter ('+bits.join(' · ')+'). Adjust the score slider, change the direction filter, switch mechanism, or click SHOW ALL to bypass the score range.';
+    }else{
+      msgTitle='No signals produced this scan';
+      msgBody='No coin scored above the storage floor (25). This means either: (a) market is genuinely quiet — no forced-participant pressure right now; (b) gate thresholds are still too strict for current conditions; or (c) data fetches failed. Open browser DevTools → Console for diagnostic info.';
     }
-    document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">⚪</div><div class="empty-title">No signals produced this scan</div><div class="empty-body">No coin scored above the storage floor (25). This means either: (a) market is genuinely quiet — no forced-participant pressure right now; (b) gate thresholds are still too strict for current conditions; or (c) data fetches failed. Open browser DevTools → Console for diagnostic info, and check the progress line above for per-gate pass counts.</div></div>';
+    document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">⚪</div><div class="empty-title">'+msgTitle+'</div><div class="empty-body">'+msgBody+'</div></div>';
     return;
   }
   var longs=sortSignalsBy(filtered.filter(function(s){return s.dir==='LONG';}),currentScannerSort());
@@ -4455,8 +4461,13 @@ try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
   document.getElementById('dir-filter').addEventListener('change',renderResults);
   document.getElementById('auto-refresh').addEventListener('change',function(e){
-    if(!e.target.checked&&autoTimer){clearTimeout(autoTimer);autoTimer=null;}
-    else if(e.target.checked)scheduleAutoScan();
+    if(!e.target.checked){
+      if(autoTimer){clearTimeout(autoTimer);autoTimer=null;}
+      scanAborted=true; // also abort any in-progress scan immediately
+    }else{
+      scanAborted=false;
+      scheduleAutoScan();
+    }
   });
 }catch(e){console.warn('[Acress] init: top controls',e.message);}
 
