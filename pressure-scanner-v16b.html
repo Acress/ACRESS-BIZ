@@ -434,6 +434,16 @@ input{font-family:var(--font-ui);}
 .tk-r-hold-override.oi-late{color:#f0b341;border-color:#f0b341;background:rgba(240,179,65,.1);}
 
 
+/* v16b — Pulse widget (30-min performance from bridge API) */
+.pulse-widget{display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:var(--s2);border:1px solid var(--border);border-radius:6px;margin-top:6px;font-family:var(--font-mono);font-size:10px;line-height:1.4;}
+.pulse-verdict{font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+.pulse-detail{color:var(--muted);font-size:9.5px;}
+.pulse-widget.trade-it{border-color:var(--green);background:rgba(46,232,160,.08);}
+.pulse-widget.skip{border-color:var(--red);background:rgba(255,82,119,.08);}
+.pulse-widget.wait{border-color:var(--amber);background:rgba(249,200,70,.08);}
+.pulse-widget.not-enough{border-color:var(--border2);background:var(--s3);}
+
+
 /* v16ab — Per-mechanism stats badge on scanner cards.
    Shows a category label and historical performance for each mechanism so the
    user can see at-a-glance whether this setup has earned trust, is failing,
@@ -977,6 +987,85 @@ var isScanning=false;
 var scanAborted=false;
 var autoTimer=null;
 var clockTimer=null;
+var pulseCache = { asOf: 0, byMechDir: {} };
+
+// ════════════════════════════════════════════════════════════════════
+// PULSE STATS — fetch recent 30-min performance from bridge API
+// ════════════════════════════════════════════════════════════════════
+async function fetchPulse(profile){
+  profile = profile || 'v16b';
+  var now = Date.now();
+  // Cache for 10 seconds
+  if (pulseCache.asOf && (now - pulseCache.asOf) < 10000){
+    return pulseCache;
+  }
+  try {
+    // Check if VPS is configured and active
+    var vpsUrl = '';
+    var vpsKey = '';
+    if (window.VPS){
+      var cfg = window.VPS.getConfig();
+      if (cfg.enabled && cfg.url && window.VPS.state.connected){
+        vpsUrl = cfg.url.replace(/\/$/, '');
+        vpsKey = cfg.apiKey;
+      }
+    }
+    if (!vpsUrl){
+      // No VPS configured — return empty pulse
+      pulseCache = { asOf: now, byMechDir: {}, error: 'VPS not configured' };
+      return pulseCache;
+    }
+    var url = vpsUrl + '/api/stats/pulse?profile=' + encodeURIComponent(profile);
+    var headers = { 'Accept': 'application/json' };
+    if (vpsKey) headers['X-Api-Key'] = vpsKey;
+    var resp = await fetch(url, {
+      headers: headers,
+      credentials: 'omit',
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!resp.ok){
+      throw new Error('HTTP ' + resp.status);
+    }
+    var data = await resp.json();
+    pulseCache = {
+      asOf: now,
+      byMechDir: data.byMechDir || {},
+      windowMs: data.windowMs || 0,
+      profile: data.profile || profile
+    };
+    return pulseCache;
+  } catch(e){
+    console.warn('[Pulse] fetch failed:', e.message);
+    pulseCache = { asOf: now, byMechDir: {}, error: e.message };
+    return pulseCache;
+  }
+}
+
+function buildPulseWidget(mechName, dir){
+  if (!mechName || !dir) return '';
+  var key = mechName + '|' + dir;
+  var pulse = pulseCache.byMechDir[key];
+  if (!pulse) return '';
+  var verdict = pulse.verdict || 'NOT ENOUGH DATA';
+  var r30 = pulse.recent30m || { n: 0, wins: 0, winPct: 0, perTrade: 0 };
+  var inf = pulse.inflight || { n: 0, avgUnrealizedPct: 0 };
+  var verdictCls = verdict === 'TRADE IT' ? 'trade-it' :
+                   verdict === 'SKIP' ? 'skip' :
+                   verdict === 'WAIT' ? 'wait' : 'not-enough';
+  var verdictColor = verdict === 'TRADE IT' ? 'var(--green)' :
+                     verdict === 'SKIP' ? 'var(--red)' :
+                     verdict === 'WAIT' ? 'var(--amber)' : 'var(--faint)';
+  var html = '<div class="pulse-widget ' + verdictCls + '" title="Last 30 min: ' + r30.n + ' closed · ' + (r30.winPct*100).toFixed(0) + '% win · $' + r30.perTrade.toFixed(2) + '/trade | In-flight: ' + inf.n + ' open · ' + (inf.avgUnrealizedPct>=0?'+':'') + inf.avgUnrealizedPct.toFixed(2) + '% avg">'
+    + '<span class="pulse-verdict" style="color:' + verdictColor + ';">' + verdict + '</span>'
+    + '<span class="pulse-detail">'
+      + 'Last 30m: ' + r30.n + ' · ' + (r30.winPct*100).toFixed(0) + '% · $' + r30.perTrade.toFixed(2) + '/trade'
+    + '</span>'
+    + '<span class="pulse-detail">'
+      + 'In-flight: ' + inf.n + ' · ' + (inf.avgUnrealizedPct>=0?'+':'') + inf.avgUnrealizedPct.toFixed(2) + '%'
+    + '</span>'
+  + '</div>';
+  return html;
+}
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -3262,6 +3351,7 @@ function buildCard(s){
     +'</div>'
     +'<div class="pc-signals">'+signalHtml+'</div>'
     +ezHtml
+    +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
       +'<div class="pc-actions">'
@@ -4399,6 +4489,7 @@ function renderTracker(){
         +'</div>'
         // v16+ — provenance row (score, mechanism, regime, gates)
         +provHtml
+        +buildPulseWidget(t.mech||'Unknown',t.dir||'LONG')
         // Body: 3 columns
         +'<div class="tk-r-body">'
           // Left: Entry / SL / TP prices
