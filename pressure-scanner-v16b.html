@@ -1417,6 +1417,85 @@ document.addEventListener('click',function(e){
   }
 },true);
 
+// ── PAPER-TRADE MODE ──────────────────────────────────────────────
+var TRADE_MODE_KEY='acress_trade_mode';
+function getTradeMode(){
+  var m=localStorage.getItem(TRADE_MODE_KEY);
+  return (m==='live')?'live':'paper';
+}
+function setTradeMode(m){
+  if(m!=='paper'&&m!=='live')return;
+  localStorage.setItem(TRADE_MODE_KEY,m);
+}
+function migrateTrackerForMode(){
+  if(typeof tracker==='undefined'||!tracker)return;
+  var changed=false;
+  for(var i=0;i<tracker.length;i++){
+    if(!tracker[i].mode){tracker[i].mode='paper';changed=true;}
+  }
+  if(changed){try{localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(tracker));}catch(e){}}
+}
+function tagUntaggedEntries(){
+  if(typeof tracker==='undefined'||!tracker)return;
+  var currentMode=getTradeMode();
+  var changed=false;
+  for(var i=0;i<tracker.length;i++){
+    if(!tracker[i].mode){tracker[i].mode=currentMode;changed=true;}
+  }
+  if(changed){try{localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(tracker));}catch(e){}}
+}
+function injectModeBadgeCSS(){
+  if(document.getElementById('mode-badge-css'))return;
+  var s=document.createElement('style');
+  s.id='mode-badge-css';
+  s.textContent=
+    '#mode-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:12px;font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:0.5px;cursor:pointer;margin-left:8px;user-select:none;vertical-align:middle;}'+
+    '#mode-badge.mode-paper{background:rgba(255,170,0,0.18);color:var(--amber);border:1px solid rgba(255,170,0,0.4);}'+
+    '#mode-badge.mode-live{background:rgba(255,40,40,0.22);color:var(--red);border:1px solid var(--red);box-shadow:0 0 8px rgba(255,40,40,0.3);animation:liveModeGlow 2s infinite;}'+
+    '#mode-badge.mode-floating{position:fixed;bottom:12px;right:220px;z-index:300;}'+
+    '#mode-badge:hover{filter:brightness(1.25);}'+
+    '#mode-badge .mode-icon{font-size:8px;}'+
+    'body.mode-live-active::before{content:"";position:fixed;top:0;left:0;right:0;height:2px;background:var(--red);z-index:1000;pointer-events:none;animation:liveModeGlow 2s infinite;}'+
+    '@keyframes liveModeGlow{0%,100%{opacity:1;}50%{opacity:0.55;}}';
+  document.head.appendChild(s);
+}
+function applyTradeModeBodyClass(){
+  document.body.classList.remove('mode-paper-active','mode-live-active');
+  document.body.classList.add('mode-'+getTradeMode()+'-active');
+}
+function renderModeBadge(){
+  injectModeBadgeCSS();
+  applyTradeModeBodyClass();
+  var el=document.getElementById('mode-badge');
+  if(!el){
+    el=document.createElement('span');
+    el.id='mode-badge';
+    var liveness=document.getElementById('liveness-indicator');
+    if(liveness&&liveness.parentNode&&!liveness.classList.contains('floating')){
+      if(liveness.nextSibling)liveness.parentNode.insertBefore(el,liveness.nextSibling);
+      else liveness.parentNode.appendChild(el);
+    }else{
+      el.classList.add('mode-floating');
+      document.body.appendChild(el);
+    }
+    el.addEventListener('click',function(){
+      var current=getTradeMode();
+      if(current==='paper'){
+        if(confirm('\u26A0 Switch to LIVE TRADING mode?\n\nIn LIVE mode, new trades will be tagged for real-money execution. Execution APIs are not connected yet, so this is currently only a tagging change — but the flag persists and any future execute buttons will route to real exchanges.\n\nProceed?')){
+          setTradeMode('live');
+        }
+      }else{
+        setTradeMode('paper');
+      }
+      renderModeBadge();
+    });
+  }
+  var mode=getTradeMode();
+  el.className=el.classList.contains('mode-floating')?('mode-floating mode-'+mode):('mode-'+mode);
+  el.innerHTML='<span class="mode-icon">&#x25CF;</span> MODE: '+(mode==='live'?'LIVE':'PAPER');
+  el.title=mode==='live'?'LIVE MODE: New trades will be tagged for real-money execution. Click to switch back to PAPER.':'PAPER MODE: All trades are virtual. Click to switch to LIVE (requires confirmation).';
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -4920,6 +4999,7 @@ try{
 }catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
 try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
 try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
+try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeBadge();tagUntaggedEntries();},1000);}catch(e){console.warn('[Acress] init: paper mode',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
