@@ -1228,7 +1228,7 @@ function injectLivenessCSS(){
   var s=document.createElement('style');
   s.id='liveness-css';
   s.textContent=
-    '#liveness-indicator{position:fixed;top:12px;right:12px;z-index:300;padding:5px 10px;background:rgba(0,0,0,0.78);border:1px solid rgba(255,255,255,0.08);border-radius:14px;font-family:var(--font-mono);font-size:11px;display:flex;align-items:center;gap:7px;cursor:default;backdrop-filter:blur(8px);}'+
+    '#liveness-indicator{position:fixed;bottom:12px;right:12px;z-index:300;padding:5px 10px;background:rgba(0,0,0,0.78);border:1px solid rgba(255,255,255,0.08);border-radius:14px;font-family:var(--font-mono);font-size:11px;display:flex;align-items:center;gap:7px;cursor:default;backdrop-filter:blur(8px);}'+
     '.liveness-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}'+
     '.liveness-dot.live-fresh{background:var(--green);box-shadow:0 0 6px var(--green);}'+
     '.liveness-dot.live-warm{background:var(--amber);box-shadow:0 0 4px var(--amber);}'+
