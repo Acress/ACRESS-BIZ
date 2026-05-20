@@ -2106,6 +2106,179 @@ document.addEventListener('click',function(e){
   th.classList.add('ana-sort-'+__anaSortDir);
 },false);
 
+// ── ACRESS TOPBAR — sticky header with brand, tabs, status, scan ──
+function injectTopbarCSS(){
+  if(document.getElementById('topbar-css'))return;
+  var s=document.createElement('style');
+  s.id='topbar-css';
+  s.textContent=
+    '#acress-topbar{position:sticky;top:0;left:0;right:0;z-index:500;background:rgba(11,15,26,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,0.08);padding:10px 20px;display:flex;align-items:center;gap:14px;font-family:var(--font-mono);height:54px;box-sizing:border-box;}'+
+    '#acress-topbar .tb-brand{display:flex;align-items:center;gap:9px;}'+
+    '#acress-topbar .tb-brand-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}'+
+    '#acress-topbar .tb-brand-name{font-weight:800;font-size:14px;color:#fff;letter-spacing:1.5px;}'+
+    '#acress-topbar .tb-brand-sub{font-size:10px;color:var(--faint);letter-spacing:2px;}'+
+    '#acress-topbar .tb-version{padding:2px 7px;border-radius:10px;background:rgba(255,170,0,0.15);color:var(--amber);font-size:9px;font-weight:800;letter-spacing:1px;margin-left:4px;}'+
+    '#acress-topbar .tb-tabs{display:flex;gap:2px;margin-left:20px;background:rgba(255,255,255,0.04);padding:3px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);}'+
+    '#acress-topbar .tb-tab{padding:5px 14px;border-radius:7px;border:none;background:transparent;color:var(--faint);font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:0.8px;cursor:pointer;text-transform:uppercase;transition:all 0.15s;}'+
+    '#acress-topbar .tb-tab:hover{color:#fff;background:rgba(255,255,255,0.06);}'+
+    '#acress-topbar .tb-tab.active{color:#000;background:var(--green);}'+
+    '#acress-topbar .tb-spacer{flex:1;}'+
+    '#acress-topbar .tb-status{display:flex;gap:6px;align-items:center;}'+
+    '#acress-topbar .tb-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:10px;font-weight:700;letter-spacing:0.5px;color:var(--faint);}'+
+    '#acress-topbar .tb-chip-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;}'+
+    '#acress-topbar .tb-chip.live-fresh{color:var(--green);background:rgba(46,232,160,0.12);border-color:rgba(46,232,160,0.3);}'+
+    '#acress-topbar .tb-chip.live-warm{color:var(--amber);}'+
+    '#acress-topbar .tb-chip.live-stale,#acress-topbar .tb-chip.live-dead{color:var(--red);background:rgba(255,82,119,0.12);border-color:rgba(255,82,119,0.4);}'+
+    '#acress-topbar .tb-chip.mode-paper{background:rgba(255,170,0,0.15);color:var(--amber);border-color:rgba(255,170,0,0.3);}'+
+    '#acress-topbar .tb-chip.mode-live{background:rgba(255,82,119,0.18);color:var(--red);border-color:var(--red);animation:tbPulse 2s infinite;}'+
+    '@keyframes tbPulse{0%,100%{opacity:1;}50%{opacity:0.65;}}'+
+    '#acress-topbar .tb-chip.pnl-pos{color:var(--green);background:rgba(46,232,160,0.08);}'+
+    '#acress-topbar .tb-chip.pnl-neg{color:var(--red);background:rgba(255,82,119,0.10);}'+
+    '#acress-topbar .tb-scan{padding:6px 14px;border-radius:8px;background:linear-gradient(135deg,#2ee8a0 0%,#22c990 100%);color:#000;border:none;font-family:var(--font-mono);font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;transition:filter 0.15s;}'+
+    '#acress-topbar .tb-scan:hover{filter:brightness(1.12);}'+
+    'body.with-acress-topbar #liveness-indicator,body.with-acress-topbar #mode-badge{display:none !important;}'+
+    'body.with-acress-topbar #market-mood-banner{top:54px;}'+
+    '.acress-hidden-by-topbar{display:none !important;}';
+  document.head.appendChild(s);
+}
+function buildTopbar(){
+  return '<div class="tb-brand">'+
+    '<span class="tb-brand-dot"></span>'+
+    '<span class="tb-brand-name">ACRESS</span>'+
+    '<span class="tb-brand-sub">PRESSURE SCANNER</span>'+
+    '<span class="tb-version">V16B</span>'+
+  '</div>'+
+  '<div class="tb-tabs" id="tb-tabs"></div>'+
+  '<div class="tb-spacer"></div>'+
+  '<div class="tb-status" id="tb-status"></div>'+
+  '<button class="tb-scan" id="tb-scan" title="Run scan now">\u26A1 SCAN</button>';
+}
+var TB_TABS=[
+  {label:'SCANNER',match:'SCANNER'},
+  {label:'TRACKER',match:'PERFORMANCE TRACKER'},
+  {label:'ANALYSIS',match:'ANALYSIS'}
+];
+function tbFindOriginalByText(targetText){
+  var t=targetText.toUpperCase();
+  var els=document.querySelectorAll('button, [role=button], [data-tab], li, a');
+  for(var i=0;i<els.length;i++){
+    var el=els[i];
+    if(el.closest('#acress-topbar'))continue;
+    var txt=(el.textContent||'').trim().toUpperCase().replace(/\s+\d+$/, '').replace(/[\u26A1]/g,'').trim();
+    if(txt===t)return el;
+  }
+  for(var i=0;i<els.length;i++){
+    var el=els[i];
+    if(el.closest('#acress-topbar'))continue;
+    var txt=(el.textContent||'').trim().toUpperCase();
+    if(txt.indexOf(t)===0)return el;
+  }
+  return null;
+}
+function tbSetupTabs(){
+  var tabsEl=document.getElementById('tb-tabs');
+  if(!tabsEl||tabsEl.dataset.wired)return;
+  tabsEl.innerHTML='';
+  TB_TABS.forEach(function(t){
+    var btn=document.createElement('button');
+    btn.className='tb-tab';
+    btn.textContent=t.label;
+    btn.dataset.match=t.match;
+    btn.addEventListener('click',function(){
+      var orig=tbFindOriginalByText(t.match);
+      if(orig)orig.click();
+      setTimeout(tbUpdateActive,80);
+    });
+    tabsEl.appendChild(btn);
+  });
+  tabsEl.dataset.wired='1';
+}
+function tbUpdateActive(){
+  var pages={scanner:'page-scanner',tracker:'page-tracker',analysis:'page-analysis'};
+  var activeKey=null;
+  for(var k in pages){
+    var p=document.getElementById(pages[k]);
+    if(p&&p.offsetParent!==null){activeKey=k;break;}
+  }
+  document.querySelectorAll('#tb-tabs .tb-tab').forEach(function(t){
+    var m=(t.dataset.match||'').toUpperCase();
+    var isActive=(activeKey==='scanner'&&m==='SCANNER')||(activeKey==='tracker'&&m==='PERFORMANCE TRACKER')||(activeKey==='analysis'&&m==='ANALYSIS');
+    if(isActive)t.classList.add('active');else t.classList.remove('active');
+  });
+}
+function tbUpdateStatus(){
+  var el=document.getElementById('tb-status');
+  if(!el)return;
+  var html='';
+  if(typeof pulseCache!=='undefined'&&pulseCache){
+    var asOf=pulseCache.asOf||0;
+    var ageMs=asOf>0?(Date.now()-asOf):Infinity;
+    var liveCls,liveTxt;
+    if(asOf===0){liveCls='live-dead';liveTxt='NO DATA';}
+    else if(ageMs<3000){liveCls='live-fresh';liveTxt='LIVE '+Math.max(0,Math.round(ageMs/1000))+'s';}
+    else if(ageMs<10000){liveCls='live-warm';liveTxt='OK '+Math.round(ageMs/1000)+'s';}
+    else if(ageMs<60000){liveCls='live-stale';liveTxt='STALE '+Math.round(ageMs/1000)+'s';}
+    else{liveCls='live-dead';liveTxt='DEAD '+Math.round(ageMs/60000)+'m';}
+    html+='<span class="tb-chip '+liveCls+'"><span class="tb-chip-dot"></span>'+liveTxt+'</span>';
+  }
+  if(typeof getTradeMode==='function'){
+    var mode=getTradeMode();
+    var cls=mode==='live'?'mode-live':'mode-paper';
+    html+='<span class="tb-chip '+cls+'"><span class="tb-chip-dot"></span>'+(mode==='live'?'LIVE':'PAPER')+'</span>';
+  }
+  if(typeof computeDailyStats==='function'){
+    var stats=computeDailyStats();
+    var sign=stats.pnl>=0?'+':'';
+    var cls=Math.abs(stats.pnl)<0.01?'':(stats.pnl>0?'pnl-pos':'pnl-neg');
+    html+='<span class="tb-chip '+cls+'">TODAY '+sign+'$'+stats.pnl.toFixed(2)+'</span>';
+  }
+  el.innerHTML=html;
+}
+function tbSetupScan(){
+  var btn=document.getElementById('tb-scan');
+  if(!btn||btn.dataset.wired)return;
+  btn.addEventListener('click',function(){
+    var els=document.querySelectorAll('button');
+    for(var i=0;i<els.length;i++){
+      var t=(els[i].textContent||'').trim().toUpperCase();
+      if(t==='SCAN NOW'||t.endsWith('SCAN NOW')){els[i].click();return;}
+    }
+  });
+  btn.dataset.wired='1';
+}
+function tbHideOriginals(){
+  var els=document.querySelectorAll('div, header, nav, section');
+  var best=null;var bestSize=Infinity;
+  for(var i=0;i<els.length;i++){
+    var el=els[i];
+    if(el.closest('#acress-topbar'))continue;
+    if(el.classList.contains('acress-hidden-by-topbar'))continue;
+    var t=(el.textContent||'');
+    if(t.indexOf('Acress')<0)continue;
+    if(t.indexOf('PRESSURE SCANNER')<0&&t.indexOf('Pressure Scanner')<0)continue;
+    if(t.indexOf('PERFORMANCE TRACKER')<0&&t.indexOf('Performance Tracker')<0)continue;
+    if(t.length>400)continue;
+    if(t.length<bestSize){best=el;bestSize=t.length;}
+  }
+  if(best)best.classList.add('acress-hidden-by-topbar');
+}
+function ensureTopbar(){
+  injectTopbarCSS();
+  var bar=document.getElementById('acress-topbar');
+  if(!bar){
+    bar=document.createElement('div');
+    bar.id='acress-topbar';
+    bar.innerHTML=buildTopbar();
+    document.body.insertBefore(bar,document.body.firstChild);
+    document.body.classList.add('with-acress-topbar');
+  }
+  tbSetupTabs();
+  tbSetupScan();
+  tbHideOriginals();
+  tbUpdateActive();
+  tbUpdateStatus();
+}
+
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
 var scoreRange={min:60,max:100};
@@ -5613,6 +5786,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
+try{ensureTopbar();setInterval(function(){ensureTopbar();tbUpdateActive();tbUpdateStatus();},500);}catch(e){console.warn('[Acress] init: topbar',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
