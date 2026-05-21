@@ -3329,16 +3329,22 @@ function openTradeRiskGate(card){
   }
   var signal=extractSignalFromCard(card.querySelector('[data-log-sig]')||card);
   if(!signal){alert('Could not extract signal from card');return;}
-  // If reverse, flip direction
+  // Lock in the original card direction NOW, before anything can mutate signal.dir.
+  // executeTradeViaBridge uses _cardDir + action to derive the final direction,
+  // making the trade direction immune to any upstream mutation bugs.
+  signal._cardDir=signal.dir;
+  // Flip for downstream consumers (modal display, tracker tagging)
   if(window.pendingTradeAction==='reverse'){
     signal.dir=signal.dir==='LONG'?'SHORT':'LONG';
     signal._isReversed=true;
   }
+  console.log('[ACRESS][trade] gate opened: action='+window.pendingTradeAction+' | card.dir(locked)='+signal._cardDir+' | signal.dir(displayed)='+signal.dir);
   showRiskGateModal(card.querySelector('[data-log-sig]')||card,function(){
     // Capture action info BEFORE the reset, then execute
     var actionUsed=window.pendingTradeAction;
     var tradedDir=signal.dir;
-    executeTradeViaBridge(signal).then(function(result){
+    console.log('[ACRESS][trade] modal confirmed: actionUsed='+actionUsed+' | tradedDir='+tradedDir+' | signal._cardDir='+signal._cardDir);
+    executeTradeViaBridge(signal,actionUsed).then(function(result){
       if(result&&result.success){
         emitNotif&&emitNotif('trade','Order placed',signal.sym+' '+signal.dir+' qty '+result.qty+(actionUsed==='reverse'?' (REVERSED)':''));
         var logBtn=card.querySelector('[data-log-sig]');
@@ -3393,23 +3399,34 @@ function openTradeRiskGate(card){
   });
 }
 
-function executeTradeViaBridge(signal){
+function executeTradeViaBridge(signal,action){
+  // BULLETPROOF DIRECTION DERIVATION
+  // Final direction = (original card direction) flipped iff action === 'reverse'.
+  // We deliberately ignore signal.dir here because anything in the call chain
+  // could have mutated it. _cardDir was locked in before any flips ran.
+  var cardDir=signal._cardDir||signal.dir;
+  var finalDir;
+  if(action==='reverse'){
+    finalDir=cardDir==='LONG'?'SHORT':'LONG';
+  }else{
+    finalDir=cardDir;
+  }
+  console.log('[ACRESS][trade] executeTradeViaBridge: action='+action+' | _cardDir='+cardDir+' | signal.dir='+signal.dir+' | sending finalDir='+finalDir);
   if(typeof getTradeMode==='function'&&getTradeMode()!=='live'){
-    // Paper mode: don't actually execute, just resolve as success
-    console.log('[trade] PAPER mode - simulating order:',signal);
-    return Promise.resolve({success:true,qty:'(paper)',orderId:'paper-'+Date.now()});
+    console.log('[ACRESS][trade] PAPER mode - simulating',finalDir,'order for',signal.sym);
+    return Promise.resolve({success:true,qty:'(paper)',orderId:'paper-'+Date.now(),direction:finalDir});
   }
   var trackerCfg=(typeof window.trackerCfg!=='undefined'&&window.trackerCfg)||{};
   var body={
     symbol:signal.sym,
-    direction:signal.dir,
+    direction:finalDir,
     positionSize:signal.positionSize||trackerCfg.position||1000,
     entry:signal.entry||signal.price,
     stopPct:signal.stopPct||trackerCfg.risk||1.92,
     targetPct:signal.targetPct||trackerCfg.takeProfit||4,
     leverage:signal.leverage||10,
   };
-  console.log('[trade] sending order to bridge:',body);
+  console.log('[ACRESS][trade] sending order body:',body);
   return fetch(getBridgeUrl()+'/api/place-order',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
