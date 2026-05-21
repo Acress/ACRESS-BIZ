@@ -3403,39 +3403,83 @@ function openTradeRiskGate(card){
         if(logBtn){
           window.rgApproved=true;
           logBtn.click();
-          // Tag the just-created entry with execution info
-          setTimeout(function(){
-            try{
-              var raw=localStorage.getItem('acress_pressure_log_v16b');
-              if(!raw)return;
-              var entries=JSON.parse(raw);
-              if(!entries.length)return;
-              var last=entries[entries.length-1];
-              last.executedAction=actionUsed||'trade';
-              last.executedAt=Date.now();
-              if(result.orderId)last.orderId=result.orderId;
-              // For reverse trades: store original signal info and flip dir+prices
-              if(actionUsed==='reverse'){
-                last.originalSignalDir=last.dir;
-                last.dir=tradedDir;
-                last.tradedDir=tradedDir;
-                // Recompute stop and target for the actually-traded direction
-                var entryPx=parseFloat(last.entry||last.entryPrice||last.price||0);
-                if(entryPx>0){
-                  var stopPctNum=parseFloat(last.stopPct||last.risk||1.92);
-                  var tpPctNum=parseFloat(last.targetPct||last.takeProfit||last.tpPct||4);
-                  if(stopPctNum>0){
-                    last.stop=tradedDir==='LONG'?entryPx*(1-stopPctNum/100):entryPx*(1+stopPctNum/100);
-                  }
-                  if(tpPctNum>0){
-                    last.target=tradedDir==='LONG'?entryPx*(1+tpPctNum/100):entryPx*(1-tpPctNum/100);
-                  }
+          // Bug 1 fix: signature-matching tagger
+          // Old setTimeout(250) wrote localStorage directly but never touched
+          // the in-memory window.tracker array, so the next saveTracker() call
+          // silently overwrote the executedAction tags. This polls window.tracker
+          // for up to 2s, matches by (sym + cardDir + loggedAt > T0-2s + untagged),
+          // mutates the target object in place, then calls saveTracker() so the
+          // in-memory state and the localStorage state stay coherent.
+          // Also captures getTradeMode() at confirm time (fixes Bug 3 too).
+          (function(){
+            var sigSym=signal.sym||signal.base||'';
+            var sigCardDir=signal._cardDir||signal.dir;
+            var sigTradedDir=tradedDir;
+            var sigT0=Date.now();
+            var sigMode=(typeof getTradeMode==='function')?getTradeMode():'paper';
+            var sigOrderId=result.orderId;
+            var sigAction=actionUsed||'trade';
+            var attempts=0;
+            var maxAttempts=40;
+            var pollTimer=setInterval(function(){
+              attempts++;
+              try{
+                var arr=(typeof window.tracker!=='undefined'&&Array.isArray(window.tracker))?window.tracker:null;
+                if(!arr){
+                  var raw=localStorage.getItem('acress_pressure_log_v16b');
+                  arr=raw?JSON.parse(raw):[];
                 }
+                var target=null;
+                for(var i=arr.length-1;i>=0;i--){
+                  var e=arr[i];
+                  if(!e)continue;
+                  if(e.loggedAt&&e.loggedAt<sigT0-2000)break;
+                  var eSym=e.sym||e.symbol||e.base||'';
+                  if(eSym!==sigSym)continue;
+                  var eDir=String(e.dir||'').toUpperCase();
+                  if(eDir!==sigCardDir)continue;
+                  if(e.executedAction)continue;
+                  target=e;
+                  break;
+                }
+                if(target){
+                  clearInterval(pollTimer);
+                  target.executedAction=sigAction;
+                  target.executedAt=Date.now();
+                  target.mode=sigMode;
+                  if(sigOrderId)target.orderId=sigOrderId;
+                  if(sigAction==='reverse'){
+                    target.originalSignalDir=target.dir;
+                    target.dir=sigTradedDir;
+                    target.tradedDir=sigTradedDir;
+                    var entryPx=parseFloat(target.entry||target.entryPrice||target.price||0);
+                    if(entryPx>0){
+                      var stopPctNum=parseFloat(target.stopPct||target.risk||1.92);
+                      var tpPctNum=parseFloat(target.targetPct||target.takeProfit||target.tpPct||4);
+                      if(stopPctNum>0){
+                        target.stop=sigTradedDir==='LONG'?entryPx*(1-stopPctNum/100):entryPx*(1+stopPctNum/100);
+                      }
+                      if(tpPctNum>0){
+                        target.target=sigTradedDir==='LONG'?entryPx*(1+tpPctNum/100):entryPx*(1-tpPctNum/100);
+                      }
+                    }
+                  }
+                  if(typeof saveTracker==='function'){
+                    try{saveTracker();}catch(e1){}
+                  }else{
+                    try{localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(arr));}catch(e1){}
+                  }
+                  console.log('[ACRESS] tagged: sym='+sigSym+' action='+sigAction+' mode='+sigMode+' orderId='+sigOrderId+' attempt='+attempts);
+                }else if(attempts>=maxAttempts){
+                  clearInterval(pollTimer);
+                  console.warn('[ACRESS] tag failed after '+(attempts*50)+'ms: no entry matched sym='+sigSym+' cardDir='+sigCardDir);
+                }
+              }catch(err){
+                clearInterval(pollTimer);
+                console.warn('[ACRESS] tag exception:',err.message);
               }
-              localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(entries));
-              console.log('[ACRESS] tagged entry as '+actionUsed+': '+(signal.sym||signal.base||'?')+' actually traded as '+tradedDir);
-            }catch(e){console.warn('[ACRESS] tag entry failed:',e.message);}
-          },250);
+            },50);
+          })();
         }
         window.pendingTradeAction=null;
       }else{
