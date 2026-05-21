@@ -3074,32 +3074,66 @@ function addReversedIndicators(){
       if(isNaN(idx)||idx<0||idx>=entries.length)return;
       var entry=entries[idx];
       if(!entry)return;
-      var origPnl=parseFloat(entry.pnl||0)||0;
-      var revPnl=computeReversedPnL(entry);
       var existing=row.querySelector('.rev-indicator');
-      if(revPnl===null){
-        if(existing)existing.remove();
-        return;
+      var pnl=parseFloat(entry.pnl||0)||0;
+      var status=(entry.status||entry.outcome||'').toLowerCase();
+      var isClosed=status.length>0&&status.indexOf('open')<0&&status.indexOf('active')<0;
+      var label, bgCol, fgCol, brCol, title, dataKey;
+      
+      if(entry.executedAction==='reverse'){
+        // Actually-reversed trade — show clearly
+        label='\u{1F504} REVERSED '+(isClosed?((pnl>=0?'+':'')+'$'+pnl.toFixed(2)):'open');
+        bgCol='rgba(255,170,0,0.18)';
+        fgCol='var(--amber)';
+        brCol='rgba(255,170,0,0.45)';
+        title='You executed this in the OPPOSITE direction of the system signal. PnL shown is from the actually-traded position.';
+        dataKey='rev-act-'+pnl.toFixed(2)+'-'+(isClosed?'c':'o');
+        row.classList.add('tk-reversed-trade');
+        row.classList.remove('tk-executed-trade');
+      }else if(entry.executedAction==='trade'){
+        // Executed as recommended
+        label='\u26A1 EXECUTED '+(isClosed?((pnl>=0?'+':'')+'$'+pnl.toFixed(2)):'open');
+        var isWin=pnl>=0;
+        bgCol=isWin?'rgba(46,232,160,0.15)':'rgba(255,82,119,0.15)';
+        fgCol=isWin?'var(--green)':'var(--red)';
+        brCol=isWin?'rgba(46,232,160,0.35)':'rgba(255,82,119,0.35)';
+        title='You executed this trade in the system recommended direction.';
+        dataKey='exec-act-'+pnl.toFixed(2)+'-'+(isClosed?'c':'o');
+        row.classList.add('tk-executed-trade');
+        row.classList.remove('tk-reversed-trade');
+      }else{
+        // Just logged (no execution) — show hypothetical reversal analysis
+        var revPnl=computeReversedPnL(entry);
+        if(revPnl===null){
+          if(existing)existing.remove();
+          row.classList.remove('tk-reversed-trade','tk-executed-trade');
+          return;
+        }
+        var revBetter=revPnl>pnl;
+        bgCol=revBetter?'rgba(46,232,160,0.12)':'rgba(255,82,119,0.12)';
+        fgCol=revBetter?'var(--green)':'var(--red)';
+        brCol=revBetter?'rgba(46,232,160,0.3)':'rgba(255,82,119,0.3)';
+        label='REV '+(revPnl>=0?'+':'')+'$'+revPnl.toFixed(2);
+        title='What this trade would have made if you took the opposite direction';
+        dataKey='hypo-'+revPnl.toFixed(2);
+        row.classList.remove('tk-reversed-trade','tk-executed-trade');
       }
-      var revBetter=revPnl>origPnl;
-      var bgCol=revBetter?'rgba(46,232,160,0.12)':'rgba(255,82,119,0.12)';
-      var fgCol=revBetter?'var(--green)':'var(--red)';
-      var brCol=revBetter?'rgba(46,232,160,0.3)':'rgba(255,82,119,0.3)';
-      var label='REV '+(revPnl>=0?'+':'')+'$'+revPnl.toFixed(2);
+      
       if(existing){
-        if(existing.dataset.val===String(revPnl.toFixed(2)))return;
-        existing.dataset.val=revPnl.toFixed(2);
+        if(existing.dataset.val===dataKey)return;
+        existing.dataset.val=dataKey;
         existing.textContent=label;
+        existing.title=title;
         existing.style.background=bgCol;
         existing.style.color=fgCol;
         existing.style.borderColor=brCol;
       }else{
         var ind=document.createElement('div');
         ind.className='rev-indicator';
-        ind.dataset.val=revPnl.toFixed(2);
+        ind.dataset.val=dataKey;
         ind.textContent=label;
-        ind.title='What this trade would have made if you took the opposite direction';
-        ind.style.cssText='position:absolute;top:8px;right:8px;padding:3px 7px;border-radius:5px;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:0.5px;background:'+bgCol+';color:'+fgCol+';border:1px solid '+brCol+';pointer-events:none;z-index:2;';
+        ind.title=title;
+        ind.style.cssText='position:absolute;top:8px;right:8px;padding:3px 8px;border-radius:5px;font-family:var(--font-mono);font-size:9px;font-weight:800;letter-spacing:0.5px;background:'+bgCol+';color:'+fgCol+';border:1px solid '+brCol+';pointer-events:none;z-index:3;';
         row.appendChild(ind);
       }
     });
@@ -3301,22 +3335,58 @@ function openTradeRiskGate(card){
     signal._isReversed=true;
   }
   showRiskGateModal(card.querySelector('[data-log-sig]')||card,function(){
-    // After modal confirm: execute trade
+    // Capture action info BEFORE the reset, then execute
+    var actionUsed=window.pendingTradeAction;
+    var tradedDir=signal.dir;
     executeTradeViaBridge(signal).then(function(result){
       if(result&&result.success){
-        emitNotif&&emitNotif('trade','Order placed',signal.sym+' '+signal.dir+' qty '+result.qty+(window.pendingTradeAction==='reverse'?' (REVERSED)':''));
-        // Also log to tracker for tracking
+        emitNotif&&emitNotif('trade','Order placed',signal.sym+' '+signal.dir+' qty '+result.qty+(actionUsed==='reverse'?' (REVERSED)':''));
         var logBtn=card.querySelector('[data-log-sig]');
         if(logBtn){
-          window.pendingTradeAction=null;
           window.rgApproved=true;
-          setTimeout(function(){logBtn.click();},0);
+          logBtn.click();
+          // Tag the just-created entry with execution info
+          setTimeout(function(){
+            try{
+              var raw=localStorage.getItem('acress_pressure_log_v16b');
+              if(!raw)return;
+              var entries=JSON.parse(raw);
+              if(!entries.length)return;
+              var last=entries[entries.length-1];
+              last.executedAction=actionUsed||'trade';
+              last.executedAt=Date.now();
+              if(result.orderId)last.orderId=result.orderId;
+              // For reverse trades: store original signal info and flip dir+prices
+              if(actionUsed==='reverse'){
+                last.originalSignalDir=last.dir;
+                last.dir=tradedDir;
+                last.tradedDir=tradedDir;
+                // Recompute stop and target for the actually-traded direction
+                var entryPx=parseFloat(last.entry||last.entryPrice||last.price||0);
+                if(entryPx>0){
+                  var stopPctNum=parseFloat(last.stopPct||last.risk||1.92);
+                  var tpPctNum=parseFloat(last.targetPct||last.takeProfit||last.tpPct||4);
+                  if(stopPctNum>0){
+                    last.stop=tradedDir==='LONG'?entryPx*(1-stopPctNum/100):entryPx*(1+stopPctNum/100);
+                  }
+                  if(tpPctNum>0){
+                    last.target=tradedDir==='LONG'?entryPx*(1+tpPctNum/100):entryPx*(1-tpPctNum/100);
+                  }
+                }
+              }
+              localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(entries));
+              console.log('[ACRESS] tagged entry as '+actionUsed+': '+signal.sym+' actually traded as '+tradedDir);
+            }catch(e){console.warn('[ACRESS] tag entry failed:',e.message);}
+          },250);
         }
+        window.pendingTradeAction=null;
       }else{
+        window.pendingTradeAction=null;
         emitNotif&&emitNotif('breaker','Order failed',signal.sym+': '+(result&&result.error||'unknown error'));
         alert('Order failed: '+(result&&result.error||'unknown'));
       }
     }).catch(function(e){
+      window.pendingTradeAction=null;
       emitNotif&&emitNotif('breaker','Order error',signal.sym+': '+e.message);
       alert('Order error: '+e.message);
     });
