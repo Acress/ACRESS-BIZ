@@ -4852,7 +4852,20 @@ async function runScan(){
         var r=await analyzeCoinDiag(s,diagnostics);
         if(r){
           diagnostics.topScores.push({sym:r.base,score:r.score,dir:r.dir});
-          if(r.score>=25){
+          // Forced-participant filter (Layer 2a)
+          // Drop signals whose mechanism would have us trading WITH the trapped herd.
+          // Explicit name list — type-based filtering would accidentally drop
+          // Short Squeeze / Long Capitulation, which are typed 'continuation'
+          // in classifyMechanism but are structurally squeeze trades we keep.
+          // Reversal, squeeze, sweep, absorption setups all pass through.
+          var _herdMechs = {
+            'Initiative Demand · Fresh Longs': true,
+            'Initiative Supply · Fresh Shorts': true,
+            'Aggressive Buying Pressure': true,
+            'Aggressive Selling Pressure': true
+          };
+          var _isHerd = r.mechanism && _herdMechs[r.mechanism.name];
+          if(r.score>=25 && !_isHerd){
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
               if(r.score>existing.score){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
