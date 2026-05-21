@@ -4645,8 +4645,9 @@ function scoreCoin(gates,context){
     score += liqPts;
     reasons.push({lvl: 'ok', tag: 'LIQ', text: gates.liq.detail});
   }
+  // Layer 3 (Option C): OI_EXHAUST scoring bumped to 25/12 so a strong setup alone clears the 25-point signal threshold
   if(gates.oiExhaust && gates.oiExhaust.dir === dir){
-    var oiePts = gates.oiExhaust.type === 'strong_exhaustion' ? 18 : 10;
+    var oiePts = gates.oiExhaust.type === 'strong_exhaustion' ? 25 : 12;
     score += oiePts;
     reasons.push({lvl: 'ok', tag: 'OIX', text: gates.oiExhaust.detail});
   }
@@ -4661,7 +4662,7 @@ function scoreCoin(gates,context){
   if(gates.cvd)maxAvailable+=15;
   if(gates.sweep)maxAvailable+=15;
   if(gates.liq)maxAvailable+=15;
-  if(gates.oiExhaust)maxAvailable+=18;
+  if(gates.oiExhaust)maxAvailable+=25;
   if(context)maxAvailable+=context.score>0?context.score:0; // context boost only counted if positive
   if(maxAvailable<70)maxAvailable=70; // floor — don't over-amplify when most gates missing
   var normalized=Math.min(100,score/maxAvailable*100);
@@ -4686,6 +4687,10 @@ function classifyMechanism(dir,gates){
     if(oi.state==='long_capitulation'&&dir==='SHORT')return{name:'Long Capitulation in Progress',type:'continuation',horizon:'10-30 min'};
     if(oi.state==='new_longs')return{name:'Initiative Demand · Fresh Longs',type:'continuation',horizon:'15-30 min'};
     if(oi.state==='new_shorts')return{name:'Initiative Supply · Fresh Shorts',type:'continuation',horizon:'15-30 min'};
+  }
+  // Option C-2: OI_EXHAUST classifyMechanism branch — only fires when no in-cascade mech matched above
+  if(gates.oiExhaust&&gates.oiExhaust.dir===dir&&gates.oiExhaust.passes){
+    return{name:dir==='LONG'?'OI Build Exhaustion · Short side':'OI Build Exhaustion · Long side',type:'setup',horizon:'15-45 min'};
   }
   return{name:dir==='LONG'?'Aggressive Buying Pressure':'Aggressive Selling Pressure',type:'continuation',horizon:'15-30 min'};
 }
@@ -5058,7 +5063,7 @@ async function analyzeCoinDiag(symObj,diag){
     var ctx=probable?gateContext(prem,probable):null;
     // Layer 2b: LIQ_INTENSITY directional confirmation from bridge liquidation feed
     gates.liq = probable ? gateLiq(liqStats, probable) : null;
-    gates.oiExhaust = probable ? gateOIExhaust(oiAgg, k5, probable) : null;
+    // Option C: gates.oiExhaust now set in the initial gates object (above) so it votes on direction
     var result=scoreCoin(gates,ctx);
     if(!result)return null;
     // v16+ — OI velocity check (continuation late-stage filter)
