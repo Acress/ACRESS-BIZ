@@ -4923,18 +4923,36 @@ async function fetchLiqStats(base){
 }
 
 function gateLiq(liqStats, dir){
+  // ratio-based gateLiq (Layer 2b fix) — bridge's robust-Z intensity is degenerate for sparse alts (MAD=0).
+  // Use the raw fiveMin/thirtyMin buckets directly with a volume-ratio formula instead.
   if(!liqStats || !liqStats.ready) return null;
-  var intensity = liqStats.intensity;
-  if(!intensity) return null;
-  var relevantIntensity = (dir === 'LONG') ? intensity.short : intensity.long;
-  if(relevantIntensity == null) return null;
-  if(relevantIntensity >= 2.0){
-    return {dir: dir, type: 'cascade_confirmed', strength: relevantIntensity,
-            detail: dir + ' confirmed by ' + relevantIntensity.toFixed(1) + ' robust-Z opposite-side liquidations (5m vs 30m baseline)'};
+  if(!liqStats.fiveMin || !liqStats.thirtyMin) return null;
+  // For LONG entries we want SHORT liquidations elevated; for SHORT we want LONG liquidations.
+  var fiveMinVol = (dir === 'LONG') ? liqStats.fiveMin.short : liqStats.fiveMin.long;
+  var thirtyMinVol = (dir === 'LONG') ? liqStats.thirtyMin.short : liqStats.thirtyMin.long;
+  var fiveMinEvents = liqStats.fiveMin.events || 0;
+  // Single events aren't cascades — require a cluster
+  if (fiveMinEvents < 2) return null;
+  if (!fiveMinVol || fiveMinVol < 1) return null;
+  // Intensity = current 5m volume divided by its expected proportional share (1/6 of 30m total)
+  var expectedShare = thirtyMinVol / 6;
+  var intensity, basis;
+  if (expectedShare > 0) {
+    intensity = fiveMinVol / expectedShare;
+    basis = 'x baseline';
+  } else {
+    // No prior baseline activity — fall back to absolute volume thresholds
+    intensity = fiveMinVol > 50000 ? 3.5 : (fiveMinVol > 10000 ? 1.7 : 0.6);
+    basis = 'absolute (no baseline)';
   }
-  if(relevantIntensity >= 1.0){
-    return {dir: dir, type: 'mild_confirmation', strength: relevantIntensity,
-            detail: dir + ' mild liq confirmation ' + relevantIntensity.toFixed(1) + ' robust-Z'};
+  var volStr = '$' + Math.round(fiveMinVol).toLocaleString();
+  if (intensity >= 3.0) {
+    return {dir: dir, type: 'cascade_confirmed', strength: intensity,
+            detail: dir + ' confirmed: ' + intensity.toFixed(1) + ' ' + basis + ' (' + volStr + ' opposite-side liq in 5m, ' + fiveMinEvents + ' events)'};
+  }
+  if (intensity >= 1.5) {
+    return {dir: dir, type: 'mild_confirmation', strength: intensity,
+            detail: dir + ' mild liq confirmation: ' + intensity.toFixed(1) + ' ' + basis + ' (' + volStr + ' in 5m)'};
   }
   return null;
 }
