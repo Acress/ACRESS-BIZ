@@ -3827,6 +3827,17 @@ async function fetchTopCoins(n){
     if(!isFinite(hi)||!isFinite(lo)||lo<=0)return false;
     var rangePct = (hi - lo) / lo * 100;
     if(rangePct < MIN_24H_RANGE_PCT){ excludedLowRange++; return false; }
+    // BYBIT GATE: only allow symbols listed on Bybit, where we execute trades.
+    // Binance still provides ticker/kline/funding data for scoring and confirmation,
+    // but the symbol must exist on Bybit to make it into the signal pool.
+    if(typeof bybitSymbolSet==='undefined' || !bybitSymbolSet || bybitSymbolSet.size===0){
+      if(!window._bybitGateWarned){
+        console.warn('[ACRESS] Bybit universe not loaded yet — Binance fallback active for this scan');
+        window._bybitGateWarned=true;
+      }
+    } else if(!bybitSymbolSet.has(base)){
+      return false;
+    }
     return true;
   }).sort(function(a,b){return parseFloat(b.quoteVolume)-parseFloat(a.quoteVolume);}).slice(0,n);
   try {
