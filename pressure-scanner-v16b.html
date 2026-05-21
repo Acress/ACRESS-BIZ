@@ -4645,6 +4645,11 @@ function scoreCoin(gates,context){
     score += liqPts;
     reasons.push({lvl: 'ok', tag: 'LIQ', text: gates.liq.detail});
   }
+  if(gates.oiExhaust && gates.oiExhaust.dir === dir){
+    var oiePts = gates.oiExhaust.type === 'strong_exhaustion' ? 18 : 10;
+    score += oiePts;
+    reasons.push({lvl: 'ok', tag: 'OIX', text: gates.oiExhaust.detail});
+  }
   if(score<0)score=0;
   // Rescale by maximum possible from available gates so a missing OI gate doesn't
   // unfairly cap the score. With all 6 gates available, max = 100. Without OI,
@@ -4656,6 +4661,7 @@ function scoreCoin(gates,context){
   if(gates.cvd)maxAvailable+=15;
   if(gates.sweep)maxAvailable+=15;
   if(gates.liq)maxAvailable+=15;
+  if(gates.oiExhaust)maxAvailable+=18;
   if(context)maxAvailable+=context.score>0?context.score:0; // context boost only counted if positive
   if(maxAvailable<70)maxAvailable=70; // floor — don't over-amplify when most gates missing
   var normalized=Math.min(100,score/maxAvailable*100);
@@ -4961,19 +4967,51 @@ function gateLiq(liqStats, dir){
   return null;
 }
 
+// OI_EXHAUST gate (Layer 3)
+async function fetchOIAgg(base) {
+  try {
+    var url = (typeof getBridgeUrl === 'function' ? getBridgeUrl() : '') + '/api/oi/' + base;
+    var res = await fetch(url, { method: 'GET' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { return null; }
+}
+
+function gateOIExhaust(oi, k5, probable) {
+  if (!oi || !oi.ready || !oi.history || oi.history.length < 6 || !k5 || k5.length < 6) return null;
+  var h = oi.history, n = h.length;
+  var a = h[0].c, b = h[Math.min(3, n-1)].c, c = h[Math.max(0, n-2)].c, d = h[n-1].c;
+  if (a <= 0 || c <= 0) return null;
+  var pcp = (b - a) / a, rcp = (d - c) / c;
+  if (pcp < 0.02 || rcp >= 0.005) return null;
+  var ps = parseFloat(k5[Math.max(0, k5.length-6)][4]);
+  var pe = parseFloat(k5[Math.max(0, k5.length-3)][4]);
+  if (!Number.isFinite(ps) || !Number.isFinite(pe) || ps <= 0) return null;
+  var ppc = (pe - ps) / ps, es, bias;
+  if (ppc > 0.005) { es = 'LONG'; bias = 'SHORT'; }
+  else if (ppc < -0.005) { es = 'SHORT'; bias = 'LONG'; }
+  else return null;
+  if (probable !== bias) return null;
+  var st = Math.min(3, pcp / 0.02);
+  return { dir: bias, type: st >= 2 ? 'strong_exhaustion' : 'mild_exhaustion', strength: st,
+           detail: bias + ' exhaustion: cross-venue OI +' + (pcp*100).toFixed(1) + '% then ' +
+                   (rcp >= 0 ? '+' : '') + (rcp*100).toFixed(2) + '% (' + es + ' side stalled)' };
+}
+
 async function analyzeCoinDiag(symObj,diag){
   var sym=symObj.symbol;
   var base=sym.replace(/USDT$/,'');
   var price=parseFloat(symObj.lastPrice);
   var chg24=parseFloat(symObj.priceChangePercent);
   try{
-    var [k1,k5,k15,oiResult,prem,liqStats]=await Promise.all([
+    var [k1,k5,k15,oiResult,prem,liqStats,oiAgg]=await Promise.all([
       fetchKlines(base,'1m',60),
       fetchKlines(base,'5m',40),
       fetchKlines(base,'15m',30),
       fetchCombinedOI(base),
       fetchPremium(base).catch(function(){return null;}),
-      fetchLiqStats(base).catch(function(){return null;})
+      fetchLiqStats(base).catch(function(){return null;}),
+      fetchOIAgg(base).catch(function(){return null;})
     ]);
     // v16 — ATR + absorption + Z-score baseline maintenance
     var atr5m=computeATR(k5,14);
@@ -5017,6 +5055,7 @@ async function analyzeCoinDiag(symObj,diag){
     var ctx=probable?gateContext(prem,probable):null;
     // Layer 2b: LIQ_INTENSITY directional confirmation from bridge liquidation feed
     gates.liq = probable ? gateLiq(liqStats, probable) : null;
+    gates.oiExhaust = probable ? gateOIExhaust(oiAgg, k5, probable) : null;
     var result=scoreCoin(gates,ctx);
     if(!result)return null;
     // v16+ — OI velocity check (continuation late-stage filter)
