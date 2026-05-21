@@ -1466,6 +1466,47 @@ function applyTradeModeBodyClass(){
   document.body.classList.remove('mode-paper-active','mode-live-active');
   document.body.classList.add('mode-'+getTradeMode()+'-active');
 }
+function showLiveModeConfirmModal(callback){
+  var existing=document.getElementById('mode-toggle-modal-overlay');
+  if(existing)existing.remove();
+  var overlay=document.createElement('div');
+  overlay.id='mode-toggle-modal-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var modal=document.createElement('div');
+  modal.style.cssText='background:#0B0F1A;border:2px solid #ff2828;padding:24px;max-width:480px;width:100%;border-radius:8px;font-family:system-ui,sans-serif;color:#fff;box-shadow:0 0 40px rgba(255,40,40,0.4);box-sizing:border-box;';
+  modal.innerHTML=
+    '<h2 style="margin:0 0 12px;color:#ff2828;font-size:20px;">\u26A0 SWITCH TO LIVE TRADING?</h2>'+
+    '<p style="margin:0 0 12px;line-height:1.5;font-size:14px;">In LIVE mode, the \u26A1 EXECUTE and \u21BB REVERSE buttons place <b>real orders on Bybit</b> using your API keys.</p>'+
+    '<p style="margin:0 0 12px;line-height:1.5;font-size:14px;">Make sure your account balance, position size, and risk settings are correct in TRADE CONFIG before proceeding.</p>'+
+    '<p style="margin:0 0 16px;line-height:1.5;font-size:14px;">Type <code style="background:#1a1f2e;padding:3px 8px;border-radius:3px;color:#ff2828;font-family:monospace;">LIVE</code> to confirm:</p>'+
+    '<input id="mode-toggle-confirm-input" type="text" style="width:100%;padding:10px;background:#000;color:#fff;border:1px solid #444;border-radius:4px;font-family:monospace;font-size:14px;box-sizing:border-box;" autocomplete="off">'+
+    '<div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">'+
+      '<button id="mode-toggle-cancel" style="padding:10px 18px;background:transparent;color:#fff;border:1px solid #666;border-radius:4px;cursor:pointer;font-size:13px;">Cancel</button>'+
+      '<button id="mode-toggle-confirm" style="padding:10px 18px;background:#ff2828;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:700;font-size:13px;opacity:0.4;" disabled>SWITCH TO LIVE</button>'+
+    '</div>';
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  var input=document.getElementById('mode-toggle-confirm-input');
+  var confirmBtn=document.getElementById('mode-toggle-confirm');
+  var cancelBtn=document.getElementById('mode-toggle-cancel');
+  setTimeout(function(){try{input.focus();}catch(e){}},50);
+  input.addEventListener('input',function(){
+    var enabled=input.value.trim().toUpperCase()==='LIVE';
+    confirmBtn.disabled=!enabled;
+    confirmBtn.style.opacity=enabled?'1':'0.4';
+  });
+  function closeModal(confirmed){
+    try{overlay.remove();}catch(e){}
+    if(callback)callback(confirmed);
+  }
+  confirmBtn.addEventListener('click',function(e){e.stopPropagation();closeModal(true);});
+  cancelBtn.addEventListener('click',function(e){e.stopPropagation();closeModal(false);});
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeModal(false);});
+  input.addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&!confirmBtn.disabled){e.preventDefault();closeModal(true);}
+    if(e.key==='Escape')closeModal(false);
+  });
+}
 function renderModeBadge(){
   injectModeBadgeCSS();
   applyTradeModeBodyClass();
@@ -1481,16 +1522,27 @@ function renderModeBadge(){
       el.classList.add('mode-floating');
       document.body.appendChild(el);
     }
-    el.addEventListener('click',function(){
+    el.addEventListener('click',function(ev){
+      if(ev)ev.stopPropagation();
+      console.log('[MODE-TOGGLE] click fired, current mode:',getTradeMode());
       var current=getTradeMode();
       if(current==='paper'){
-        if(confirm('\u26A0 Switch to LIVE TRADING mode?\n\nIn LIVE mode, new trades will be tagged for real-money execution. Execution APIs are not connected yet, so this is currently only a tagging change — but the flag persists and any future execute buttons will route to real exchanges.\n\nProceed?')){
-          setTradeMode('live');
-        }
+        showLiveModeConfirmModal(function(confirmed){
+          console.log('[MODE-TOGGLE] confirmation modal returned:',confirmed);
+          if(confirmed){
+            setTradeMode('live');
+            console.log('[MODE-TOGGLE] switched to LIVE, localStorage now:',localStorage.getItem(TRADE_MODE_KEY));
+            renderModeBadge();
+            if(typeof emitNotif==='function')emitNotif('breaker','LIVE MODE ACTIVE','EXECUTE & REVERSE now place real orders on Bybit.');
+          }
+        });
       }else{
-        setTradeMode('paper');
+        if(confirm('Switch back to PAPER mode? Real orders will stop being placed.')){
+          setTradeMode('paper');
+          console.log('[MODE-TOGGLE] switched to PAPER, localStorage now:',localStorage.getItem(TRADE_MODE_KEY));
+          renderModeBadge();
+        }
       }
-      renderModeBadge();
     });
   }
   var mode=getTradeMode();
