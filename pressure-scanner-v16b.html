@@ -4912,6 +4912,8 @@ async function runScan(){
 // elevated LONG liquidations (longs forced to sell). Returns null when
 // the bridge has no data yet (symbol not yet subscribed or warming up).
 async function fetchLiqStats(base){
+  // LIQ symbol sanitize (Layer 2b cleanup) — bridge rejects non-ASCII symbols with 400; skip them silently
+  if(!base || !/^[A-Z0-9]+$/.test(base)) return null;
   try{
     var url = (typeof getBridgeUrl==='function' ? getBridgeUrl() : '') + '/api/liquidations/' + base + 'USDT';
     var res = await fetch(url, {method:'GET'});
