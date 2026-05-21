@@ -3210,6 +3210,144 @@ function injectReversalCSS(){
 }
 
 
+
+// ── TRADE EXECUTION (EXECUTE + REVERSE) ────────────────────────────
+window.pendingTradeAction = null;
+
+function getBridgeUrl(){
+  return (typeof window.BRIDGE_URL!=='undefined'&&window.BRIDGE_URL)
+    ||(typeof window.API_BASE!=='undefined'&&window.API_BASE)
+    ||'http://89.167.43.202:3000';
+}
+
+function injectTradeButtonCSS(){
+  if(document.getElementById('trade-btn-css'))return;
+  var s=document.createElement('style');
+  s.id='trade-btn-css';
+  s.textContent=
+    '.pcard .trade-actions{display:flex;gap:4px;margin-top:6px;}'+
+    '.pcard .trade-btn,.pcard .rev-trade-btn{flex:1;padding:5px 8px;border-radius:6px;font-family:var(--font-mono);font-size:10px;font-weight:800;letter-spacing:0.5px;cursor:pointer;border:1px solid;transition:all 0.15s;text-align:center;}'+
+    '.pcard .trade-btn{background:rgba(46,232,160,0.12);color:var(--green);border-color:rgba(46,232,160,0.4);}'+
+    '.pcard .trade-btn:hover{background:rgba(46,232,160,0.22);}'+
+    '.pcard .rev-trade-btn{background:rgba(255,170,0,0.12);color:var(--amber);border-color:rgba(255,170,0,0.4);}'+
+    '.pcard .rev-trade-btn:hover{background:rgba(255,170,0,0.22);}'+
+    'body.mode-live-active .pcard .trade-btn,body.mode-live-active .pcard .rev-trade-btn{box-shadow:0 0 8px rgba(255,82,119,0.3);}'+
+    '#risk-gate-modal .rg-action-btn{padding:8px 16px;border-radius:6px;font-family:var(--font-mono);font-size:11px;font-weight:800;letter-spacing:0.5px;cursor:pointer;border:1px solid;margin-left:6px;}'+
+    '#risk-gate-modal .rg-action-btn.execute{background:var(--green);color:#000;border-color:var(--green);}'+
+    '#risk-gate-modal .rg-action-btn.reverse{background:var(--amber);color:#000;border-color:var(--amber);}';
+  document.head.appendChild(s);
+}
+
+function addTradeButtonsToCard(card){
+  if(!card||card.querySelector('.trade-actions'))return;
+  var logBtn=card.querySelector('[data-log-sig]');
+  if(!logBtn)return;
+  var sym=(card.querySelector('.pc-sym')||{textContent:''}).textContent.trim();
+  var dir=card.classList.contains('long')?'LONG':(card.classList.contains('short')?'SHORT':'LONG');
+  var bar=document.createElement('div');
+  bar.className='trade-actions';
+  bar.innerHTML=
+    '<button class="trade-btn" data-trade-sig data-sym="'+sym+'" data-dir="'+dir+'" title="Execute as recommended">\u26A1 EXECUTE</button>'+
+    '<button class="rev-trade-btn" data-rev-trade-sig data-sym="'+sym+'" data-dir="'+dir+'" title="Execute the OPPOSITE direction">\u21BB REVERSE</button>';
+  // Insert after the log button's row, or at end of card
+  var logRow=logBtn.parentElement;
+  if(logRow&&logRow.parentElement===card){
+    logRow.parentElement.insertBefore(bar,logRow.nextSibling);
+  }else{
+    card.appendChild(bar);
+  }
+}
+
+function decorateAllCardsWithTradeButtons(){
+  document.querySelectorAll('#results .pcard').forEach(addTradeButtonsToCard);
+}
+
+// Click interceptors for the new buttons (capture phase, before risk gate's log handler)
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.closest)return;
+  var tBtn=e.target.closest('[data-trade-sig]');
+  var rBtn=e.target.closest('[data-rev-trade-sig]');
+  if(!tBtn&&!rBtn)return;
+  e.preventDefault();
+  e.stopPropagation();
+  var btn=tBtn||rBtn;
+  window.pendingTradeAction=tBtn?'trade':'reverse';
+  // Stash the card reference so we can extract signal info inside the gate flow
+  var card=btn.closest('.pcard');
+  window.pendingTradeCard=card;
+  // Manually trigger the risk gate flow by calling the existing log-click pathway
+  // Find the +Log button in the same card and synthesize a click on it
+  if(card){
+    var logBtn=card.querySelector('[data-log-sig]');
+    if(logBtn){
+      // We have to bypass the existing log-click interceptor's behavior of logging.
+      // We'll handle confirm differently via the modal's confirm callback.
+      openTradeRiskGate(card);
+    }
+  }
+},true);
+
+function openTradeRiskGate(card){
+  if(typeof extractSignalFromCard!=='function'||typeof showRiskGateModal!=='function'){
+    alert('Risk gate not available - check console');
+    console.warn('extractSignalFromCard or showRiskGateModal missing');
+    return;
+  }
+  var signal=extractSignalFromCard(card.querySelector('[data-log-sig]')||card);
+  if(!signal){alert('Could not extract signal from card');return;}
+  // If reverse, flip direction
+  if(window.pendingTradeAction==='reverse'){
+    signal.dir=signal.dir==='LONG'?'SHORT':'LONG';
+    signal._isReversed=true;
+  }
+  showRiskGateModal(card.querySelector('[data-log-sig]')||card,function(){
+    // After modal confirm: execute trade
+    executeTradeViaBridge(signal).then(function(result){
+      if(result&&result.success){
+        emitNotif&&emitNotif('trade','Order placed',signal.sym+' '+signal.dir+' qty '+result.qty+(window.pendingTradeAction==='reverse'?' (REVERSED)':''));
+        // Also log to tracker for tracking
+        var logBtn=card.querySelector('[data-log-sig]');
+        if(logBtn){
+          window.pendingTradeAction=null;
+          window.rgApproved=true;
+          setTimeout(function(){logBtn.click();},0);
+        }
+      }else{
+        emitNotif&&emitNotif('breaker','Order failed',signal.sym+': '+(result&&result.error||'unknown error'));
+        alert('Order failed: '+(result&&result.error||'unknown'));
+      }
+    }).catch(function(e){
+      emitNotif&&emitNotif('breaker','Order error',signal.sym+': '+e.message);
+      alert('Order error: '+e.message);
+    });
+  });
+}
+
+function executeTradeViaBridge(signal){
+  if(typeof getTradeMode==='function'&&getTradeMode()!=='live'){
+    // Paper mode: don't actually execute, just resolve as success
+    console.log('[trade] PAPER mode - simulating order:',signal);
+    return Promise.resolve({success:true,qty:'(paper)',orderId:'paper-'+Date.now()});
+  }
+  var trackerCfg=(typeof window.trackerCfg!=='undefined'&&window.trackerCfg)||{};
+  var body={
+    symbol:signal.sym,
+    direction:signal.dir,
+    positionSize:signal.positionSize||trackerCfg.position||1000,
+    entry:signal.entry||signal.price,
+    stopPct:signal.stopPct||trackerCfg.risk||1.92,
+    targetPct:signal.targetPct||trackerCfg.takeProfit||4,
+    leverage:signal.leverage||10,
+  };
+  console.log('[trade] sending order to bridge:',body);
+  return fetch(getBridgeUrl()+'/api/place-order',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body),
+  }).then(function(r){return r.json();});
+}
+
+
 function ensureTopbar(){
   injectTopbarCSS();
   var bar=document.getElementById('acress-topbar');
@@ -6734,7 +6872,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
-try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();injectReversalCSS();ensureTopbar();ensureNotifButton();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();injectReversalCSS();ensureTopbar();ensureNotifButton();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();styleTrackerRows();addReversedIndicators();renderReversalSummary();},500);setInterval(checkAndEmitNotifs,3000);}catch(e){console.warn('[Acress] init: full + reversal',e.message);}
+try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();injectReversalCSS();ensureTopbar();ensureNotifButton();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();injectReversalCSS();injectTradeButtonCSS();ensureTopbar();ensureNotifButton();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();styleTrackerRows();addReversedIndicators();renderReversalSummary();decorateAllCardsWithTradeButtons();},500);setInterval(checkAndEmitNotifs,3000);}catch(e){console.warn('[Acress] init: full + reversal',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
