@@ -8462,13 +8462,14 @@ function openDrilldownByHourFromVPS(hour){
 </script>
 <script id="acress-card-grid-theme-init">
 (function(){
-  function injectCardGridTheme(){
-    var existing = document.getElementById('acress-card-grid-theme');
-    if(existing) existing.remove();
+  function ensureCardGridTheme(){
+    // Idempotent: only add if missing. Prevents the flicker caused by
+    // continuous remove+re-add cycles fighting with other stylesheets.
+    if(document.getElementById('acress-card-grid-theme')) return;
     var s = document.createElement('style');
     s.id = 'acress-card-grid-theme';
     s.textContent = `
-      /* === SCANNER GRID: uniform card heights, 3-col desktop / 2-col tablet / 1-col phone === */
+      /* ===== SCANNER GRID ===== */
       @media (min-width: 1025px){
         #results{
           display: grid !important;
@@ -8492,16 +8493,19 @@ function openDrilldownByHourFromVPS(hour){
           gap: 12px !important;
         }
       }
+      /* Headers, count rows, banners — anything that's NOT a card spans full width */
+      #results > :not(.pcard){
+        grid-column: 1 / -1 !important;
+      }
+      /* Scanner card sizing only — leave internal layout (flex/block/etc) untouched */
       #results .pcard{
         min-height: 300px !important;
-        display: flex !important;
-        flex-direction: column !important;
         box-sizing: border-box !important;
         margin: 0 !important;
         width: 100% !important;
       }
 
-      /* === TRACKER GRID: 2-col rectangular cards on desktop+tablet, 1-col on phone === */
+      /* ===== TRACKER GRID ===== */
       @media (min-width: 641px){
         #tracker-body{
           display: grid !important;
@@ -8517,15 +8521,13 @@ function openDrilldownByHourFromVPS(hour){
           gap: 14px !important;
         }
       }
-      /* Filter row, sort row, summary panels, etc. span full width — only .tk-entry-card take slots */
+      /* Filter row, sort row, summary panel — non-card children span full width */
       #tracker-body > :not(.tk-entry-card){
         grid-column: 1 / -1 !important;
       }
-      /* Uniform card dimensions within tracker */
+      /* Tracker card sizing only */
       #tracker-body .tk-entry-card{
         min-height: 220px !important;
-        display: flex !important;
-        flex-direction: column !important;
         box-sizing: border-box !important;
         margin: 0 !important;
         width: 100% !important;
@@ -8533,8 +8535,10 @@ function openDrilldownByHourFromVPS(hour){
     `;
     document.head.appendChild(s);
   }
-  injectCardGridTheme();
-  setInterval(injectCardGridTheme, 2000);
+  ensureCardGridTheme();
+  // Safety re-add: only kicks in if some other code removes our stylesheet.
+  // Idempotent guard inside ensureCardGridTheme means no flicker in normal operation.
+  setInterval(ensureCardGridTheme, 2000);
 })();
 </script>
 </body>
