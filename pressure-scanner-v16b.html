@@ -3346,7 +3346,7 @@ function openTradeRiskGate(card){
     console.log('[ACRESS][trade] modal confirmed: actionUsed='+actionUsed+' | tradedDir='+tradedDir+' | signal._cardDir='+signal._cardDir);
     executeTradeViaBridge(signal,actionUsed).then(function(result){
       if(result&&result.success){
-        emitNotif&&emitNotif('trade','Order placed',signal.sym+' '+signal.dir+' qty '+result.qty+(actionUsed==='reverse'?' (REVERSED)':''));
+        emitNotif&&emitNotif('trade','Order placed',(signal.sym||signal.base||'?')+' '+signal.dir+' qty '+result.qty+(actionUsed==='reverse'?' (REVERSED)':''));
         var logBtn=card.querySelector('[data-log-sig]');
         if(logBtn){
           window.rgApproved=true;
@@ -3381,7 +3381,7 @@ function openTradeRiskGate(card){
                 }
               }
               localStorage.setItem('acress_pressure_log_v16b',JSON.stringify(entries));
-              console.log('[ACRESS] tagged entry as '+actionUsed+': '+signal.sym+' actually traded as '+tradedDir);
+              console.log('[ACRESS] tagged entry as '+actionUsed+': '+(signal.sym||signal.base||'?')+' actually traded as '+tradedDir);
             }catch(e){console.warn('[ACRESS] tag entry failed:',e.message);}
           },250);
         }
@@ -3417,8 +3417,9 @@ function executeTradeViaBridge(signal,action){
     return Promise.resolve({success:true,qty:'(paper)',orderId:'paper-'+Date.now(),direction:finalDir});
   }
   var trackerCfg=(typeof window.trackerCfg!=='undefined'&&window.trackerCfg)||{};
+  var sym=signal.sym||signal.symbol||(signal.base?signal.base+'USDT':null);
   var body={
-    symbol:signal.sym,
+    symbol:sym,
     direction:finalDir,
     positionSize:signal.positionSize||trackerCfg.position||1000,
     entry:signal.entry||signal.price,
