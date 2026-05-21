@@ -4887,7 +4887,8 @@ async function runScan(){
           // If bybitSymbolSet hasn't loaded yet, allow through (matches fallback behavior in pool builder).
           var _base = r.sym ? String(r.sym).replace(/USDT$/, '') : null;
           var _onBybit = !bybitSymbolSet || bybitSymbolSet.size===0 || (_base && bybitSymbolSet.has(_base));
-          if(r.score>=25 && !_isHerd && _onBybit){
+          // precision: threshold 25 -> 40 (single-gate signals filtered; requires 2+ gates aligned)
+          if(r.score>=40 && !_isHerd && _onBybit){
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
               if(r.score>existing.score){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
@@ -4974,6 +4975,8 @@ function gateLiq(liqStats, dir){
 
 // OI_EXHAUST gate (Layer 3)
 async function fetchOIAgg(base) {
+  // Silence 400s for non-ASCII symbols (Binance fallback meme coins) — same pattern as fetchLiqStats
+  if (!base || !/^[A-Z0-9]+$/.test(base)) return null;
   try {
     var url = (typeof getBridgeUrl === 'function' ? getBridgeUrl() : '') + '/api/oi/' + base;
     var res = await fetch(url, { method: 'GET' });
