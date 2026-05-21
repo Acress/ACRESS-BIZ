@@ -3017,6 +3017,199 @@ body{overflow-x:hidden;}
 }
 
 
+
+// ── REVERSAL ANALYSIS ──────────────────────────────────────────────
+// For each closed entry, compute what PnL the opposite direction would have made.
+// Uses MFE/MAE if available; falls back to status-based approximation.
+function computeReversedPnL(entry){
+  if(!entry)return null;
+  var pnl=parseFloat(entry.pnl||entry.pnlUsd||entry.pnl_usd||0)||0;
+  var status=(entry.status||entry.outcome||entry.close_reason||entry.closeReason||'').toLowerCase();
+  var positionSize=parseFloat(entry.positionSize||entry.notional||entry.position||1000)||1000;
+  var stopPct=parseFloat(entry.stopPct||entry.stop_pct||entry.riskPct||1.92)||1.92;
+  var targetPct=parseFloat(entry.targetPct||entry.target_pct||entry.tpPct||4)||4;
+  var isOpen=status.indexOf('open')>-1||status.indexOf('active')>-1||status==='';
+  if(isOpen)return null;
+  // MFE/MAE approach (most accurate when available)
+  var mfe=Math.abs(parseFloat(entry.mfe||entry.mfePct||entry.mfe_pct||0)||0);
+  var mae=Math.abs(parseFloat(entry.mae||entry.maePct||entry.mae_pct||0)||0);
+  // Heuristic: if values look like prices (>10), and entry price exists, convert to %
+  var entryPrice=parseFloat(entry.entry||entry.entryPrice||entry.price||0)||0;
+  if(mfe>20&&entryPrice>0)mfe=Math.abs(mfe-entryPrice)/entryPrice*100;
+  if(mae>20&&entryPrice>0)mae=Math.abs(mae-entryPrice)/entryPrice*100;
+  if(mfe>0||mae>0){
+    // For reversed: original favorable = reversed adverse, original adverse = reversed favorable
+    var hitRevStop=mfe>=stopPct;
+    var hitRevTarget=mae>=targetPct;
+    if(hitRevStop)return -positionSize*stopPct/100;
+    if(hitRevTarget)return positionSize*targetPct/100;
+    // Neither: expired with partial movement
+    return -1*pnl;
+  }
+  // Status-based fallback
+  if(status.indexOf('win')>-1||status.indexOf('won')>-1||status.indexOf('target')>-1){
+    var rr=targetPct/stopPct||2;
+    return -1*pnl/rr;
+  }
+  if(status.indexOf('lost')>-1||status.indexOf('loss')>-1||status.indexOf('stop')>-1){
+    return -1*pnl;
+  }
+  if(status.indexOf('expir')>-1||status.indexOf('timeout')>-1){
+    return -1*pnl;
+  }
+  return -1*pnl;
+}
+
+function addReversedIndicators(){
+  try{
+    var raw=localStorage.getItem('acress_pressure_log_v16b');
+    if(!raw)return;
+    var entries=JSON.parse(raw);
+    var body=document.getElementById('tracker-body');
+    if(!body)return;
+    Array.from(body.children).forEach(function(row){
+      var idEl=row.querySelector('[data-tk-remove-id]');
+      if(!idEl)return;
+      var idx=parseInt(idEl.getAttribute('data-tk-remove-id'));
+      if(isNaN(idx)||idx<0||idx>=entries.length)return;
+      var entry=entries[idx];
+      if(!entry)return;
+      var origPnl=parseFloat(entry.pnl||0)||0;
+      var revPnl=computeReversedPnL(entry);
+      var existing=row.querySelector('.rev-indicator');
+      if(revPnl===null){
+        if(existing)existing.remove();
+        return;
+      }
+      var revBetter=revPnl>origPnl;
+      var bgCol=revBetter?'rgba(46,232,160,0.12)':'rgba(255,82,119,0.12)';
+      var fgCol=revBetter?'var(--green)':'var(--red)';
+      var brCol=revBetter?'rgba(46,232,160,0.3)':'rgba(255,82,119,0.3)';
+      var label='REV '+(revPnl>=0?'+':'')+'$'+revPnl.toFixed(2);
+      if(existing){
+        if(existing.dataset.val===String(revPnl.toFixed(2)))return;
+        existing.dataset.val=revPnl.toFixed(2);
+        existing.textContent=label;
+        existing.style.background=bgCol;
+        existing.style.color=fgCol;
+        existing.style.borderColor=brCol;
+      }else{
+        var ind=document.createElement('div');
+        ind.className='rev-indicator';
+        ind.dataset.val=revPnl.toFixed(2);
+        ind.textContent=label;
+        ind.title='What this trade would have made if you took the opposite direction';
+        ind.style.cssText='position:absolute;top:8px;right:8px;padding:3px 7px;border-radius:5px;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:0.5px;background:'+bgCol+';color:'+fgCol+';border:1px solid '+brCol+';pointer-events:none;z-index:2;';
+        row.appendChild(ind);
+      }
+    });
+  }catch(e){console.warn('[ACRESS] addReversedIndicators',e.message);}
+}
+
+function buildReversalSummary(){
+  var raw=localStorage.getItem('acress_pressure_log_v16b');
+  if(!raw)return '<div class="rev-empty">No tracker data yet</div>';
+  var entries;try{entries=JSON.parse(raw);}catch(e){return '<div class="rev-empty">Tracker data unreadable</div>';}
+  if(!Array.isArray(entries)||!entries.length)return '<div class="rev-empty">No tracker entries</div>';
+  var closed=entries.filter(function(e){
+    var s=(e.status||e.outcome||e.close_reason||'').toLowerCase();
+    return s&&s.indexOf('open')<0&&s.indexOf('active')<0;
+  });
+  if(!closed.length)return '<div class="rev-empty">No closed trades to analyze yet</div>';
+  var totalOrig=0,totalRev=0;
+  closed.forEach(function(e){
+    totalOrig+=parseFloat(e.pnl||0)||0;
+    var r=computeReversedPnL(e);if(r!==null)totalRev+=r;
+  });
+  // By score bucket
+  var buckets={'0-40':{orig:0,rev:0,count:0,wins:0,losses:0},'40-60':{orig:0,rev:0,count:0,wins:0,losses:0},'60-80':{orig:0,rev:0,count:0,wins:0,losses:0},'80-100':{orig:0,rev:0,count:0,wins:0,losses:0}};
+  closed.forEach(function(e){
+    var s=parseFloat(e.score||0)||0;
+    var key=s<40?'0-40':s<60?'40-60':s<80?'60-80':'80-100';
+    var p=parseFloat(e.pnl||0)||0;
+    var r=computeReversedPnL(e)||0;
+    buckets[key].orig+=p;
+    buckets[key].rev+=r;
+    buckets[key].count++;
+    if(p>0)buckets[key].wins++;else if(p<0)buckets[key].losses++;
+  });
+  // By mechanism
+  var byMech={};
+  closed.forEach(function(e){
+    var m=e.mech||e.mechanism||'Unknown';
+    if(!byMech[m])byMech[m]={orig:0,rev:0,count:0};
+    byMech[m].orig+=parseFloat(e.pnl||0)||0;
+    var r=computeReversedPnL(e);if(r!==null)byMech[m].rev+=r;
+    byMech[m].count++;
+  });
+  function fmt(n){return (n>=0?'+':'')+'$'+n.toFixed(2);}
+  function clsOf(n){return n>0?'pos':n<0?'neg':'';}
+  function bestLabel(o,r){return Math.abs(r-o)<0.5?'\u2014':r>o?'REV':'ORIG';}
+  var diff=totalRev-totalOrig;
+  var html='<div class="rev-header">REVERSAL ANALYSIS \u00B7 '+closed.length+' closed trades</div>';
+  html+='<div class="rev-overall">';
+  html+='<div class="rev-stat"><div class="rev-stat-label">Took every signal</div><div class="rev-stat-val '+clsOf(totalOrig)+'">'+fmt(totalOrig)+'</div></div>';
+  html+='<div class="rev-stat"><div class="rev-stat-label">Reversed every signal</div><div class="rev-stat-val '+clsOf(totalRev)+'">'+fmt(totalRev)+'</div></div>';
+  html+='<div class="rev-stat"><div class="rev-stat-label">Difference</div><div class="rev-stat-val '+clsOf(diff)+'">'+fmt(diff)+'</div></div>';
+  html+='</div>';
+  html+='<div class="rev-section-title">BY SCORE RANGE</div>';
+  html+='<table class="rev-table"><thead><tr><th>Score</th><th>N</th><th>W/L</th><th>Original</th><th>Reversed</th><th>Better</th></tr></thead><tbody>';
+  Object.keys(buckets).forEach(function(key){
+    var b=buckets[key];if(b.count===0)return;
+    html+='<tr><td>'+key+'</td><td>'+b.count+'</td><td>'+b.wins+'/'+b.losses+'</td><td class="'+clsOf(b.orig)+'">'+fmt(b.orig)+'</td><td class="'+clsOf(b.rev)+'">'+fmt(b.rev)+'</td><td class="best-'+(bestLabel(b.orig,b.rev)==='REV'?'rev':'orig')+'">'+bestLabel(b.orig,b.rev)+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  html+='<div class="rev-section-title">BY MECHANISM (sorted by reversal benefit)</div>';
+  var mechs=Object.keys(byMech).sort(function(a,b){return (byMech[b].rev-byMech[b].orig)-(byMech[a].rev-byMech[a].orig);});
+  html+='<table class="rev-table"><thead><tr><th>Mechanism</th><th>N</th><th>Original</th><th>Reversed</th><th>Better</th></tr></thead><tbody>';
+  mechs.forEach(function(m){
+    var b=byMech[m];
+    html+='<tr><td>'+m+'</td><td>'+b.count+'</td><td class="'+clsOf(b.orig)+'">'+fmt(b.orig)+'</td><td class="'+clsOf(b.rev)+'">'+fmt(b.rev)+'</td><td class="best-'+(bestLabel(b.orig,b.rev)==='REV'?'rev':'orig')+'">'+bestLabel(b.orig,b.rev)+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  return html;
+}
+
+function renderReversalSummary(){
+  var body=document.getElementById('tracker-body');
+  if(!body||!body.parentElement)return;
+  var panel=document.getElementById('reversal-summary-panel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='reversal-summary-panel';
+    body.parentElement.insertBefore(panel,body);
+  }
+  var html=buildReversalSummary();
+  if(panel.dataset.lastHash===html.length+'|'+html.substring(0,50))return;
+  panel.dataset.lastHash=html.length+'|'+html.substring(0,50);
+  panel.innerHTML=html;
+}
+
+function injectReversalCSS(){
+  if(document.getElementById('reversal-css'))return;
+  var s=document.createElement('style');
+  s.id='reversal-css';
+  s.textContent=
+    '#reversal-summary-panel{background:rgba(20,25,40,0.5);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 18px;margin:12px 0 16px;font-family:var(--font-mono);}'+
+    '#reversal-summary-panel .rev-header{font-size:10px;color:var(--faint);letter-spacing:2px;margin-bottom:12px;font-weight:700;}'+
+    '#reversal-summary-panel .rev-empty{color:var(--faint);font-size:11px;text-align:center;padding:20px;}'+
+    '#reversal-summary-panel .rev-overall{display:flex;gap:28px;margin-bottom:14px;flex-wrap:wrap;}'+
+    '#reversal-summary-panel .rev-stat-label{font-size:9px;color:var(--faint);letter-spacing:1px;margin-bottom:4px;}'+
+    '#reversal-summary-panel .rev-stat-val{font-size:18px;font-weight:800;font-family:var(--font-mono);}'+
+    '#reversal-summary-panel .rev-stat-val.pos{color:var(--green);}'+
+    '#reversal-summary-panel .rev-stat-val.neg{color:var(--red);}'+
+    '#reversal-summary-panel .rev-section-title{font-size:9px;color:var(--faint);letter-spacing:1.5px;margin-top:14px;margin-bottom:6px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;font-weight:600;}'+
+    '#reversal-summary-panel .rev-table{width:100%;border-collapse:collapse;font-size:11px;}'+
+    '#reversal-summary-panel .rev-table th{text-align:left;font-weight:600;color:var(--faint);font-size:9px;letter-spacing:0.5px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.08);}'+
+    '#reversal-summary-panel .rev-table td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.04);}'+
+    '#reversal-summary-panel .rev-table td.pos{color:var(--green);font-weight:700;}'+
+    '#reversal-summary-panel .rev-table td.neg{color:var(--red);font-weight:700;}'+
+    '#reversal-summary-panel .rev-table td.best-rev{color:var(--amber);font-weight:800;letter-spacing:1px;}'+
+    '#reversal-summary-panel .rev-table td.best-orig{color:var(--faint);}';
+  document.head.appendChild(s);
+}
+
+
 function ensureTopbar(){
   injectTopbarCSS();
   var bar=document.getElementById('acress-topbar');
@@ -6541,7 +6734,7 @@ try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeB
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
 try{ensureTrackerExtraFilters();setupTrackerRenderHooks();setInterval(function(){ensureTrackerExtraFilters();applyTrackerExtraSort();applyTrackerExtraFilters();},2000);}catch(e){console.warn('[Acress] init: tracker filters',e.message);}
-try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();ensureTopbar();ensureNotifButton();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();ensureTopbar();ensureNotifButton();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();styleTrackerRows();},500);setInterval(checkAndEmitNotifs,3000);}catch(e){console.warn('[Acress] init: full',e.message);}
+try{injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();injectReversalCSS();ensureTopbar();ensureNotifButton();renderTopMoversWidget();positionStickyPanels();fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});setInterval(function(){fetchTopMovers().then(function(){renderTopMoversWidget();markTopMoverCards();positionStickyPanels();});},30000);setInterval(function(){injectUIPolishCSS();injectTopMoversCSS();injectSolidBgCSS();injectTrackerCardCSS();injectNotifCSS();injectReversalCSS();ensureTopbar();ensureNotifButton();tbUpdateActive();tbUpdateStatus();positionStickyPanels();markTopMoverCards();lockTrackerVerdicts();styleTrackerRows();addReversedIndicators();renderReversalSummary();},500);setInterval(checkAndEmitNotifs,3000);}catch(e){console.warn('[Acress] init: full + reversal',e.message);}
 try{setMode(scanMode);renderWatchlist();}catch(e){console.warn('[Acress] init: scan mode/watchlist',e.message);}
 try{
   document.getElementById('wl-input').addEventListener('keydown',function(e){if(e.key==='Enter')addToWatchlist();});
