@@ -8459,5 +8459,82 @@ function openDrilldownByHourFromVPS(hour){
   setInterval(tick,500);
 })();
 </script>
+<script id="acress-card-grid-theme-init">
+(function(){
+  function injectCardGridTheme(){
+    var existing = document.getElementById('acress-card-grid-theme');
+    if(existing) existing.remove();
+    var s = document.createElement('style');
+    s.id = 'acress-card-grid-theme';
+    s.textContent = `
+      /* === SCANNER GRID: uniform card heights, 3-col desktop / 2-col tablet / 1-col phone === */
+      @media (min-width: 1025px){
+        #results{
+          display: grid !important;
+          grid-template-columns: repeat(3, 1fr) !important;
+          gap: 12px !important;
+          align-items: stretch !important;
+        }
+      }
+      @media (min-width: 641px) and (max-width: 1024px){
+        #results{
+          display: grid !important;
+          grid-template-columns: repeat(2, 1fr) !important;
+          gap: 12px !important;
+          align-items: stretch !important;
+        }
+      }
+      @media (max-width: 640px){
+        #results{
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 12px !important;
+        }
+      }
+      #results .pcard{
+        min-height: 300px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        width: 100% !important;
+      }
+
+      /* === TRACKER GRID: 2-col rectangular cards on desktop+tablet, 1-col on phone === */
+      @media (min-width: 641px){
+        #tracker-body{
+          display: grid !important;
+          grid-template-columns: repeat(2, 1fr) !important;
+          gap: 14px !important;
+          align-items: stretch !important;
+        }
+      }
+      @media (max-width: 640px){
+        #tracker-body{
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 14px !important;
+        }
+      }
+      /* Filter row, sort row, summary panels, etc. span full width — only .tk-entry-card take slots */
+      #tracker-body > :not(.tk-entry-card){
+        grid-column: 1 / -1 !important;
+      }
+      /* Uniform card dimensions within tracker */
+      #tracker-body .tk-entry-card{
+        min-height: 220px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        width: 100% !important;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+  injectCardGridTheme();
+  setInterval(injectCardGridTheme, 2000);
+})();
+</script>
 </body>
 </html>
