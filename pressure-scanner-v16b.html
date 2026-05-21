@@ -4889,6 +4889,11 @@ async function runScan(){
           var _onBybit = !bybitSymbolSet || bybitSymbolSet.size===0 || (_base && bybitSymbolSet.has(_base));
           // precision: threshold 25 -> 40 (single-gate signals filtered; requires 2+ gates aligned)
           if(r.score>=40 && !_isHerd && _onBybit){
+            // L4b: signal observability — log gate-firing pattern for each pushed signal
+            try {
+              var _tags = (r.reasons||[]).map(function(x){return (x && x.tag) ? x.tag : String(x);}).join(',');
+              console.log('[ACRESS-SIG] '+r.sym+' '+r.dir+' score='+r.score+' mech="'+(r.mechanism&&r.mechanism.name||'?')+'" gates=['+_tags+']');
+            } catch(e) {}
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
               if(r.score>existing.score){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
