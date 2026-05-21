@@ -2256,20 +2256,14 @@ function tbSetupScan(){
   btn.dataset.wired='1';
 }
 function tbHideOriginals(){
-  var els=document.querySelectorAll('div, header, nav, section');
-  var best=null;var bestSize=Infinity;
-  for(var i=0;i<els.length;i++){
-    var el=els[i];
-    if(el.closest('#acress-topbar'))continue;
-    if(el.classList.contains('acress-hidden-by-topbar'))continue;
-    var t=(el.textContent||'');
-    if(t.indexOf('Acress')<0)continue;
-    if(t.indexOf('PRESSURE SCANNER')<0&&t.indexOf('Pressure Scanner')<0)continue;
-    if(t.indexOf('PERFORMANCE TRACKER')<0&&t.indexOf('Performance Tracker')<0)continue;
-    if(t.length>400)continue;
-    if(t.length<bestSize){best=el;bestSize=t.length;}
-  }
-  if(best)best.classList.add('acress-hidden-by-topbar');
+  // Disabled - keep the original brand+tabs+settings row fully visible.
+  // Active cleanup: remove the demote class from anything that still has it.
+  document.querySelectorAll('.acress-hidden-by-topbar').forEach(function(el){
+    el.classList.remove('acress-hidden-by-topbar');
+    el.style.opacity='';
+    el.style.visibility='';
+    el.style.display='';
+  });
 }
 
 // ── UI POLISH (topbar fixes + card layout + composite sort) ───────
