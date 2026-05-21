@@ -4639,6 +4639,12 @@ function scoreCoin(gates,context){
     score+=context.score;
     reasons.push({lvl:context.score>=3?'ok':context.score<=-3?'weak':'partial',tag:'CTX',text:context.detail});
   }
+  // Layer 2b: LIQ_INTENSITY scoring (up to 15 points) from bridge liquidation feed
+  if(gates.liq && gates.liq.dir === dir){
+    var liqPts = gates.liq.type === 'cascade_confirmed' ? 15 : 8;
+    score += liqPts;
+    reasons.push({lvl: 'ok', tag: 'LIQ', text: gates.liq.detail});
+  }
   if(score<0)score=0;
   // Rescale by maximum possible from available gates so a missing OI gate doesn't
   // unfairly cap the score. With all 6 gates available, max = 100. Without OI,
@@ -4649,6 +4655,7 @@ function scoreCoin(gates,context){
   if(gates.mtf)maxAvailable+=20;
   if(gates.cvd)maxAvailable+=15;
   if(gates.sweep)maxAvailable+=15;
+  if(gates.liq)maxAvailable+=15;
   if(context)maxAvailable+=context.score>0?context.score:0; // context boost only counted if positive
   if(maxAvailable<70)maxAvailable=70; // floor — don't over-amplify when most gates missing
   var normalized=Math.min(100,score/maxAvailable*100);
@@ -4898,18 +4905,51 @@ async function runScan(){
 }
 
 // Same as analyzeCoin but increments diagnostic counters when individual gates pass
+// LIQ_INTENSITY gate (Layer 2b)
+// Fetches liquidation stats from the bridge for this symbol and produces
+// a directional confirmation signal. For LONG entries we want elevated
+// SHORT liquidations (shorts forced to cover). For SHORT entries we want
+// elevated LONG liquidations (longs forced to sell). Returns null when
+// the bridge has no data yet (symbol not yet subscribed or warming up).
+async function fetchLiqStats(base){
+  try{
+    var url = (typeof getBridgeUrl==='function' ? getBridgeUrl() : '') + '/api/liquidations/' + base + 'USDT';
+    var res = await fetch(url, {method:'GET'});
+    if(!res.ok) return null;
+    return await res.json();
+  } catch(e){ return null; }
+}
+
+function gateLiq(liqStats, dir){
+  if(!liqStats || !liqStats.ready) return null;
+  var intensity = liqStats.intensity;
+  if(!intensity) return null;
+  var relevantIntensity = (dir === 'LONG') ? intensity.short : intensity.long;
+  if(relevantIntensity == null) return null;
+  if(relevantIntensity >= 2.0){
+    return {dir: dir, type: 'cascade_confirmed', strength: relevantIntensity,
+            detail: dir + ' confirmed by ' + relevantIntensity.toFixed(1) + ' robust-Z opposite-side liquidations (5m vs 30m baseline)'};
+  }
+  if(relevantIntensity >= 1.0){
+    return {dir: dir, type: 'mild_confirmation', strength: relevantIntensity,
+            detail: dir + ' mild liq confirmation ' + relevantIntensity.toFixed(1) + ' robust-Z'};
+  }
+  return null;
+}
+
 async function analyzeCoinDiag(symObj,diag){
   var sym=symObj.symbol;
   var base=sym.replace(/USDT$/,'');
   var price=parseFloat(symObj.lastPrice);
   var chg24=parseFloat(symObj.priceChangePercent);
   try{
-    var [k1,k5,k15,oiResult,prem]=await Promise.all([
+    var [k1,k5,k15,oiResult,prem,liqStats]=await Promise.all([
       fetchKlines(base,'1m',60),
       fetchKlines(base,'5m',40),
       fetchKlines(base,'15m',30),
       fetchCombinedOI(base),
-      fetchPremium(base).catch(function(){return null;})
+      fetchPremium(base).catch(function(){return null;}),
+      fetchLiqStats(base).catch(function(){return null;})
     ]);
     // v16 — ATR + absorption + Z-score baseline maintenance
     var atr5m=computeATR(k5,14);
@@ -4951,6 +4991,8 @@ async function analyzeCoinDiag(symObj,diag){
     if(gates.sweep&&gates.sweep.dir)v[gates.sweep.dir]+=2;
     if(v.LONG>v.SHORT)probable='LONG';else if(v.SHORT>v.LONG)probable='SHORT';
     var ctx=probable?gateContext(prem,probable):null;
+    // Layer 2b: LIQ_INTENSITY directional confirmation from bridge liquidation feed
+    gates.liq = probable ? gateLiq(liqStats, probable) : null;
     var result=scoreCoin(gates,ctx);
     if(!result)return null;
     // v16+ — OI velocity check (continuation late-stage filter)
