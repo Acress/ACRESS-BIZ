@@ -4870,68 +4870,18 @@ async function runScan(){
         var r=await analyzeCoinDiag(s,diagnostics);
         if(r){
           diagnostics.topScores.push({sym:r.base,score:r.score,dir:r.dir});
-          // Forced-participant filter (Layer 2a)
-          // Drop signals whose mechanism would have us trading WITH the trapped herd.
-          // Explicit name list — type-based filtering would accidentally drop
-          // Short Squeeze / Long Capitulation, which are typed 'continuation'
-          // in classifyMechanism but are structurally squeeze trades we keep.
-          // Reversal, squeeze, sweep, absorption setups all pass through.
-          var _herdMechs = {
-            'Initiative Demand · Fresh Longs': true,
-            'Initiative Supply · Fresh Shorts': true,
-            'Aggressive Buying Pressure': true,
-            'Aggressive Selling Pressure': true
-          };
-          var _isHerd = r.mechanism && _herdMechs[r.mechanism.name];
-          // Bybit-only signal filter (Layer 2a+): drop signals on symbols Bybit can't trade.
-          // If bybitSymbolSet hasn't loaded yet, allow through (matches fallback behavior in pool builder).
-          var _base = r.sym ? String(r.sym).replace(/USDT$/, '') : null;
-          var _onBybit = !bybitSymbolSet || bybitSymbolSet.size===0 || (_base && bybitSymbolSet.has(_base));
-          // precision: threshold 25 -> 40 (single-gate signals filtered; requires 2+ gates aligned)
-          // L4e: type-based filter (replaces L4c/L4d name-based logic which had inverted directional checks).
-          // Cline audit revealed mechanism objects have a 'type' field: 'reversal', 'setup', or 'continuation'.
-          // Reversal strategy: pass 'reversal' (Exhaustion + Flow Divergence) and 'setup' (OI Build Exhaustion).
-          // Drop 'continuation' (Long Capitulation, Short Squeeze, Initiative Demand/Supply, Aggressive Buying/Selling).
-          var _mechName = (r.mechanism && r.mechanism.name) || '?';
-          var _mechType = (r.mechanism && r.mechanism.type) || '';
-          var _isContinuation = _mechType === 'continuation';
-          // L4d: skip-reason log for filtered candidates above threshold
-          if(r.score>=40 && (_isHerd || !_onBybit || _isContinuation)){
-            var _why = [];
-            if(_isHerd) _why.push('herd-named');
-            if(_isContinuation) _why.push('continuation-type('+_mechName+')');
-            if(!_onBybit) _why.push('not-on-bybit');
-            try { console.log('[ACRESS-SKIP] '+r.sym+' '+r.dir+' score='+r.score+' filtered: '+_why.join(', ')); } catch(e){}
-          }
-          if(r.score>=40 && !_isHerd && _onBybit && !_isContinuation){
-            // L4c: plain-English signal log
-            try {
-              var _tags = (r.reasons||[]).map(function(x){return (x && x.tag) ? x.tag : String(x);});
-              var _gateMap = {
-                'OI':'open interest surge','TAKER':'aggressive market orders',
-                'MTF':'multi-timeframe trend aligned','CVD':'buy/sell volume imbalance',
-                'SWEEP':'level swept','LIQ':'liquidation cascade',
-                'OIX':'OI exhaustion','CTX':'market context aligned',
-                'PROB':'primary signal','OI-VEL':'OI velocity spike'
-              };
-              var _meaning = {
-                'Long Capitulation in Progress':{what:'Longs being washed out. Selling pressure fading, buyers absorbing.',todo:'Wait for price to reclaim and hold recent low. Enter LONG with stop below the wick. Target prior range mid.',horizon:'15-45 min'},
-                'Short Squeeze in Progress':{what:'Shorts being forced to cover. Squeeze in motion.',todo:'Ride LONG with trailing stop. Exit when buying volume stalls or OI rebuilds.',horizon:'15-45 min'},
-                'Exhaustion Reversal \u00b7 High Swept':{what:'Price spiked to new high then immediately failed. Failed breakout.',todo:'SHORT the failure. Stop above the wick high. Target back to the breakout level.',horizon:'15-45 min'},
-                'Exhaustion Reversal \u00b7 Low Swept':{what:'Price flushed to new low then immediately failed. Failed breakdown.',todo:'LONG the failure. Stop below the wick low. Target back to the breakdown level.',horizon:'15-45 min'},
-                'Flow Divergence Hidden':{what:'Price going one way, underlying flow says opposite. Smart money may be positioning against obvious move.',todo:'Smaller size. Wait for trend break confirmation before full entry.',horizon:'30-90 min'},
-                'OI Build Exhaustion \u00b7 Long side':{what:'Long OI built heavily but price stopped advancing. Loaded position, no follow-through.',todo:'SETUP, not entry. If longs unwind, fade SHORT. If buying resumes, follow LONG.',horizon:'30-60 min'},
-                'OI Build Exhaustion \u00b7 Short side':{what:'Short OI built heavily but price stopped declining. Loaded position, no follow-through.',todo:'SETUP, not entry. If shorts cover, ride LONG. If selling resumes, follow SHORT.',horizon:'30-60 min'}
-              };
-              var _m = _meaning[_mechName] || {what:'Mechanism: '+_mechName,todo:'Review gates and confirm with chart.',horizon:'?'};
-              var _strength = r.score >= 70 ? 'very strong' : (r.score >= 55 ? 'strong' : 'decent');
-              var _triggers = _tags.map(function(t){return _gateMap[t] || t;}).join(', ');
-              console.log('[ACRESS] '+r.sym+' '+r.dir.toUpperCase()+' ('+_strength+', '+r.score+'/100)');
-              console.log('   What is happening: '+_m.what);
-              console.log('   Why it fired:      '+_triggers);
-              console.log('   What to do:        '+_m.todo);
-              console.log('   Horizon:           '+_m.horizon);
-            } catch(e) { console.warn('[ACRESS] L4c log err', e); }
+          // L_REVERT: spec-aligned signal push (2026-05-22).
+          // All filter layers added since the May 21 reference spec have been removed:
+          //   - Layer 2a herd-name filter (_herdMechs)
+          //   - Layer 2a+ Bybit-only signal-level check (pool filter handles this)
+          //   - L4a threshold bump 25 -> 40 (reverted to 25)
+          //   - L4b observability log
+          //   - L4c plain-English log
+          //   - L4d skip-reason log + case-fix
+          //   - L4e mechanism.type=='continuation' drop
+          // Push all signals scoring >= 25 per spec section 4.8.
+          // UI display threshold (default 60+ Regular) handled by acress_score_range.
+          if(r.score>=25){
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
               if(r.score>existing.score){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
