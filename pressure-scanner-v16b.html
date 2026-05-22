@@ -986,6 +986,25 @@ var EXCLUDE_BASES=new Set(EXCLUDE_BASES_STABLES.concat(EXCLUDE_BASES_MEGACAPS).c
 
 // ── STATE ──────────────────────────────────────────────────────────
 var signals=[];
+/* L_FILTER_V1 */
+var SYMBOL_BLACKLIST = new Set([
+  'SPCX','GUA','AMD','BROCCOLIF3B','DOGS','SKYAI','NATGAS','PUMP','FET','PROM',
+  'AIA','1000PEPE','EWY','DOGE','AVAX','PLAY','LINK','ADA','XLM'
+]);
+var MECH_BLACKLIST = new Set([
+  'Aggressive Buying Pressure',
+  'Aggressive Selling Pressure'
+]);
+function shouldAcceptSignal(r){
+  if(!r) return false;
+  var b = r.base || (r.sym && r.sym.replace(/USDT$/,''));
+  if(b && /[^\x00-\x7F]/.test(b)){ shouldAcceptSignal._lastReason='non_ascii_sym:'+b; return false; }
+  if(b && SYMBOL_BLACKLIST.has(b)){ shouldAcceptSignal._lastReason='blacklist_sym:'+b; return false; }
+  var mn = r.mechanism && r.mechanism.name;
+  if(mn && MECH_BLACKLIST.has(mn)){ shouldAcceptSignal._lastReason='blacklist_mech:'+mn; return false; }
+  shouldAcceptSignal._lastReason=null;
+  return true;
+}
 var isScanning=false;
 var scanAborted=false;
 var autoTimer=null;
@@ -4884,9 +4903,9 @@ async function runScan(){
           if(r.score>=25){
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
-              if(r.score>existing.score){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
+              if(r.score>existing.score && shouldAcceptSignal(r)){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}else if(r.score>existing.score){console.log('[ACRESS-FILTER] upgrade rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
             }else{
-              signals.push(r);renderResults();
+              if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
             }
           }
         }
