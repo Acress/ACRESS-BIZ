@@ -4890,14 +4890,24 @@ async function runScan(){
           // precision: threshold 25 -> 40 (single-gate signals filtered; requires 2+ gates aligned)
           // L4c: directional consistency — reject signals where direction contradicts mechanism design intent
           var _mechName = (r.mechanism && r.mechanism.name) || '';
+          // L4d: case-insensitive direction comparison (r.dir is 'LONG'/'SHORT' uppercase, was being compared to lowercase)
+          var _dirLC = String(r.dir||'').toLowerCase();
           var _validDir = (function(){
             if (!_mechName) return true;
-            if (_mechName.indexOf('Long Capitulation') !== -1) return r.dir === 'long';
-            if (_mechName.indexOf('Short Squeeze') !== -1) return r.dir === 'long';
-            if (_mechName.indexOf('High Swept') !== -1) return r.dir === 'short';
-            if (_mechName.indexOf('Low Swept') !== -1) return r.dir === 'long';
+            if (_mechName.indexOf('Long Capitulation') !== -1) return _dirLC === 'long';
+            if (_mechName.indexOf('Short Squeeze') !== -1) return _dirLC === 'long';
+            if (_mechName.indexOf('High Swept') !== -1) return _dirLC === 'short';
+            if (_mechName.indexOf('Low Swept') !== -1) return _dirLC === 'long';
             return true;
           })();
+          // L4d: skip-reason log — for candidates above threshold that got filtered, show why
+          if(r.score>=40 && (_isHerd || !_onBybit || !_validDir)){
+            var _why = [];
+            if(_isHerd) _why.push('herd-mech');
+            if(!_onBybit) _why.push('not-on-bybit');
+            if(!_validDir) _why.push('dir-mismatch('+_dirLC+' vs '+_mechName+')');
+            try { console.log('[ACRESS-SKIP] '+r.sym+' '+r.dir+' score='+r.score+' filtered: '+_why.join(', ')); } catch(e){}
+          }
           if(r.score>=40 && !_isHerd && _onBybit && _validDir){
             // L4c: plain-English signal log
             try {
