@@ -4888,27 +4888,22 @@ async function runScan(){
           var _base = r.sym ? String(r.sym).replace(/USDT$/, '') : null;
           var _onBybit = !bybitSymbolSet || bybitSymbolSet.size===0 || (_base && bybitSymbolSet.has(_base));
           // precision: threshold 25 -> 40 (single-gate signals filtered; requires 2+ gates aligned)
-          // L4c: directional consistency — reject signals where direction contradicts mechanism design intent
-          var _mechName = (r.mechanism && r.mechanism.name) || '';
-          // L4d: case-insensitive direction comparison (r.dir is 'LONG'/'SHORT' uppercase, was being compared to lowercase)
-          var _dirLC = String(r.dir||'').toLowerCase();
-          var _validDir = (function(){
-            if (!_mechName) return true;
-            if (_mechName.indexOf('Long Capitulation') !== -1) return _dirLC === 'long';
-            if (_mechName.indexOf('Short Squeeze') !== -1) return _dirLC === 'long';
-            if (_mechName.indexOf('High Swept') !== -1) return _dirLC === 'short';
-            if (_mechName.indexOf('Low Swept') !== -1) return _dirLC === 'long';
-            return true;
-          })();
-          // L4d: skip-reason log — for candidates above threshold that got filtered, show why
-          if(r.score>=40 && (_isHerd || !_onBybit || !_validDir)){
+          // L4e: type-based filter (replaces L4c/L4d name-based logic which had inverted directional checks).
+          // Cline audit revealed mechanism objects have a 'type' field: 'reversal', 'setup', or 'continuation'.
+          // Reversal strategy: pass 'reversal' (Exhaustion + Flow Divergence) and 'setup' (OI Build Exhaustion).
+          // Drop 'continuation' (Long Capitulation, Short Squeeze, Initiative Demand/Supply, Aggressive Buying/Selling).
+          var _mechName = (r.mechanism && r.mechanism.name) || '?';
+          var _mechType = (r.mechanism && r.mechanism.type) || '';
+          var _isContinuation = _mechType === 'continuation';
+          // L4d: skip-reason log for filtered candidates above threshold
+          if(r.score>=40 && (_isHerd || !_onBybit || _isContinuation)){
             var _why = [];
-            if(_isHerd) _why.push('herd-mech');
+            if(_isHerd) _why.push('herd-named');
+            if(_isContinuation) _why.push('continuation-type('+_mechName+')');
             if(!_onBybit) _why.push('not-on-bybit');
-            if(!_validDir) _why.push('dir-mismatch('+_dirLC+' vs '+_mechName+')');
             try { console.log('[ACRESS-SKIP] '+r.sym+' '+r.dir+' score='+r.score+' filtered: '+_why.join(', ')); } catch(e){}
           }
-          if(r.score>=40 && !_isHerd && _onBybit && _validDir){
+          if(r.score>=40 && !_isHerd && _onBybit && !_isContinuation){
             // L4c: plain-English signal log
             try {
               var _tags = (r.reasons||[]).map(function(x){return (x && x.tag) ? x.tag : String(x);});
