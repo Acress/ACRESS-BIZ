@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<!-- L_SYMBOL_DASHBOARD_V1 — Per-symbol performance dashboard.
+     Fetches /api/analysis/aggregate?dim=base from the Acress bridge.
+     Scanner palette inlined for visual consistency; this file is self-contained. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acress · Symbol Performance</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font-ui:'Outfit',system-ui,sans-serif;
+  --font-mono:'Space Mono','Courier New',monospace;
+  --bg:#04050e;--s1:#080c1a;--s2:#0d1224;--s3:#131929;
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.12);
+  --hi:#ffffff;--body:#d4ddf0;--muted:#6b7fa8;--faint:#5d6a8a;
+  --purple:#b48efa;--purple2:rgba(180,142,250,.14);
+  --green:#2ee8a0;--green2:rgba(46,232,160,.13);
+  --red:#ff5277;--red2:rgba(255,82,119,.13);
+  --amber:#f9c846;--amber2:rgba(249,200,70,.13);
+  --cyan:#41d1ff;
+  --r:12px;--r-sm:7px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--body);font-family:var(--font-ui);font-size:14px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;}
+.container{max-width:1400px;margin:0 auto;padding:20px 24px;}
+h1{font-size:22px;font-weight:700;letter-spacing:-.3px;color:var(--hi);margin-bottom:4px;}
+.subtitle{color:var(--muted);font-size:12px;font-family:var(--font-mono);margin-bottom:20px;}
+.subtitle .status{margin-left:12px;color:var(--cyan);}
+.subtitle .status.err{color:var(--red);}
+
+/* Controls */
+.controls{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin-bottom:20px;}
+.control{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;}
+.control label{font-weight:600;}
+.control select,.control input[type=number]{
+  background:var(--s2);color:var(--body);border:1px solid var(--border2);border-radius:var(--r-sm);
+  padding:5px 10px;font-family:var(--font-mono);font-size:12px;cursor:pointer;
+}
+.control select:focus,.control input[type=number]:focus{outline:none;border-color:var(--cyan);}
+.control input[type=checkbox]{accent-color:var(--cyan);}
+.control button{
+  background:var(--purple2);color:var(--purple);border:1px solid rgba(180,142,250,.4);
+  border-radius:var(--r-sm);padding:6px 14px;font-family:var(--font-mono);font-size:11px;
+  font-weight:700;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;
+}
+.control button:hover{background:rgba(180,142,250,.25);}
+
+/* Top/bottom panels */
+.top-bottom{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+.panel{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;}
+.panel h3{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
+.panel h3 .accent{color:var(--green);}
+.panel h3 .accent-red{color:var(--red);}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;}
+th{background:var(--s2);color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+   padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;}
+th:first-child{text-align:left;}
+th:hover{color:var(--hi);}
+th.sorted-asc::after{content:' ▲';font-size:9px;color:var(--cyan);}
+th.sorted-desc::after{content:' ▼';font-size:9px;color:var(--cyan);}
+td{padding:6px 10px;text-align:right;font-family:var(--font-mono);font-size:12px;border-bottom:1px solid var(--border);}
+td:first-child{text-align:left;font-weight:700;color:var(--hi);font-family:var(--font-ui);}
+tr:hover td{background:var(--s2);}
+.pos{color:var(--green);}
+.neg{color:var(--red);}
+.marg{color:var(--amber);}
+.dim{color:var(--faint);}
+tfoot td{background:var(--s2);font-weight:700;color:var(--body);border-top:2px solid var(--border2);}
+
+/* Main table panel */
+.main-panel{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.main-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);}
+.main-header h3{font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--muted);text-transform:uppercase;}
+.main-header .meta{font-family:var(--font-mono);font-size:11px;color:var(--faint);}
+.empty{padding:32px;text-align:center;color:var(--faint);font-family:var(--font-mono);font-size:12px;}
+
+.footer-note{color:var(--faint);font-size:11px;font-family:var(--font-mono);margin-top:20px;line-height:1.7;}
+
+@media (max-width:900px){
+  .top-bottom{grid-template-columns:1fr;}
+  .container{padding:14px;}
+  th, td{padding:5px 6px;font-size:11px;}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Symbol Performance · ACRESS</h1>
+  <div class="subtitle">
+    Per-symbol stats from closed signals · /api/analysis/aggregate?dim=base
+    <span class="status" id="status">loading…</span>
+  </div>
+
+  <div class="controls">
+    <div class="control">
+      <label>Window:</label>
+      <select id="window-select"></select>
+    </div>
+    <div class="control">
+      <label>Direction:</label>
+      <select id="dir-select">
+        <option value="all">all</option>
+        <option value="LONG">LONG only</option>
+        <option value="SHORT">SHORT only</option>
+      </select>
+    </div>
+    <div class="control">
+      <label>Min n:</label>
+      <input type="number" id="min-n-input" value="5" min="0" max="9999" style="width:60px;">
+    </div>
+    <div class="control">
+      <label><input type="checkbox" id="show-all-cb"> show all (ignore min n)</label>
+    </div>
+    <div class="control" style="margin-left:auto;">
+      <button id="refresh-btn">⟳ Refresh</button>
+    </div>
+  </div>
+
+  <div class="top-bottom">
+    <div class="panel">
+      <h3><span class="accent">▲</span> Top 10 by mean PnL (n ≥ min n)</h3>
+      <table id="top10-table"><thead></thead><tbody></tbody></table>
+    </div>
+    <div class="panel">
+      <h3><span class="accent-red">▼</span> Bottom 10 by mean PnL (n ≥ min n)</h3>
+      <table id="bottom10-table"><thead></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="main-panel">
+    <div class="main-header">
+      <h3>All symbols (filtered, sortable)</h3>
+      <div class="meta"><span id="row-count">0 symbols</span></div>
+    </div>
+    <table id="main-table">
+      <thead>
+        <tr>
+          <th data-sort="label">Symbol</th>
+          <th data-sort="n">n</th>
+          <th data-sort="winRate">Win %</th>
+          <th data-sort="meanPnl">Mean PnL %</th>
+          <th data-sort="totalPnl">Total PnL $</th>
+          <th data-sort="meanMfe">Mean MFE %</th>
+          <th data-sort="meanMae">Mean MAE %</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot><tr id="totals-row"></tr></tfoot>
+    </table>
+  </div>
+
+  <div class="footer-note">
+    <strong>v1 limitations:</strong> mechanism multi-select filter deferred to v2 (requires a small <code>mech</code> IN-clause API extension; track in <code>ACRESS-upgrades.md</code>).
+    Sparkline-per-symbol deferred to v2 (would need a new <code>/api/analysis/symbol/:base/timeseries</code> endpoint).
+    Tracker artifacts (<code>stale_timeout</code> closes) are excluded from these stats per <code>L_RECENT_PERF_V3</code>.
+  </div>
+</div>
+
+<script>
+/* L_SYMBOL_DASHBOARD_V1 — config constants. Edit these to tune. */
+const BRIDGE_URL_DEFAULT = 'https://89-167-43-202.sslip.io';
+const PROFILE = 'v16b';
+const DEFAULT_WINDOW = '1d';
+const MIN_N_DEFAULT = 5;
+const WINDOW_OPTIONS = ['4h','1d','4d','7d'];
+const POS_THRESHOLD = 0.05;   // |mean PnL| < this → "marginal" (amber)
+const REFRESH_AUTO_MS = 0;    // 0 = no auto-refresh; set e.g. 60000 for 60s
+
+/* Bridge URL resolution — matches scanner pattern */
+function getBridgeUrl(){
+  return (typeof window.BRIDGE_URL !== 'undefined' && window.BRIDGE_URL)
+      || (typeof window.API_BASE  !== 'undefined' && window.API_BASE)
+      || BRIDGE_URL_DEFAULT;
+}
+
+/* State */
+const state = {
+  window: DEFAULT_WINDOW,
+  dir: 'all',
+  minN: MIN_N_DEFAULT,
+  showAll: false,
+  sortBy: 'meanPnl',
+  sortDir: 'desc',
+  rows: [],
+  lastFetchAt: 0,
+};
+
+/* Format helpers */
+function pct(x, d=2){ if(x==null||!isFinite(x))return '—'; return Number(x).toFixed(d); }
+function pctSign(x, d=2){ if(x==null||!isFinite(x))return '—'; return (x>=0?'+':'')+Number(x).toFixed(d); }
+function dollar(x){ if(x==null||!isFinite(x))return '—'; return (x>=0?'+':'')+'$'+Number(x).toFixed(0); }
+function colorClass(x){
+  if(x==null||!isFinite(x))return 'dim';
+  if(Math.abs(x)<POS_THRESHOLD)return 'marg';
+  return x>0 ? 'pos' : 'neg';
+}
+
+/* Populate window dropdown */
+(function initControls(){
+  const wsel = document.getElementById('window-select');
+  WINDOW_OPTIONS.forEach(w=>{
+    const o=document.createElement('option');
+    o.value=w; o.textContent=w;
+    if(w===DEFAULT_WINDOW)o.selected=true;
+    wsel.appendChild(o);
+  });
+  document.getElementById('min-n-input').value = MIN_N_DEFAULT;
+  // Listeners
+  wsel.addEventListener('change', ()=>{ state.window=wsel.value; fetchAndRender(); });
+  document.getElementById('dir-select').addEventListener('change', e=>{ state.dir=e.target.value; fetchAndRender(); });
+  document.getElementById('min-n-input').addEventListener('change', e=>{ state.minN=parseInt(e.target.value)||0; render(); });
+  document.getElementById('show-all-cb').addEventListener('change', e=>{ state.showAll=e.target.checked; render(); });
+  document.getElementById('refresh-btn').addEventListener('click', fetchAndRender);
+  // Sortable headers
+  document.querySelectorAll('#main-table th[data-sort]').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const col = th.getAttribute('data-sort');
+      if(state.sortBy===col) state.sortDir = state.sortDir==='desc'?'asc':'desc';
+      else { state.sortBy=col; state.sortDir = (col==='label')?'asc':'desc'; }
+      render();
+    });
+  });
+})();
+
+/* Fetch from bridge */
+async function fetchAndRender(){
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = 'fetching…';
+  statusEl.className = 'status';
+  const params = new URLSearchParams({
+    profile: PROFILE,
+    period: state.window,
+    dim: 'base',
+  });
+  if(state.dir === 'LONG' || state.dir === 'SHORT') params.set('dir', state.dir);
+  const url = getBridgeUrl() + '/api/analysis/aggregate?' + params.toString();
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    state.rows = (data.rows || []).filter(r => r.label && r.label !== '(none)' && r.label !== '(unknown)');
+    state.lastFetchAt = Date.now();
+    statusEl.textContent = state.rows.length + ' symbols · fetched ' + new Date().toLocaleTimeString();
+    render();
+  } catch (e){
+    statusEl.textContent = 'fetch failed: ' + e.message;
+    statusEl.className = 'status err';
+    state.rows = [];
+    render();
+  }
+}
+
+/* Render — top/bottom panels + main table + totals */
+function render(){
+  const effectiveMinN = state.showAll ? 0 : state.minN;
+  const filtered = state.rows.filter(r => r.n >= effectiveMinN);
+
+  // Top/bottom — always sorted by meanPnl, regardless of main-table sort
+  const sorted = [...filtered].sort((a,b)=>(b.meanPnl||-Infinity)-(a.meanPnl||-Infinity));
+  renderTopBottom('top10-table', sorted.slice(0, 10));
+  renderTopBottom('bottom10-table', sorted.slice(-10).reverse());
+
+  // Main table — sorted by state.sortBy / state.sortDir
+  const mainSorted = [...filtered].sort((a,b)=>{
+    let av = a[state.sortBy], bv = b[state.sortBy];
+    if(state.sortBy === 'label'){ av = String(av||''); bv = String(bv||'');
+      return state.sortDir==='asc' ? av.localeCompare(bv) : bv.localeCompare(av); }
+    av = (av==null||!isFinite(av)) ? -Infinity : av;
+    bv = (bv==null||!isFinite(bv)) ? -Infinity : bv;
+    return state.sortDir==='asc' ? av-bv : bv-av;
+  });
+  renderMainTable(mainSorted);
+  renderTotals(filtered);
+
+  // Sort indicators
+  document.querySelectorAll('#main-table th').forEach(th=>{
+    th.classList.remove('sorted-asc','sorted-desc');
+    if(th.getAttribute('data-sort')===state.sortBy){
+      th.classList.add(state.sortDir==='asc'?'sorted-asc':'sorted-desc');
+    }
+  });
+
+  document.getElementById('row-count').textContent =
+    filtered.length + ' symbols' +
+    (filtered.length !== state.rows.length ? ' (of ' + state.rows.length + ' total)' : '');
+}
+
+function renderTopBottom(tableId, rows){
+  const t = document.getElementById(tableId);
+  const thead = t.querySelector('thead'), tbody = t.querySelector('tbody');
+  thead.innerHTML = '<tr>'
+    + '<th>Symbol</th><th>n</th><th>Win %</th><th>Mean PnL %</th><th>Total $</th>'
+    + '</tr>';
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="dim" style="text-align:center;font-style:italic;">(no data)</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const cls = colorClass(r.meanPnl);
+    return '<tr>'
+      + '<td>' + r.label + '</td>'
+      + '<td>' + r.n + '</td>'
+      + '<td>' + pct((r.winRate||0)*100, 1) + '%</td>'
+      + '<td class="' + cls + '">' + pctSign(r.meanPnl, 3) + '</td>'
+      + '<td class="' + colorClass(r.totalPnl) + '">' + dollar(r.totalPnl) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function renderMainTable(rows){
+  const tbody = document.querySelector('#main-table tbody');
+  if(!rows.length){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">no symbols match the current filter</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    return '<tr>'
+      + '<td>' + r.label + '</td>'
+      + '<td>' + r.n + '</td>'
+      + '<td>' + pct((r.winRate||0)*100, 1) + '%</td>'
+      + '<td class="' + colorClass(r.meanPnl) + '">' + pctSign(r.meanPnl, 3) + '</td>'
+      + '<td class="' + colorClass(r.totalPnl) + '">' + dollar(r.totalPnl) + '</td>'
+      + '<td class="pos">' + pctSign(r.meanMfe, 2) + '</td>'
+      + '<td class="neg">' + pctSign(r.meanMae, 2) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function renderTotals(rows){
+  const totalsRow = document.getElementById('totals-row');
+  if(!rows.length){ totalsRow.innerHTML = ''; return; }
+  let totalN = 0, totalWins = 0, totalPnl = 0, mfeWeighted = 0, maeWeighted = 0;
+  for(const r of rows){
+    totalN += r.n || 0;
+    totalWins += r.wins || 0;
+    totalPnl += r.totalPnl || 0;
+    mfeWeighted += (r.meanMfe || 0) * (r.n || 0);
+    maeWeighted += (r.meanMae || 0) * (r.n || 0);
+  }
+  const winRate = totalN ? totalWins / totalN : 0;
+  const meanPnl = totalN ? totalPnl / totalN : 0;  // dollar-weighted approximation — sum of usd / count
+  const meanMfe = totalN ? mfeWeighted / totalN : 0;
+  const meanMae = totalN ? maeWeighted / totalN : 0;
+  totalsRow.innerHTML =
+      '<td>TOTAL (' + rows.length + ' syms)</td>'
+    + '<td>' + totalN + '</td>'
+    + '<td>' + pct(winRate*100, 1) + '%</td>'
+    + '<td class="' + colorClass(meanPnl) + '">' + pctSign(meanPnl, 3) + '</td>'
+    + '<td class="' + colorClass(totalPnl) + '">' + dollar(totalPnl) + '</td>'
+    + '<td class="pos">' + pctSign(meanMfe, 2) + '</td>'
+    + '<td class="neg">' + pctSign(meanMae, 2) + '</td>';
+}
+
+/* Auto-refresh (optional; off by default) */
+if(REFRESH_AUTO_MS > 0){
+  setInterval(fetchAndRender, REFRESH_AUTO_MS);
+}
+
+/* First fetch on load */
+fetchAndRender();
+</script>
+</body>
+</html>

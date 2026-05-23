@@ -4811,7 +4811,12 @@ function scoreCoin(gates,context){
                 through to a softer "OI Pressure Down" label so the signal
                 still surfaces, just not branded as capitulation.
    Shadow mode (current default): log WOULD-reclassify lines, keep label as-is.
-   Flip LONG_CAP_LIQ_GATE_ACTIVE = true after 1h of shadow observation. */
+   BLOCKED FROM ACTIVATION by Upgrade 8.6 (Bybit V5 allLiquidation WS topic
+   format is currently broken — 0 events for BTC over 30min, 5 across 84
+   subscribed symbols). Until 8.6 ships, gates.liq is null for nearly every
+   signal, so flipping to active would over-reclassify ~100% of Long Cap.
+   The cohort-level Telegram filter (L_TG_FILTER_V1) already suppresses
+   Long Cap alerts regardless. Re-evaluate the flip after 8.6 lands. */
 var LONG_CAP_LIQ_GATE_ACTIVE = false;
 function classifyMechanism(dir,gates){
   // Reversal vs continuation, then named mechanism
