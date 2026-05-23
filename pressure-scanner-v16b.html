@@ -4800,6 +4800,19 @@ function scoreCoin(gates,context){
   return{dir:dir,score:Math.round(normalized),reasons:reasons,mechanism:mechanism,oiAvailable:!!gates.oi};
 }
 
+/* L_LONG_CAP_LIQ_GATE_V1 — Upgrade 8.5
+   Long Capitulation label currently fires on OI state alone (price↓ + OI↓).
+   The diagnostic showed 60% of these signals enter during the drop, not after
+   the bounce. Real capitulations have liquidation cascade evidence; without
+   that, the trigger is catching "falling knife" patterns.
+
+   Active mode: require gates.liq.dir==='SHORT' && type==='cascade_confirmed'
+                before applying the Long Capitulation label. Otherwise fall
+                through to a softer "OI Pressure Down" label so the signal
+                still surfaces, just not branded as capitulation.
+   Shadow mode (current default): log WOULD-reclassify lines, keep label as-is.
+   Flip LONG_CAP_LIQ_GATE_ACTIVE = true after 1h of shadow observation. */
+var LONG_CAP_LIQ_GATE_ACTIVE = false;
 function classifyMechanism(dir,gates){
   // Reversal vs continuation, then named mechanism
   var hasSweepReclaim=gates.sweep&&gates.sweep.dir===dir&&(gates.sweep.type==='high_sweep_reclaim'||gates.sweep.type==='low_sweep_reclaim');
@@ -4813,7 +4826,20 @@ function classifyMechanism(dir,gates){
   }
   if(oi&&oi.dir===dir){
     if(oi.state==='short_squeeze'&&dir==='LONG')return{name:'Short Squeeze in Progress',type:'continuation',horizon:'10-30 min'};
-    if(oi.state==='long_capitulation'&&dir==='SHORT')return{name:'Long Capitulation in Progress',type:'continuation',horizon:'10-30 min'};
+    if(oi.state==='long_capitulation'&&dir==='SHORT'){
+      /* L_LONG_CAP_LIQ_GATE_V1 — gate the capitulation label on liquidation cascade evidence */
+      var liqOk = gates.liq && gates.liq.dir==='SHORT' && gates.liq.type==='cascade_confirmed';
+      if(liqOk){
+        return{name:'Long Capitulation in Progress',type:'continuation',horizon:'10-30 min'};
+      }
+      if(LONG_CAP_LIQ_GATE_ACTIVE){
+        // Active mode: reclassify as softer OI Pressure Down (signal still pushes)
+        return{name:'OI Pressure Down',type:'continuation',horizon:'10-30 min'};
+      }
+      // Shadow mode: keep the Long Capitulation label, but log what we WOULD have done
+      try{ console.log('[L_LONG_CAP_LIQ_GATE_V1 SHADOW] WOULD reclassify Long Cap → OI Pressure Down (no cascade_confirmed: liq=' + (gates.liq ? gates.liq.type : 'null') + ')'); }catch(_){}
+      return{name:'Long Capitulation in Progress',type:'continuation',horizon:'10-30 min'};
+    }
     if(oi.state==='new_longs')return{name:'Initiative Demand · Fresh Longs',type:'continuation',horizon:'15-30 min'};
     if(oi.state==='new_shorts')return{name:'Initiative Supply · Fresh Shorts',type:'continuation',horizon:'15-30 min'};
   }
