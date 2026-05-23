@@ -991,10 +991,7 @@ var SYMBOL_BLACKLIST = new Set([
   'SPCX','GUA','AMD','BROCCOLIF3B','DOGS','SKYAI','NATGAS','PUMP','FET','PROM',
   'AIA','1000PEPE','EWY','DOGE','AVAX','PLAY','LINK','ADA','XLM'
 ]);
-var MECH_BLACKLIST = new Set([
-  'Aggressive Buying Pressure',
-  'Aggressive Selling Pressure'
-]);
+var MECH_BLACKLIST = new Set([]); /* disabled — use recent-perf gate instead */
 function shouldAcceptSignal(r){
   if(!r) return false;
   var b = r.base || (r.sym && r.sym.replace(/USDT$/,''));
