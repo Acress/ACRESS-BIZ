@@ -4836,8 +4836,11 @@ function classifyMechanism(dir,gates){
         // Active mode: reclassify as softer OI Pressure Down (signal still pushes)
         return{name:'OI Pressure Down',type:'continuation',horizon:'10-30 min'};
       }
-      // Shadow mode: keep the Long Capitulation label, but log what we WOULD have done
-      try{ console.log('[L_LONG_CAP_LIQ_GATE_V1 SHADOW] WOULD reclassify Long Cap → OI Pressure Down (no cascade_confirmed: liq=' + (gates.liq ? gates.liq.type : 'null') + ')'); }catch(_){}
+      // Shadow mode: keep the Long Capitulation label, but log what we WOULD have done.
+      // CONVENTION: every shadow / marker-tagged console.log MUST start with "[Acress" so
+      // bridge.js page.on('console') relay (L_RELAY_FILTER_V2) forwards it to docker logs.
+      // Future shadow logs should follow the form "[Acress · L_XXX_VN SHADOW] ...".
+      try{ console.log('[Acress · L_LONG_CAP_LIQ_GATE_V1 SHADOW] WOULD reclassify Long Cap → OI Pressure Down (no cascade_confirmed: liq=' + (gates.liq ? gates.liq.type : 'null') + ')'); }catch(_){}
       return{name:'Long Capitulation in Progress',type:'continuation',horizon:'10-30 min'};
     }
     if(oi.state==='new_longs')return{name:'Initiative Demand · Fresh Longs',type:'continuation',horizon:'15-30 min'};
