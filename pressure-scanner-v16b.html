@@ -3932,10 +3932,13 @@ function showWlError(msg){
 // v16b — Pool-level volatility floor.
 // Skip coins whose 24h high-to-low range is below MIN_24H_RANGE_PCT.
 // User-tunable via console: localStorage.setItem('acress_min_range_pct', '3')
+// /* L_RANGE_FILTER_REMOVED_V1 */ default lowered 4 → 0 to disable the gate
+// without removing the override mechanism. Range is still computed and tagged
+// onto each signal as range24Pct for post-hoc analysis.
 var MIN_24H_RANGE_PCT = (function(){
   try { var v = localStorage.getItem('acress_min_range_pct');
-        return v != null ? parseFloat(v) : 4; }
-  catch(_){ return 4; }
+        return v != null ? parseFloat(v) : 0; }
+  catch(_){ return 0; }
 })();
 
 async function fetchTopCoins(n){
@@ -3952,10 +3955,12 @@ async function fetchTopCoins(n){
       return false;
     }
     if(parseFloat(t.quoteVolume)<500000)return false;
-    // 24h range gate
+    // 24h range gate (now defaults off; range is tagged onto ticker so it
+    // flows through to the signal object for slicing the newly-admitted cohort)
     var hi = parseFloat(t.highPrice), lo = parseFloat(t.lowPrice);
     if(!isFinite(hi)||!isFinite(lo)||lo<=0)return false;
     var rangePct = (hi - lo) / lo * 100;
+    t.range24Pct = rangePct;
     if(rangePct < MIN_24H_RANGE_PCT){ excludedLowRange++; return false; }
     // BYBIT GATE: only allow symbols listed on Bybit, where we execute trades.
     // Binance still provides ticker/kline/funding data for scoring and confirmation,
@@ -3994,6 +3999,7 @@ async function fetchWatchlistCoins(bases){
     var hi = parseFloat(t.highPrice), lo = parseFloat(t.lowPrice);
     if(isFinite(hi)&&isFinite(lo)&&lo>0){
       var rangePct = (hi - lo) / lo * 100;
+      t.range24Pct = rangePct;
       if(rangePct < MIN_24H_RANGE_PCT){
         try { console.warn('[Acress] Watchlist coin ' + t.symbol.slice(0,-4) +
           ' has only ' + rangePct.toFixed(1) + '% 24h range (below ' + MIN_24H_RANGE_PCT + '% floor) — keeping it but low signal quality likely'); } catch(_){}
@@ -4806,6 +4812,8 @@ async function analyzeCoin(symObj){
     // v16 — Persist Z-score buffer at end of each coin's analysis
     return{
       sym:sym,base:base,price:price,chg24:chg24,
+      /* L_RANGE_FILTER_REMOVED_V1 */
+      range24Pct:(symObj.range24Pct!=null?symObj.range24Pct:null),
       dir:result.dir,score:result.score,
       mechanism:result.mechanism,reasons:result.reasons,
       regimeKind:result.regimeKind,regimeAction:result.regimeAction,
@@ -5107,6 +5115,7 @@ async function analyzeCoinDiag(symObj,diag){
     return{
       id:'sig_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
       sym:sym,base:base,price:price,chg24:chg24,
+      range24Pct:(symObj.range24Pct!=null?symObj.range24Pct:null),
       dir:result.dir,score:result.score,
       mechanism:result.mechanism,reasons:result.reasons,
       regimeKind:marketRegime.kind,regimeAction:regimeAction.action,
