@@ -1004,6 +1004,11 @@ var SYMBOL_BLACKLIST = new Set([
   'AIA','1000PEPE','EWY','DOGE','AVAX','PLAY','LINK','ADA','XLM'
 ]);
 var MECH_BLACKLIST = new Set([]); /* disabled — use recent-perf gate instead */
+/* L_SCORE_CAP_80_V1 — Upgrade 7: simulator-validated score cap at 80.
+   Score>80 bucket showed −0.371% mean PnL vs −0.252% for the 60-74 bucket
+   in the 15K-signal simulator run; capping removes the worst-performing tail
+   without losing the productive middle. Tunable via SCORE_CAP_MAX. */
+var SCORE_CAP_MAX = 80;
 function shouldAcceptSignal(r){
   if(!r) return false;
   var b = r.base || (r.sym && r.sym.replace(/USDT$/,''));
@@ -1011,6 +1016,7 @@ function shouldAcceptSignal(r){
   if(b && SYMBOL_BLACKLIST.has(b)){ shouldAcceptSignal._lastReason='blacklist_sym:'+b; return false; }
   var mn = r.mechanism && r.mechanism.name;
   if(mn && MECH_BLACKLIST.has(mn)){ shouldAcceptSignal._lastReason='blacklist_mech:'+mn; return false; }
+  if(r.score > SCORE_CAP_MAX){ shouldAcceptSignal._lastReason='score_cap:'+r.score; return false; }
   shouldAcceptSignal._lastReason=null;
   return true;
 }
