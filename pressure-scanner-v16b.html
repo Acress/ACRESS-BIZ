@@ -85,6 +85,11 @@ input{font-family:var(--font-ui);}
 
 /* v16 — entry zone visualization on cards */
 .entry-zone{font-family:var(--font-mono);font-size:9.5px;color:var(--muted);background:var(--s2);padding:4px 8px;border-radius:4px;border:1px solid var(--border);margin-top:4px;display:flex;justify-content:space-between;gap:10px;}
+/* L_SCHEMA_POPULATE_V3 — break-even verdict styles (entry and exit cards) */
+.be-verdict,.be-funding{font-family:var(--font-mono);font-size:10.5px;font-weight:600;padding:5px 8px;border-radius:4px;margin-top:4px;line-height:1.3;}
+.be-verdict.be-good,.be-funding.be-good{background:rgba(46,200,120,0.12);color:#34c97a;border:1px solid rgba(46,200,120,0.30);}
+.be-verdict.be-warn,.be-funding.be-warn{background:rgba(240,180,65,0.12);color:#f0b441;border:1px solid rgba(240,180,65,0.30);}
+.be-verdict.be-bad, .be-funding.be-bad {background:rgba(230,80,90,0.12);color:#ff6b78;border:1px solid rgba(230,80,90,0.30);}
 .entry-zone.extended{border-color:var(--amber);color:var(--amber);}
 .entry-zone .ez-lbl{color:var(--faint);}
 .entry-zone .ez-val{font-weight:700;}
@@ -973,6 +978,12 @@ input{font-family:var(--font-ui);}
 var SIGNAL_TTL_MS=30*60*1000;       // 30-min signal validity
 var AUTO_REFRESH_MS=5*60*1000;      // 5-min auto-scan cycle
 var SURGICAL_THR=85,HIGH_THR=72;    // score tiers
+/* L_SCHEMA_POPULATE_V3 — break-even / cost-model constants */
+const FEE_BPS_CONSTANT = 11;          // L_FEE_BPS — Bybit V5 round-trip taker (0.11%)
+const SLIPPAGE_BUFFER_BPS = 5;        // L_SLIPPAGE_BUFFER — exit spread widening + thin-book slippage
+const BE_THRESHOLD_CHEAP = 0.20;      // L_BE_THRESHOLD_CHEAP — total cost < 0.20% = cheap entry
+const BE_THRESHOLD_EXPENSIVE = 0.40;  // L_BE_THRESHOLD_EXPENSIVE — total cost > 0.40% = expensive entry
+const HOLD_DURATION_MIN = 25;         // L_HOLD_DURATION — assumed hold duration for funding-applicability check
 var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
@@ -3942,6 +3953,95 @@ var MIN_24H_RANGE_PCT = (function(){
   catch(_){ return 0; }
 })();
 
+/* L_SCHEMA_POPULATE_V3 — bookTicker map (best bid/ask per symbol, refreshed per scan)
+   and helper functions for break-even / cost modeling. */
+var bookTickerBySymbol = {};
+async function fetchBookTickerMap(){
+  try{
+    var d = await fetch('https://fapi.binance.com/fapi/v1/ticker/bookTicker',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json();});
+    var map = {};
+    if(Array.isArray(d)){
+      d.forEach(function(t){
+        var bid = parseFloat(t.bidPrice), ask = parseFloat(t.askPrice);
+        if(isFinite(bid) && isFinite(ask) && bid > 0 && ask > 0 && ask >= bid){
+          map[t.symbol] = { bid: bid, ask: ask };
+        }
+      });
+    }
+    bookTickerBySymbol = map;
+    return map;
+  }catch(e){
+    console.warn('[Acress] bookTicker fetch failed — spread_bps will be null this scan:', e.message);
+    bookTickerBySymbol = {};
+    return {};
+  }
+}
+function computeSpreadBps(sym){
+  var bt = bookTickerBySymbol[sym];
+  if(!bt) return null;
+  var mid = (bt.bid + bt.ask) / 2;
+  if(!isFinite(mid) || mid <= 0) return null;
+  return (bt.ask - bt.bid) / mid * 10000;
+}
+function compute5mExtremes(k5, n){
+  // distance from the high and low of the last n 5m bars (default 6 = ~30 min)
+  if(!Array.isArray(k5) || !k5.length) return { hi: null, lo: null };
+  n = n || 6;
+  var bars = k5.slice(-n);
+  var hi = -Infinity, lo = Infinity;
+  for(var i = 0; i < bars.length; i++){
+    var h = parseFloat(bars[i][2]), l = parseFloat(bars[i][3]);
+    if(isFinite(h) && h > hi) hi = h;
+    if(isFinite(l) && l < lo) lo = l;
+  }
+  return { hi: isFinite(hi) ? hi : null, lo: isFinite(lo) ? lo : null };
+}
+function distFrom5mExtremes(k5, currentPrice){
+  var ex = compute5mExtremes(k5, 6);
+  if(ex.hi == null || ex.lo == null || !isFinite(currentPrice) || currentPrice <= 0){
+    return { high: null, low: null };
+  }
+  return {
+    high: (ex.hi - currentPrice) / currentPrice * 100,  // positive = below recent high
+    low:  (currentPrice - ex.lo) / currentPrice * 100   // positive = above recent low
+  };
+}
+function computeMinutesToFunding(){
+  var nowUtc = new Date();
+  var hoursUtc = nowUtc.getUTCHours() + nowUtc.getUTCMinutes()/60 + nowUtc.getUTCSeconds()/3600;
+  return (8 - (hoursUtc % 8)) * 60;
+}
+function computeBreakEven(dir, entryPrice, fundingRatePct, spreadBps, minutesToFunding){
+  // fundingRatePct is in percent units (matches ctx.fr convention — lastFundingRate * 100)
+  // Returns nulls (and funding_applies=0) when spread_bps is unavailable.
+  if(spreadBps == null || !isFinite(entryPrice) || entryPrice <= 0){
+    return {
+      break_even_price: null,
+      break_even_pct:   null,
+      funding_applies:  0,
+      funding_cost_bps: null
+    };
+  }
+  var funding_applies = (minutesToFunding != null && minutesToFunding < HOLD_DURATION_MIN) ? 1 : 0;
+  var funding_bps_magnitude = funding_applies && fundingRatePct != null ? Math.abs(fundingRatePct * 100) : 0;
+  // fundingRatePct in percent → ×100 → bps
+  var longPaysPositive  = (dir === 'LONG'  && fundingRatePct != null && fundingRatePct > 0);
+  var shortPaysNegative = (dir === 'SHORT' && fundingRatePct != null && fundingRatePct < 0);
+  var funding_cost_sign = (longPaysPositive || shortPaysNegative) ? 1 : -1;
+  var funding_cost_bps = funding_bps_magnitude * funding_cost_sign;
+  var costBps = FEE_BPS_CONSTANT + spreadBps + SLIPPAGE_BUFFER_BPS + funding_cost_bps;
+  var break_even_pct = costBps / 100;
+  var break_even_price = dir === 'LONG'
+    ? entryPrice * (1 + costBps / 10000)
+    : entryPrice * (1 - costBps / 10000);
+  return {
+    break_even_price: break_even_price,
+    break_even_pct:   break_even_pct,
+    funding_applies:  funding_applies,
+    funding_cost_bps: funding_cost_bps
+  };
+}
+
 async function fetchTopCoins(n){
   var d=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json();});
   var excludedMegacap = 0, excludedLowRange = 0;
@@ -4811,6 +4911,12 @@ async function analyzeCoin(symObj){
     else if(regimeAction.action==='boost')result.score=Math.min(100,result.score+8);
     if(regimeAction.reason)result.reasons.push({lvl:regimeAction.action==='boost'?'ok':'partial',tag:'REGIME',text:regimeAction.reason});
     // v16 — Persist Z-score buffer at end of each coin's analysis
+    /* L_SCHEMA_POPULATE_V3 — derived fields for funding/spread/break-even/dist-from-extremes */
+    var _fr   = ctx ? ctx.fr : null;
+    var _spr  = computeSpreadBps(sym);
+    var _dist = distFrom5mExtremes(k5, price);
+    var _mtf  = computeMinutesToFunding();
+    var _be   = computeBreakEven(result.dir, price, _fr, _spr, _mtf);
     return{
       sym:sym,base:base,price:price,chg24:chg24,
       /* L_RANGE_FILTER_REMOVED_V1 */
@@ -4822,6 +4928,16 @@ async function analyzeCoin(symObj){
       oiVelocity:result.oiVelocity,oiAcceleration:result.oiAcceleration,
       lateStageOI:result.lateStageOI,earlyStageOI:result.earlyStageOI,
       atr5m:atr5m,
+      /* L_SCHEMA_POPULATE_V3 */
+      fundingRate: _fr,
+      spread_bps: _spr,
+      dist_from_5m_high_pct: _dist.high,
+      dist_from_5m_low_pct:  _dist.low,
+      minutes_to_funding: _mtf,
+      funding_applies: _be.funding_applies,
+      funding_cost_bps: _be.funding_cost_bps,
+      break_even_price: _be.break_even_price,
+      break_even_pct: _be.break_even_pct,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -4872,6 +4988,9 @@ async function runScan(){
   setProgress(setProgress.last+' · probing BTC regime…');
   await refreshMarketRegime();
   renderRegimeBadge();
+  /* L_SCHEMA_POPULATE_V3 — refresh bookTicker map once per scan; analyzeCoin reads it for spread_bps */
+  setProgress(setProgress.last+' · fetching bookTicker…');
+  await fetchBookTickerMap();
   // Preload Bybit symbol set (cached after first call) so per-coin lookups are instant
   if(document.getElementById('bybit-agg').checked){
     setProgress(setProgress.last+' · loading Bybit universe…');
@@ -5113,6 +5232,12 @@ async function analyzeCoinDiag(symObj,diag){
     else if(regimeAction.action==='boost')result.score=Math.min(100,result.score+8);
     if(regimeAction.reason)result.reasons.push({lvl:regimeAction.action==='boost'?'ok':'partial',tag:'REGIME',text:regimeAction.reason});
     diag.scored++;
+    /* L_SCHEMA_POPULATE_V3 — derived fields for funding/spread/break-even/dist-from-extremes */
+    var _fr   = ctx ? ctx.fr : null;
+    var _spr  = computeSpreadBps(sym);
+    var _dist = distFrom5mExtremes(k5, price);
+    var _mtf  = computeMinutesToFunding();
+    var _be   = computeBreakEven(result.dir, price, _fr, _spr, _mtf);
     return{
       id:'sig_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
       sym:sym,base:base,price:price,chg24:chg24,
@@ -5124,6 +5249,16 @@ async function analyzeCoinDiag(symObj,diag){
       oiVelocity:result.oiVelocity,oiAcceleration:result.oiAcceleration,
       lateStageOI:result.lateStageOI,earlyStageOI:result.earlyStageOI,
       atr5m:atr5m,
+      /* L_SCHEMA_POPULATE_V3 */
+      fundingRate: _fr,
+      spread_bps: _spr,
+      dist_from_5m_high_pct: _dist.high,
+      dist_from_5m_low_pct:  _dist.low,
+      minutes_to_funding: _mtf,
+      funding_applies: _be.funding_applies,
+      funding_cost_bps: _be.funding_cost_bps,
+      break_even_price: _be.break_even_price,
+      break_even_pct: _be.break_even_pct,
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -5973,6 +6108,34 @@ function buildCard(s){
     +'<span><span class="ez-lbl">max exec</span> <span class="ez-val">$'+fP(ez.maxExec)+'</span></span>'
     +'<span><span class="ez-lbl">now</span> <span class="ez-val">$'+fP(ez.current)+' ('+ezDir+ezExtendedPct.toFixed(2)+'%)</span></span>'
     +'</div>';
+  /* L_SCHEMA_POPULATE_V3 — ENTRY VERDICT line based on break_even_pct */
+  var verdictHtml = '';
+  (function(){
+    var bep = s.break_even_pct;
+    var lines = [];
+    if(bep == null){
+      lines.push('<div class="be-verdict be-warn">🟡 COST DATA MISSING — caution</div>');
+    }else{
+      var bepStr = bep.toFixed(2);
+      if(bep < BE_THRESHOLD_CHEAP){
+        lines.push('<div class="be-verdict be-good">🟢 CHEAP ENTRY — needs only '+bepStr+'% to profit</div>');
+      }else if(bep <= BE_THRESHOLD_EXPENSIVE){
+        lines.push('<div class="be-verdict be-warn">🟡 OK ENTRY — needs '+bepStr+'% to profit</div>');
+      }else{
+        lines.push('<div class="be-verdict be-bad">🔴 EXPENSIVE — needs '+bepStr+'% to profit, consider skipping</div>');
+      }
+    }
+    if(s.funding_applies === 1 && s.funding_cost_bps != null && s.minutes_to_funding != null){
+      var mtfMin = Math.round(s.minutes_to_funding);
+      var fbAbsPct = Math.abs(s.funding_cost_bps) / 100;
+      if(s.funding_cost_bps > 0){
+        lines.push('<div class="be-funding be-bad">⏰ Funding settles in '+mtfMin+' min — adds '+fbAbsPct.toFixed(2)+'% cost</div>');
+      }else if(s.funding_cost_bps < 0){
+        lines.push('<div class="be-funding be-good">⏰ Funding settles in '+mtfMin+' min — saves '+fbAbsPct.toFixed(2)+'%</div>');
+      }
+    }
+    verdictHtml = lines.join('');
+  })();
   return '<div class="'+cardCls+'">'
     +'<div class="pc-head">'
       +'<div class="pc-sym-wrap">'
@@ -5993,6 +6156,7 @@ function buildCard(s){
     +'</div>'
     +'<div class="pc-signals">'+signalHtml+'</div>'
     +ezHtml
+    +verdictHtml  /* L_SCHEMA_POPULATE_V3 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
@@ -7149,6 +7313,38 @@ function renderTracker(){
               +'<div class="tk-r-pnl-big '+pnlCls+'">'+pnlSign+currentPnlUsd.toFixed(2)+'</div>'
               +'<div class="tk-r-pnl-pct '+pnlCls+'">'+pctSign+currentPnlPct.toFixed(2)+'%</div>'
             +'</div>'
+            /* L_SCHEMA_POPULATE_V3 — EXIT VERDICT */
+            +(function(){
+              if(t.break_even_price == null || !isFinite(t.break_even_price) || t.break_even_price <= 0) return '';
+              var curPrice = (t.currentPrice != null) ? t.currentPrice : (t.price != null ? t.price : entryPrice);
+              if(!isFinite(curPrice) || curPrice <= 0) return '';
+              var cur_minus_be = dir === 'LONG'
+                ? (curPrice - t.break_even_price) / t.break_even_price * 100
+                : (t.break_even_price - curPrice) / t.break_even_price * 100;
+              var mag = Math.abs(cur_minus_be).toFixed(2);
+              var blocks = [];
+              if(cur_minus_be > 0.10){
+                blocks.push('<div class="be-verdict be-good">🟢 PROFITABLE EXIT — close now for +'+mag+'% net</div>');
+              }else if(cur_minus_be < -0.10){
+                blocks.push('<div class="be-verdict be-bad">🔴 BELOW BREAK-EVEN — needs +'+mag+'% more to exit even</div>');
+              }else{
+                blocks.push('<div class="be-verdict be-warn">🟡 AT BREAK-EVEN — exit roughly flat</div>');
+              }
+              // Recompute minutes_to_funding fresh on each render
+              var mtf = computeMinutesToFunding();
+              if(mtf != null && mtf < 10 && t.fundingRate != null){
+                var willApply = 1;
+                var fbpsMag = Math.abs(t.fundingRate * 100);
+                var longPaysPositive  = (dir === 'LONG'  && t.fundingRate > 0);
+                var shortPaysNegative = (dir === 'SHORT' && t.fundingRate < 0);
+                var fSign = (longPaysPositive || shortPaysNegative) ? 1 : -1;
+                var fbpsSigned = fbpsMag * fSign;
+                var fbpsAbsPct = Math.abs(fbpsSigned) / 100;
+                var verb = fbpsSigned > 0 ? 'cost' : 'save';
+                blocks.push('<div class="be-funding '+(fbpsSigned>0?'be-bad':'be-good')+'">⏰ Funding in '+Math.round(mtf)+' min — would '+verb+' '+fbpsAbsPct.toFixed(2)+'%</div>');
+              }
+              return blocks.join('');
+            })()
             +'<div class="tk-r-stat"><span class="lbl">RRR</span><span class="val">'+rr+' : 1</span></div>'
             +'<div class="tk-r-stat"><span class="lbl">Duration</span><span class="val">'+durTxt+'</span></div>'
             +'<div class="tk-r-mfe-mae">'
