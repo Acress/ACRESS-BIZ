@@ -974,7 +974,10 @@ var SIGNAL_TTL_MS=30*60*1000;       // 30-min signal validity
 var AUTO_REFRESH_MS=5*60*1000;      // 5-min auto-scan cycle
 var SURGICAL_THR=85,HIGH_THR=72;    // score tiers
 var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
-var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','SOL','BNB','XRP'];
+/* L_MEGACAP_V1 — per ACRESS spec §2.3, full 18-name list.
+   Reason: thick orderbook depth absorbs pressure signals before they translate
+   into tradeable price moves on these names. */
+var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','LTC','BCH','NEAR','ATOM','FIL','ICP'];
 var EXCLUDE_BASES_MEGACAPS = (function(){
   try { var v = localStorage.getItem('acress_megacap_excludes');
         return v ? JSON.parse(v) : EXCLUDE_BASES_MEGACAPS_DEFAULT; }
