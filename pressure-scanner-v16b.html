@@ -1812,22 +1812,12 @@ function showRiskGateModal(btn,callback){
   document.body.appendChild(overlay);
   wire();
 }
-var rgApproved=null;
-document.addEventListener('click',function(e){
-  if(!e.target||!e.target.closest)return;
-  var btn=e.target.closest('[data-log-sig]');
-  if(!btn||btn.disabled||btn.classList.contains('tracked'))return;
-  if(typeof isCircuitBreakerActive==='function'&&isCircuitBreakerActive())return;
-  if(rgApproved===btn){rgApproved=null;return;}
-  e.preventDefault();
-  e.stopPropagation();
-  showRiskGateModal(btn,function(confirmed){
-    if(confirmed){
-      rgApproved=btn;
-      setTimeout(function(){btn.click();rgApproved=null;},0);
-    }
-  });
-},true);
+/* L_LOG_DIRECT_V1 — removed the Risk Gate modal interceptor on +Log clicks.
+   Previously, every +Log click opened a confirmation modal before logging.
+   Now the click passes through directly to logSignalById() for one-click logging.
+   The Risk Gate modal function (showRiskGateModal) is preserved — it's still used
+   by the EXECUTE / REVERSE trade buttons via openTradeRiskGate. Only the +Log
+   pre-confirmation is removed. rgApproved variable also removed (no longer needed). */
 
 // ── PULSE FILTERS + COMPOSITE SORT ─────────────────────────────────
 var PULSE_FILTERS_KEY='acress_pulse_filters';
@@ -6215,8 +6205,13 @@ function buildCard(s){
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
       +'<div class="pc-actions">'
         +logBtn
-        +'<a class="pc-act '+dc+'" href="'+bybit+'" target="_blank" rel="noopener">Bybit</a>'
-        +'<a class="pc-act '+dc+'" href="'+bn+'" target="_blank" rel="noopener">Binance</a>'
+        /* L_TRADE_LINK_NEW_TAB_V1 — both anchors open in a new tab (already had
+           target="_blank"); rel upgraded from "noopener" to "noopener noreferrer"
+           so the exchange tab can't read window.opener AND doesn't receive the
+           Referer header. User retains the scanner tab; can open multiple
+           exchange tabs in parallel. */
+        +'<a class="pc-act '+dc+'" href="'+bybit+'" target="_blank" rel="noopener noreferrer">Bybit</a>'
+        +'<a class="pc-act '+dc+'" href="'+bn+'" target="_blank" rel="noopener noreferrer">Binance</a>'
       +'</div>'
     +'</div>'
   +'</div>';
