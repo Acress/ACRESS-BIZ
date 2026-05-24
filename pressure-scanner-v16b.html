@@ -1158,6 +1158,161 @@ function recomputeVelocityScores(arr){
     live[k].velocity.score = Math.round(composite * 100);
   }
 }
+
+/* L_DISPLACEMENT_EFFICIENCY_V1 — Displacement Efficiency Metric.
+   Healthy directional moves have efficient displacement (small effort, large
+   price travel). Manipulative sweeps and absorption events have low efficiency
+   (huge effort, small price travel).
+
+   Window: last 3 × 5m bars = 15 min (uses k5 already in hand from analyzeCoin).
+
+   Formula:
+     priceTravel15m   = abs(close[-1] - open[-3]) / open[-3] * 10000   (bps)
+     aggression15m    = Σ abs(2*bv - qv) over last 3 5m bars
+                        (bv = takerBuyQuoteVolume col 10, qv = quoteVolume col 7)
+     volume15m        = Σ qv over last 3 5m bars
+     oiExpansion15m   = abs(oi[-1] - oi[-4]) when available, else omitted
+
+     Each effort component is normalised to median-of-rolling-baseline using
+     the existing zBuffers infrastructure (4h retention = 48 samples at 5min
+     cadence — V1 choice to match established convention; revisit as 24h
+     extension if 4h proves too noisy).
+
+     composite_effort = mean of normalised components (capped at 3× median
+     each to handle outliers).
+
+     displacement_efficiency_raw = priceTravel15m / max(composite_effort, ε).
+
+   Percentile output: raw value pushed into its own rolling baseline, then
+   percentile rank computed within that buffer. Output 0-100.
+
+   Statuses:
+     'ok'      — pct computed; tier from percentile
+     'pending' — fewer than 4 × 5m bars available
+     'idle'    — composite_effort == 0 (no activity)
+     'warming' — rolling baseline has <12 samples yet
+
+   OI graceful degradation: when oi unavailable (symbol not on Bybit OR
+   fetchOIHist failed in analyzeCoinDiag), the OI term is omitted from
+   the effort composite; aggression+volume alone drive the metric. */
+function _oiArrayFromArg(oiArg) {
+  if (Array.isArray(oiArg)) return oiArg;
+  if (oiArg && Array.isArray(oiArg.oi)) return oiArg.oi;
+  return null;
+}
+function computeDisplacementEfficiency(k5, oiArg, base) {
+  if (!Array.isArray(k5) || k5.length < 4) {
+    return { status: 'pending', pct: null, raw: null };
+  }
+  var bars = k5.slice(-3);
+  var openStart = parseFloat(bars[0][1]);
+  var closeEnd  = parseFloat(bars[2][4]);
+  if (!isFinite(openStart) || openStart <= 0 || !isFinite(closeEnd)) {
+    return { status: 'pending', pct: null, raw: null };
+  }
+  var priceTravelBps = Math.abs(closeEnd - openStart) / openStart * 10000;
+
+  var aggression15m = 0, volume15m = 0;
+  for (var i = 0; i < bars.length; i++) {
+    var qv = parseFloat(bars[i][7]);
+    var bv = parseFloat(bars[i][10]);
+    if (isFinite(qv) && isFinite(bv)) {
+      aggression15m += Math.abs(2 * bv - qv);
+      volume15m += qv;
+    }
+  }
+
+  var oiList = _oiArrayFromArg(oiArg);
+  var oiExpansion15m = null;
+  if (oiList && oiList.length >= 4) {
+    var oiEnd = parseFloat(oiList[oiList.length - 1].sumOpenInterest);
+    var oiStart = parseFloat(oiList[oiList.length - 4].sumOpenInterest);
+    if (isFinite(oiEnd) && isFinite(oiStart)) {
+      oiExpansion15m = Math.abs(oiEnd - oiStart);
+    }
+  }
+
+  // Push current values into rolling baselines (4h retention via existing zBuffers).
+  if (base) {
+    pushBaseline(base, 'eff_agg', aggression15m);
+    pushBaseline(base, 'eff_vol', volume15m);
+    if (oiExpansion15m != null) pushBaseline(base, 'eff_oi', oiExpansion15m);
+  }
+
+  // Normalise each component to (current / rolling median), capped at 3× to dampen outliers.
+  function _normVs(metric, current) {
+    if (!base) return null;
+    var b = getBaseline(base, metric);
+    if (b.vals.length < 6) return null;  // need a handful of samples
+    var sorted = b.vals.slice().sort(function(a, b) { return a - b; });
+    var median = sorted[Math.floor(sorted.length / 2)];
+    if (!isFinite(median) || median <= 0) return null;
+    return Math.min(3, current / median);
+  }
+  var nAgg = _normVs('eff_agg', aggression15m);
+  var nVol = _normVs('eff_vol', volume15m);
+  var nOI  = oiExpansion15m != null ? _normVs('eff_oi', oiExpansion15m) : null;
+
+  var components = [nAgg, nVol, nOI].filter(function(x) { return x != null; });
+  if (!components.length) {
+    return { status: 'warming', pct: null, raw: null, n: 0 };
+  }
+  var compositeEffort = components.reduce(function(s, x) { return s + x; }, 0) / components.length;
+  if (!isFinite(compositeEffort) || compositeEffort <= 0) {
+    return { status: 'idle', pct: null, raw: null };
+  }
+
+  var rawEfficiency = priceTravelBps / Math.max(compositeEffort, 1e-9);
+  if (base) pushBaseline(base, 'eff_raw', rawEfficiency);
+
+  var effBuf = base ? getBaseline(base, 'eff_raw') : null;
+  if (!effBuf || effBuf.vals.length < 12) {
+    return { status: 'warming', pct: null, raw: rawEfficiency, n: effBuf ? effBuf.vals.length : 0 };
+  }
+
+  var rank = 0;
+  for (var j = 0; j < effBuf.vals.length; j++) {
+    if (effBuf.vals[j] < rawEfficiency) rank++;
+  }
+  var pct = Math.round((rank / Math.max(1, effBuf.vals.length - 1)) * 100);
+
+  return {
+    status: 'ok',
+    pct: pct,
+    raw: rawEfficiency,
+    n: effBuf.vals.length,
+    price_travel_bps: priceTravelBps,
+    aggression: aggression15m,
+    volume: volume15m,
+    oi_expansion: oiExpansion15m,
+    composite_effort: compositeEffort,
+    has_oi: oiExpansion15m != null,
+  };
+}
+
+/* L_DISPLACEMENT_EFFICIENCY_CARD_V1 — shared HTML renderer for both the live
+   result card and the tracker card. Reuses .vel-line CSS classes for visual
+   pairing with the velocity score line. */
+function buildEfficiencyHtml(eff, opts) {
+  opts = opts || {};
+  var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
+  if (!eff || eff.status === 'pending') {
+    return '<div class="vel-line vel-gray"' + style + '>Efficiency: pending</div>';
+  }
+  if (eff.status === 'idle') {
+    return '<div class="vel-line vel-gray"' + style + '>Efficiency: idle</div>';
+  }
+  if (eff.status === 'warming') {
+    return '<div class="vel-line vel-gray"' + style + '>Efficiency: warming (' + (eff.n || 0) + '/12)</div>';
+  }
+  if (eff.pct == null) return '';
+  var p = eff.pct, cls, emoji, suffix;
+  if (p >= 70)      { cls = 'vel-green'; emoji = '🟢'; suffix = ' · clean displacement'; }
+  else if (p >= 30) { cls = 'vel-amber'; emoji = '🟡'; suffix = ''; }
+  else              { cls = 'vel-red';   emoji = '🔴'; suffix = ' · absorption/trap risk'; }
+  return '<div class="vel-line ' + cls + '"' + style + '>' + emoji + ' Efficiency <b>' + p + '%</b>' + suffix + '</div>';
+}
+
 var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
@@ -5299,6 +5454,8 @@ async function analyzeCoin(symObj){
        in scope. Composite percentile-rank score is filled in by the post-
        scan recomputeVelocityScores pass once the full universe is in hand. */
     var _vel = computeLiveVelocity(k1, k5, _spr);
+    /* L_DISPLACEMENT_EFFICIENCY_V1 — efficiency uses k5 + oi already in hand. */
+    var _eff = computeDisplacementEfficiency(k5, oi, base);
     return{
       sym:sym,base:base,price:price,chg24:chg24,
       /* L_RANGE_FILTER_REMOVED_V1 */
@@ -5322,6 +5479,8 @@ async function analyzeCoin(symObj){
       break_even_pct: _be.break_even_pct,
       /* L_VELOCITY_SCORE_V1 — live velocity bundle (score filled in post-scan) */
       velocity: _vel,
+      /* L_DISPLACEMENT_EFFICIENCY_V1 */
+      efficiency: _eff,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -5649,6 +5808,9 @@ async function analyzeCoinDiag(symObj,diag){
       break_even_pct: _be.break_even_pct,
       /* L_VELOCITY_SCORE_V1 — live velocity bundle on the diag/emit path. */
       velocity: computeLiveVelocity(k1, k5, _spr),
+      /* L_DISPLACEMENT_EFFICIENCY_V1 — diag/emit path. oiResult shape is
+         {oi:Array|null, aggregated, …}; helper normalises either form. */
+      efficiency: computeDisplacementEfficiency(k5, oiResult, base),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -6681,6 +6843,7 @@ function buildCard(s, moodKey){
     +ezHtml
     +verdictHtml  /* L_SCHEMA_POPULATE_V3 */
     +velocityHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
+    +buildEfficiencyHtml(s.efficiency) /* L_DISPLACEMENT_EFFICIENCY_CARD_V1 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
@@ -7034,6 +7197,18 @@ function logToTracker(s){
       n_1m_klines:      s.velocity.n_1m_klines,
       insufficient:     s.velocity.insufficient,
       logged_at:        Date.now(),
+    } : null,
+    /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 — freeze efficiency at log time
+       so the tracker can later compare entry vs current (deteriorating
+       structure warning if now drops ≥20pp below entry). */
+    efficiency: s.efficiency ? {
+      status:          s.efficiency.status,
+      pct:             s.efficiency.pct,
+      raw:             s.efficiency.raw,
+      has_oi:          s.efficiency.has_oi,
+      price_travel_bps: s.efficiency.price_travel_bps,
+      n:               s.efficiency.n,
+      logged_at:       Date.now(),
     } : null,
     entryPrice:s.entryPrice,originalEntry:s.entryPrice,
     loggedAt:Date.now(),
@@ -7881,6 +8056,37 @@ function renderTracker(){
           tkVelHtml = '<div class="vel-line '+cls+'" style="margin:6px 12px 0;">'+em+' Velocity at log <b>'+sc+'</b> ('+dec+') · '+mfe+' · '+sp+'</div>';
         }
       }
+      /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 — entry-vs-now efficiency. Reads
+         frozen snapshot (t.efficiency) for the entry value and looks up
+         current value from the live signals[] array (by sym). If the
+         symbol is no longer in the live universe, "now: —". If now is
+         ≥20pp below entry, flag with ⚠️ deteriorating. */
+      var tkEffHtml = '';
+      if (t.efficiency) {
+        var teEntry = t.efficiency;
+        var liveSig = (typeof signals !== 'undefined') ? signals.find(function(x){return x.sym === t.sym && x.validUntil > Date.now();}) : null;
+        var teNow = (liveSig && liveSig.efficiency) ? liveSig.efficiency : null;
+        var entryPctTxt = (teEntry.status === 'ok' && teEntry.pct != null) ? (teEntry.pct + '%') : (teEntry.status === 'warming' ? 'warming' : teEntry.status === 'pending' ? 'pending' : teEntry.status === 'idle' ? 'idle' : '—');
+        var nowPctTxt;
+        var warn = '';
+        var cls2;
+        if (!teNow) {
+          nowPctTxt = '—';
+          cls2 = 'vel-gray';
+        } else if (teNow.status !== 'ok' || teNow.pct == null) {
+          nowPctTxt = teNow.status === 'warming' ? 'warming' : teNow.status === 'pending' ? 'pending' : teNow.status === 'idle' ? 'idle' : '—';
+          cls2 = 'vel-gray';
+        } else {
+          nowPctTxt = teNow.pct + '%';
+          if (teEntry.status === 'ok' && teEntry.pct != null && (teEntry.pct - teNow.pct) >= 20) {
+            warn = ' ⚠️ deteriorating';
+            cls2 = 'vel-red';
+          } else if (teNow.pct >= 70) { cls2 = 'vel-green'; }
+          else if (teNow.pct >= 30)   { cls2 = 'vel-amber'; }
+          else                         { cls2 = 'vel-red'; }
+        }
+        tkEffHtml = '<div class="vel-line '+cls2+'" style="margin:6px 12px 0;">Efficiency at entry: <b>'+entryPctTxt+'</b> · now: <b>'+nowPctTxt+'</b>'+warn+'</div>';
+      }
       html+='<div class="'+rowCls+'">'
         // Header bar
         +'<div class="tk-r-header">'
@@ -7895,6 +8101,7 @@ function renderTracker(){
         // v16+ — provenance row (score, mechanism, regime, gates)
         +provHtml
         +tkVelHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
+        +tkEffHtml /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 */
         +buildPulseWidget(t.mech||'Unknown',t.dir||'LONG')
         // Body: 3 columns
         +'<div class="tk-r-body">'
