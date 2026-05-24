@@ -1292,18 +1292,22 @@ function computeDisplacementEfficiency(k5, oiArg, base) {
 
 /* L_DISPLACEMENT_EFFICIENCY_CARD_V1 — shared HTML renderer for both the live
    result card and the tracker card. Reuses .vel-line CSS classes for visual
-   pairing with the velocity score line. */
+   pairing with the velocity score line.
+   Copy refinement: gray-state strings use plain English with time context
+   where applicable. See CLAUDE.md "Status Strings — Plain English Or Don't
+   Ship". 90s scan cadence → countdown = ceil((12 - n_samples) * 1.5) minutes. */
 function buildEfficiencyHtml(eff, opts) {
   opts = opts || {};
   var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
   if (!eff || eff.status === 'pending') {
-    return '<div class="vel-line vel-gray"' + style + '>Efficiency: pending</div>';
+    return '<div class="vel-line vel-gray"' + style + '>Efficiency: not enough price history yet</div>';
   }
   if (eff.status === 'idle') {
-    return '<div class="vel-line vel-gray"' + style + '>Efficiency: idle</div>';
+    return '<div class="vel-line vel-gray"' + style + '>Efficiency: coin not moving — no recent activity</div>';
   }
   if (eff.status === 'warming') {
-    return '<div class="vel-line vel-gray"' + style + '>Efficiency: warming (' + (eff.n || 0) + '/12)</div>';
+    var minsRemaining = Math.max(1, Math.ceil((12 - (eff.n || 0)) * 90 / 60));
+    return '<div class="vel-line vel-gray"' + style + '>Efficiency: gathering data (' + minsRemaining + ' min until ready)</div>';
   }
   if (eff.pct == null) return '';
   var p = eff.pct, cls, emoji, suffix;
@@ -8058,23 +8062,41 @@ function renderTracker(){
       }
       /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 — entry-vs-now efficiency. Reads
          frozen snapshot (t.efficiency) for the entry value and looks up
-         current value from the live signals[] array (by sym). If the
-         symbol is no longer in the live universe, "now: —". If now is
-         ≥20pp below entry, flag with ⚠️ deteriorating. */
+         current value from the live signals[] array (by sym). Copy uses
+         plain English on every gray state (see CLAUDE.md "Status Strings —
+         Plain English Or Don't Ship"). "Not currently tracked" reserved for
+         the case where the symbol has dropped out of the live scan universe
+         (most often: signal expired). Warming countdown computed at 90s
+         scan cadence: ceil((12 - n) * 1.5) minutes. */
       var tkEffHtml = '';
       if (t.efficiency) {
         var teEntry = t.efficiency;
         var liveSig = (typeof signals !== 'undefined') ? signals.find(function(x){return x.sym === t.sym && x.validUntil > Date.now();}) : null;
         var teNow = (liveSig && liveSig.efficiency) ? liveSig.efficiency : null;
-        var entryPctTxt = (teEntry.status === 'ok' && teEntry.pct != null) ? (teEntry.pct + '%') : (teEntry.status === 'warming' ? 'warming' : teEntry.status === 'pending' ? 'pending' : teEntry.status === 'idle' ? 'idle' : '—');
-        var nowPctTxt;
-        var warn = '';
-        var cls2;
+        // Entry-side text — frozen snapshot, no time-context applicable
+        var entryPctTxt;
+        if (teEntry.status === 'ok' && teEntry.pct != null) entryPctTxt = teEntry.pct + '%';
+        else if (teEntry.status === 'warming') entryPctTxt = 'still gathering at log time';
+        else if (teEntry.status === 'pending') entryPctTxt = 'no history at log time';
+        else if (teEntry.status === 'idle')    entryPctTxt = 'coin idle at log time';
+        else                                    entryPctTxt = '—';
+        // Now-side text — live, may carry countdown
+        var nowPctTxt, warn = '', cls2;
         if (!teNow) {
-          nowPctTxt = '—';
+          nowPctTxt = 'not currently tracked';
           cls2 = 'vel-gray';
-        } else if (teNow.status !== 'ok' || teNow.pct == null) {
-          nowPctTxt = teNow.status === 'warming' ? 'warming' : teNow.status === 'pending' ? 'pending' : teNow.status === 'idle' ? 'idle' : '—';
+        } else if (teNow.status === 'warming') {
+          var mn = Math.max(1, Math.ceil((12 - (teNow.n || 0)) * 90 / 60));
+          nowPctTxt = 'gathering data (' + mn + ' min until ready)';
+          cls2 = 'vel-gray';
+        } else if (teNow.status === 'pending') {
+          nowPctTxt = 'not enough price history yet';
+          cls2 = 'vel-gray';
+        } else if (teNow.status === 'idle') {
+          nowPctTxt = 'coin not moving — no recent activity';
+          cls2 = 'vel-gray';
+        } else if (teNow.pct == null) {
+          nowPctTxt = '—';
           cls2 = 'vel-gray';
         } else {
           nowPctTxt = teNow.pct + '%';
