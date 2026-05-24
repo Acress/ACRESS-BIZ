@@ -976,7 +976,10 @@ input{font-family:var(--font-ui);}
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────
 var SIGNAL_TTL_MS=30*60*1000;       // 30-min signal validity
-var AUTO_REFRESH_MS=5*60*1000;      // 5-min auto-scan cycle
+/* L_CADENCE_90 — scan cadence 5min → 90s for fresher signals. CPU baseline
+   was ~8.6% / mem 58% at 5min cadence; 3× scan rate is well within the 70%
+   sustained target. Revert if CPU > 85% sustained or new error patterns. */
+var AUTO_REFRESH_MS=90*1000;       // 90s auto-scan cycle (was 5min)
 var SURGICAL_THR=85,HIGH_THR=72;    // score tiers
 /* L_SCHEMA_POPULATE_V3 — break-even / cost-model constants */
 const FEE_BPS_CONSTANT = 11;          // L_FEE_BPS — Bybit V5 round-trip taker (0.11%)
