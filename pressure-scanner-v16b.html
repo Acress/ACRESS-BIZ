@@ -743,6 +743,28 @@ input{font-family:var(--font-ui);}
         <option value="all">All</option>
       </select>
     </div>
+    <!-- L_FILTER_UI_REGIME_OI_SYMBOL_V1 — three new filter selects backed by
+         /api/filter_options. Option lists are populated at runtime from the
+         DB universe (last 7 days). Each filter is independent and AND-combined
+         with the existing direction/mechanism/score filters in renderResults. -->
+    <div class="cfg-group">
+      <span>Regime</span>
+      <select id="regime-filter" onchange="renderResults()" style="max-width:160px;">
+        <option value="all">All</option>
+      </select>
+    </div>
+    <div class="cfg-group">
+      <span>OI stage</span>
+      <select id="oi-stage-filter" onchange="renderResults()" style="max-width:140px;">
+        <option value="all">All</option>
+      </select>
+    </div>
+    <div class="cfg-group">
+      <span>Symbol</span>
+      <select id="symbol-filter" onchange="renderResults()" style="max-width:180px;">
+        <option value="all">All</option>
+      </select>
+    </div>
     <div class="cfg-group">
       <span>Sort</span>
       <select id="scanner-sort" onchange="renderResults()">
@@ -3862,6 +3884,54 @@ function refreshMechFilter(){
   }
 }
 
+/* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — populators for the three new filter
+   dropdowns. Each pulls its option list from filterOptionsCache (loaded by
+   loadFilterOptions on init + every 5 min). Each preserves the user's prior
+   selection if the value still exists in the new option set. Counts shown in
+   labels are from the DB cohort (last 7d), not in-memory — these dimensions
+   don't have a meaningful "live count" the way mechanism does. */
+function refreshRegimeFilter(){
+  var sel=document.getElementById('regime-filter');if(!sel)return;
+  var list=(filterOptionsCache&&Array.isArray(filterOptionsCache.regimes))?filterOptionsCache.regimes:[];
+  var current=sel.value;
+  var opts=['<option value="all">All regimes</option>'];
+  list.forEach(function(r){
+    opts.push('<option value="'+String(r.name).replace(/"/g,'&quot;')+'">'+r.name+' ('+r.n+')</option>');
+  });
+  sel.innerHTML=opts.join('');
+  var existing=list.some(function(r){return r.name===current;});
+  if(current==='all'){sel.value='all';}
+  else if(existing){sel.value=current;}
+}
+function refreshOiStageFilter(){
+  var sel=document.getElementById('oi-stage-filter');if(!sel)return;
+  var list=(filterOptionsCache&&Array.isArray(filterOptionsCache.oi_stages))?filterOptionsCache.oi_stages:[];
+  var current=sel.value;
+  var opts=['<option value="all">All</option>'];
+  list.forEach(function(r){
+    opts.push('<option value="'+String(r.name).replace(/"/g,'&quot;')+'">'+r.name+' ('+r.n+')</option>');
+  });
+  sel.innerHTML=opts.join('');
+  var existing=list.some(function(r){return r.name===current;});
+  if(current==='all'){sel.value='all';}
+  else if(existing){sel.value=current;}
+}
+function refreshSymbolFilter(){
+  var sel=document.getElementById('symbol-filter');if(!sel)return;
+  var list=(filterOptionsCache&&Array.isArray(filterOptionsCache.bases))?filterOptionsCache.bases:[];
+  var current=sel.value;
+  // Symbols are alphabetised for browser type-ahead navigation.
+  var sorted=list.slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+  var opts=['<option value="all">All ('+list.length+' symbols, 7d)</option>'];
+  sorted.forEach(function(r){
+    opts.push('<option value="'+String(r.name).replace(/"/g,'&quot;')+'">'+r.name+' ('+r.n+')</option>');
+  });
+  sel.innerHTML=opts.join('');
+  var existing=sorted.some(function(r){return r.name===current;});
+  if(current==='all'){sel.value='all';}
+  else if(existing){sel.value=current;}
+}
+
 
 // ── CONNECTIVITY DIAGNOSTIC ────────────────────────────────────────
 async function runDiagnostic(){
@@ -5557,6 +5627,16 @@ function renderResults(){invalidateMechanismStats();
   var dirFilter=document.getElementById('dir-filter').value;
   var mechFilterEl=document.getElementById('mech-filter');
   var mechFilter=mechFilterEl?mechFilterEl.value:'all';
+  /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — three additional filters. AND-combined
+     with the existing dir/mech/score filters. Each guards against the select
+     being absent (defensive — they always exist post-init, but renderResults
+     can run before any post-init code so be safe). */
+  var regimeFilterEl=document.getElementById('regime-filter');
+  var regimeFilter=regimeFilterEl?regimeFilterEl.value:'all';
+  var oiStageFilterEl=document.getElementById('oi-stage-filter');
+  var oiStageFilter=oiStageFilterEl?oiStageFilterEl.value:'all';
+  var symbolFilterEl=document.getElementById('symbol-filter');
+  var symbolFilter=symbolFilterEl?symbolFilterEl.value:'all';
   // Cull expired
   signals=signals.filter(function(s){return s.validUntil>Date.now()-120000;});
   var live=signals.filter(function(s){return s.validUntil>Date.now();});
@@ -5576,6 +5656,16 @@ function renderResults(){invalidateMechanismStats();
   if(dirFilter==='long')filtered=filtered.filter(function(s){return s.dir==='LONG';});
   if(dirFilter==='short')filtered=filtered.filter(function(s){return s.dir==='SHORT';});
   if(mechFilter&&mechFilter!=='all')filtered=filtered.filter(function(s){return s.mechanism&&s.mechanism.name===mechFilter;});
+  /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — apply the new filters. For OI stage,
+     'untagged' matches signals where s.oiStage is null/undefined (the DB
+     stores those as NULL and the endpoint surfaces them via
+     COALESCE → 'untagged'). */
+  if(regimeFilter&&regimeFilter!=='all')filtered=filtered.filter(function(s){return s.regimeKind===regimeFilter;});
+  if(oiStageFilter&&oiStageFilter!=='all'){
+    if(oiStageFilter==='untagged')filtered=filtered.filter(function(s){return !s.oiStage;});
+    else filtered=filtered.filter(function(s){return s.oiStage===oiStageFilter;});
+  }
+  if(symbolFilter&&symbolFilter!=='all')filtered=filtered.filter(function(s){return s.base===symbolFilter;});
   if(!filtered.length){
     // v16b — Honor the user's filter. If nothing matches, show empty state.
     // The old "diagnostic fallback" that showed top 8 cards regardless of
@@ -7630,6 +7720,10 @@ try{
   loadFilterOptions().then(function(){
     try{refreshMechFilter();}catch(e){}
     try{refreshTkMechFilter();}catch(e){}
+    /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — populate the three new filter selects */
+    try{refreshRegimeFilter();}catch(e){}
+    try{refreshOiStageFilter();}catch(e){}
+    try{refreshSymbolFilter();}catch(e){}
     console.log('[FilterOptions] loaded · '+filterOptionsCache.mechs.length+' mechs, '+filterOptionsCache.regimes.length+' regimes, '+filterOptionsCache.bases.length+' bases (last 7d)');
   }).catch(function(){});
   setInterval(function(){
@@ -7637,6 +7731,9 @@ try{
     loadFilterOptions().then(function(){
       try{refreshMechFilter();}catch(e){}
       try{refreshTkMechFilter();}catch(e){}
+      try{refreshRegimeFilter();}catch(e){}
+      try{refreshOiStageFilter();}catch(e){}
+      try{refreshSymbolFilter();}catch(e){}
     }).catch(function(){});
   }, 5 * 60 * 1000);
 }catch(e){console.warn('[Acress] init: filter options',e.message);}
