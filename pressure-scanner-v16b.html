@@ -1138,7 +1138,7 @@ function buildMarketMoodBanner(){
     }
   }
   if(counts.total===0){
-    /* Disconnected message — see L_DISCONNECTED_BANNER_V1 in Analysis-tab block.
+    /* Disconnected message — mirrors the Analysis-tab disconnected banner.
        Replaces silent empty render with an actionable "VPS not connected" notice. */
     if(window.VPS && !window.VPS.isActive()){
       return '<div class="market-mood-banner mood-dead">'+
