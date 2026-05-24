@@ -1137,7 +1137,17 @@ function buildMarketMoodBanner(){
       else counts.notEnoughData++;
     }
   }
-  if(counts.total===0)return '';
+  if(counts.total===0){
+    /* L_DISCONNECTED_BANNER_V1 — replace silent empty render with an actionable
+       "VPS not connected" message so the user knows why the banner is blank. */
+    if(window.VPS && !window.VPS.isActive()){
+      return '<div class="market-mood-banner mood-dead">'+
+        '<span class="mood-label">⚠ VPS DISCONNECTED</span>'+
+        '<span class="mood-msg">Mechanism performance unavailable. Open Settings to configure the VPS URL, then click Save &amp; Test. Auto-retry runs every 60s.</span>'+
+      '</div>';
+    }
+    return '';
+  }
   var populated=counts.tradeIt+counts.wait+counts.skip;
   var populatedRatio=populated/counts.total;
   var tradeItPct=populated>0?counts.tradeIt/populated*100:0;
@@ -8349,16 +8359,42 @@ window.VPS = {
     var self = this;
     // Test connection if previously enabled
     var cfg = this.getConfig();
-    if (cfg.enabled && cfg.url && cfg.apiKey){
-      this.testConnection().then(function(res){
-        self.repaintStatusPill();
-        if (res.ok){
-          // Refresh analytics with VPS data if the page is already open
-          if (typeof renderAnalytics === 'function'){
-            try { renderAnalytics(); } catch(e){}
+    /* L_AUTOCONNECT_V2 — apiKey only needed for POST /api/import; GETs work without it */
+    if (cfg.enabled && cfg.url){
+      var attemptConnect = function(){
+        return self.testConnection().then(function(res){
+          self.repaintStatusPill();
+          if (res.ok){
+            // Refresh analytics with VPS data if the page is already open
+            if (typeof renderAnalytics === 'function'){
+              try { renderAnalytics(); } catch(e){}
+            }
+            // Re-render Analysis tab if it's already on screen — clears the disconnected banner
+            if (typeof window.renderAnalysisPage === 'function'){
+              try { window.renderAnalysisPage(); } catch(e){}
+            }
+            // Re-render market mood banner now that pulse data can flow
+            if (typeof renderMarketMoodBanner === 'function'){
+              try { renderMarketMoodBanner(); } catch(e){}
+            }
+          } else {
+            console.warn('[VPS] connect failed:', res.error);
           }
-        } else {
-          console.warn('[VPS] auto-connect failed:', res.error);
+          return res.ok;
+        });
+      };
+      attemptConnect().then(function(ok){
+        /* L_AUTOCONNECT_RETRY_V1 — if first attempt failed, retry every 60s until it succeeds.
+           Self-heals the system from transient bridge unavailability at page-load time. */
+        if (!ok){
+          var retryInterval = setInterval(function(){
+            attemptConnect().then(function(retryOk){
+              if (retryOk){
+                clearInterval(retryInterval);
+                console.log('[VPS] auto-reconnect succeeded after retry');
+              }
+            });
+          }, 60000);
         }
       });
     } else {
@@ -8581,6 +8617,22 @@ function openDrilldownFromVPSAnalytics(idx){
   window.renderAnalysisPage = function(){
     var page = document.getElementById('page-analysis');
     if (!page) return;
+
+    /* L_DISCONNECTED_BANNER_V1 — inject (or clear) a visible "VPS not connected"
+       notice at the top of the Analysis tab so the empty state is self-explanatory. */
+    var disconnectedBanner = page.querySelector('.analysis-disconnected-banner');
+    var isConnected = !!(window.VPS && window.VPS.isActive());
+    if (!isConnected){
+      if (!disconnectedBanner){
+        disconnectedBanner = document.createElement('div');
+        disconnectedBanner.className = 'analysis-disconnected-banner';
+        disconnectedBanner.style.cssText = 'padding:14px 18px;margin:0 0 14px 0;background:rgba(255,170,0,.12);border:1px solid var(--amber);border-radius:6px;color:var(--amber);font-family:var(--font-mono);font-size:12px;line-height:1.5;';
+        disconnectedBanner.innerHTML = '⚠ <b>VPS not connected.</b> Open the Settings panel, set the VPS URL, and click <b>Save &amp; Test</b>. Auto-retry runs every 60s — this banner clears once the connection succeeds.';
+        page.insertBefore(disconnectedBanner, page.firstChild);
+      }
+    } else if (disconnectedBanner){
+      disconnectedBanner.remove();
+    }
 
     if (window.VPS && window.VPS.isActive()){
       return renderAnalysisPageFromVPS().catch(function(e){
