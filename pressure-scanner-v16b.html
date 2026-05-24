@@ -90,6 +90,12 @@ input{font-family:var(--font-ui);}
 .be-verdict.be-good,.be-funding.be-good{background:rgba(46,200,120,0.12);color:#34c97a;border:1px solid rgba(46,200,120,0.30);}
 .be-verdict.be-warn,.be-funding.be-warn{background:rgba(240,180,65,0.12);color:#f0b441;border:1px solid rgba(240,180,65,0.30);}
 .be-verdict.be-bad, .be-funding.be-bad {background:rgba(230,80,90,0.12);color:#ff6b78;border:1px solid rgba(230,80,90,0.30);}
+/* L_VELOCITY_CARD_DISPLAY_V1 — single-line velocity readout (score · decile · expected MFE/TTM · spread). */
+.vel-line{font-family:var(--font-mono);font-size:10.5px;font-weight:600;padding:5px 8px;border-radius:4px;margin-top:4px;line-height:1.3;}
+.vel-line.vel-green{background:rgba(46,200,120,0.12);color:#34c97a;border:1px solid rgba(46,200,120,0.30);}
+.vel-line.vel-amber{background:rgba(240,180,65,0.12);color:#f0b441;border:1px solid rgba(240,180,65,0.30);}
+.vel-line.vel-red  {background:rgba(230,80,90,0.12);color:#ff6b78;border:1px solid rgba(230,80,90,0.30);}
+.vel-line.vel-gray {background:rgba(160,160,180,0.08);color:#9aa0b0;border:1px solid rgba(160,160,180,0.20);}
 .entry-zone.extended{border-color:var(--amber);color:var(--amber);}
 .entry-zone .ez-lbl{color:var(--faint);}
 .entry-zone .ez-val{font-weight:700;}
@@ -782,8 +788,12 @@ input{font-family:var(--font-ui);}
     </div>
     <div class="cfg-group">
       <span>Sort</span>
+      <!-- L_VELOCITY_SORT_V1 — default switched to velocity_desc per spec
+           (fastest movers first). All prior options preserved as alternatives. -->
       <select id="scanner-sort" onchange="renderResults()">
-        <option value="score_desc" selected>Score (high → low)</option>
+        <option value="velocity_desc" selected>Velocity (fast → slow)</option>
+        <option value="velocity_asc">Velocity (slow → fast)</option>
+        <option value="score_desc">Score (high → low)</option>
         <option value="score_asc">Score (low → high)</option>
         <option value="mech_asc">Mechanism (A → Z)</option>
         <option value="chg24_desc">24h change (up first)</option>
@@ -1032,6 +1042,122 @@ const SLIPPAGE_BUFFER_BPS = 5;        // L_SLIPPAGE_BUFFER — exit spread widen
 const BE_THRESHOLD_CHEAP = 0.20;      // L_BE_THRESHOLD_CHEAP — total cost < 0.20% = cheap entry
 const BE_THRESHOLD_EXPENSIVE = 0.40;  // L_BE_THRESHOLD_EXPENSIVE — total cost > 0.40% = expensive entry
 const HOLD_DURATION_MIN = 25;         // L_HOLD_DURATION — assumed hold duration for funding-applicability check
+
+/* L_VELOCITY_SCORE_V1 — empirically-derived constants for the velocity rating
+   shown on every result card. Decile boundaries come from the 5-min realized
+   range distribution of 1,333 closed v16b signals (price_history-equipped
+   rows). MFE/TTM medians come from that same per-decile slice. These are
+   data anchors — re-derive from analysis_log when the sample size grows by
+   10x or a regime flip is suspected. */
+const VELOCITY_DECILE_UPPER_BPS = [14.5, 20.6, 26.3, 33.1, 39.9, 49.0, 61.4, 79.6, 115.4]; // 9 boundaries → 10 buckets
+const VELOCITY_DECILE_STATS = [
+  { mfe: 0.18, ttm: 11.5 }, // D1 — slowest, bleed cohort
+  { mfe: 0.21, ttm: 16.6 },
+  { mfe: 0.27, ttm: 16.3 },
+  { mfe: 0.32, ttm: 13.0 },
+  { mfe: 0.44, ttm: 18.4 },
+  { mfe: 0.47, ttm: 12.4 },
+  { mfe: 0.58, ttm: 13.5 },
+  { mfe: 0.81, ttm: 12.4 },
+  { mfe: 1.08, ttm: 12.6 },
+  { mfe: 1.95, ttm: 15.2 }, // D10 — fastest, highest expected MFE
+];
+const VELOCITY_MIN_1M_KLINES = 10;    // sanity: need ≥10 of 15 expected 1m bars
+const VELOCITY_HALTED_MIN_BPS = 1;    // sanity: avg 1m range must exceed 1 bps to count
+function velocityDecileFor(maxFive_bps){
+  if(maxFive_bps == null || !isFinite(maxFive_bps)) return null;
+  for(let i = 0; i < VELOCITY_DECILE_UPPER_BPS.length; i++){
+    if(maxFive_bps < VELOCITY_DECILE_UPPER_BPS[i]) return i + 1;
+  }
+  return 10;
+}
+function velocityColorClass(decile){
+  if(decile == null) return 'vel-gray';
+  if(decile >= 9) return 'vel-green';
+  if(decile >= 5) return 'vel-amber';
+  return 'vel-red';
+}
+function velocityColorEmoji(decile){
+  if(decile == null) return '⚪';
+  if(decile >= 9) return '🟢';
+  if(decile >= 5) return '🟡';
+  return '🔴';
+}
+/* L_VELOCITY_SCORE_V1 — single source-of-truth for the live velocity bundle.
+   Called from analyzeCoin and analyzeCoinDiag. velocity_score (0-100) is
+   left null here; the post-scan percentile-rank pass fills it in. */
+function computeLiveVelocity(k1, k5, spreadBps){
+  var avg1m = null, max5m = null, nBars1m = 0;
+  if(Array.isArray(k1) && k1.length){
+    var bars1 = k1.slice(-15), sum = 0, count = 0;
+    for(var i = 0; i < bars1.length; i++){
+      var hi = parseFloat(bars1[i][2]), lo = parseFloat(bars1[i][3]);
+      if(isFinite(hi) && isFinite(lo) && lo > 0){
+        sum += (hi - lo) / lo * 10000;
+        count++;
+      }
+    }
+    nBars1m = count;
+    avg1m = count ? sum / count : null;
+  }
+  if(Array.isArray(k5) && k5.length){
+    var bars5 = k5.slice(-12), mx = 0;
+    for(var j = 0; j < bars5.length; j++){
+      var op = parseFloat(bars5[j][1]), cl = parseFloat(bars5[j][4]);
+      if(isFinite(op) && isFinite(cl) && op > 0){
+        var move = Math.abs(cl - op) / op * 10000;
+        if(move > mx) mx = move;
+      }
+    }
+    max5m = mx;
+  }
+  var insufficient = (nBars1m < VELOCITY_MIN_1M_KLINES) || (avg1m == null) || (avg1m < VELOCITY_HALTED_MIN_BPS);
+  var decile = insufficient ? null : velocityDecileFor(max5m);
+  var stats  = (decile != null) ? VELOCITY_DECILE_STATS[decile - 1] : null;
+  return {
+    avg_1m_bps: avg1m,
+    max_5m_bps: max5m,
+    spread_bps: spreadBps,
+    n_1m_klines: nBars1m,
+    insufficient: insufficient,
+    decile: decile,
+    expected_mfe_pct: stats ? stats.mfe : null,
+    expected_ttm_min: stats ? stats.ttm : null,
+    score: null,
+  };
+}
+/* L_VELOCITY_SCORE_V1 — post-scan percentile-rank pass. Composite:
+   0.4*pct_rank(avg_1m) + 0.4*pct_rank(max_5m) + 0.2*(1 - pct_rank(spread)).
+   Spread inverted so low-spread is better. score in [0,100]. Operates on
+   the live signals array in place. */
+function recomputeVelocityScores(arr){
+  var live = arr.filter(function(s){ return s && s.velocity && !s.velocity.insufficient; });
+  if(live.length < 2){
+    // not enough population to rank — leave scores null, card display falls back to decile only
+    return;
+  }
+  var collect = function(getter){
+    var idx = live.map(function(s, i){ return { v: getter(s), i: i }; })
+                  .filter(function(e){ return e.v != null && isFinite(e.v); })
+                  .sort(function(a, b){ return a.v - b.v; });
+    var ranks = new Array(live.length).fill(null);
+    idx.forEach(function(entry, rank){
+      ranks[entry.i] = idx.length > 1 ? rank / (idx.length - 1) : 0.5;
+    });
+    return ranks;
+  };
+  var r_avg1m = collect(function(s){ return s.velocity.avg_1m_bps; });
+  var r_max5m = collect(function(s){ return s.velocity.max_5m_bps; });
+  var r_spread = collect(function(s){ return s.velocity.spread_bps; });
+  for(var k = 0; k < live.length; k++){
+    var ra = r_avg1m[k], rm = r_max5m[k], rs = r_spread[k];
+    if(ra == null && rm == null && rs == null){ live[k].velocity.score = null; continue; }
+    var composite = 0.4 * (ra != null ? ra : 0.5)
+                  + 0.4 * (rm != null ? rm : 0.5)
+                  + 0.2 * (1 - (rs != null ? rs : 0.5));
+    live[k].velocity.score = Math.round(composite * 100);
+  }
+}
 var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
@@ -5169,6 +5295,10 @@ async function analyzeCoin(symObj){
     var _dist = distFrom5mExtremes(k5, price);
     var _mtf  = computeMinutesToFunding();
     var _be   = computeBreakEven(result.dir, price, _fr, _spr, _mtf);
+    /* L_VELOCITY_SCORE_V1 — live velocity bundle; helper uses k1/k5 already
+       in scope. Composite percentile-rank score is filled in by the post-
+       scan recomputeVelocityScores pass once the full universe is in hand. */
+    var _vel = computeLiveVelocity(k1, k5, _spr);
     return{
       sym:sym,base:base,price:price,chg24:chg24,
       /* L_RANGE_FILTER_REMOVED_V1 */
@@ -5190,6 +5320,8 @@ async function analyzeCoin(symObj){
       funding_cost_bps: _be.funding_cost_bps,
       break_even_price: _be.break_even_price,
       break_even_pct: _be.break_even_pct,
+      /* L_VELOCITY_SCORE_V1 — live velocity bundle (score filled in post-scan) */
+      velocity: _vel,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -5291,6 +5423,10 @@ async function runScan(){
     }));
     setProgress('Analyzed '+checked+'/'+pool.length+' · OI:'+diagnostics.oiPass+' · Taker:'+diagnostics.takerPass+' · MTF:'+diagnostics.mtfPass+' · CVD:'+diagnostics.cvdPass+' · Sweep:'+diagnostics.sweepPass+' · ×Bybit:'+diagnostics.aggregatedOI+' · '+signals.filter(function(s){return s.validUntil>Date.now();}).length+' live signals');
   }
+  /* L_VELOCITY_SCORE_V1 — fill in the percentile-rank composite score
+     across the full live universe before rendering. Must run before
+     renderResults so velocity_desc sort and card display see the score. */
+  try { recomputeVelocityScores(signals); } catch(e) { console.warn('[Acress] velocity rank pass err:', e.message); }
   signals.sort(function(a,b){return b.score-a.score;});
   diagnostics.topScores.sort(function(a,b){return b.score-a.score;});
   window._lastDiagnostics=diagnostics;
@@ -5511,6 +5647,8 @@ async function analyzeCoinDiag(symObj,diag){
       funding_cost_bps: _be.funding_cost_bps,
       break_even_price: _be.break_even_price,
       break_even_pct: _be.break_even_pct,
+      /* L_VELOCITY_SCORE_V1 — live velocity bundle on the diag/emit path. */
+      velocity: computeLiveVelocity(k1, k5, _spr),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -5564,7 +5702,27 @@ function toast(msg,kind){
 // ════════════════════════════════════════════════════════════════════
 function sortSignalsBy(arr,key){
   var a=arr.slice();
+  /* L_VELOCITY_SORT_V1 — velocity_desc / velocity_asc sort by composite
+     velocity score with nulls (insufficient-data cards) pushed to the
+     bottom in both directions. */
+  var velOf = function(s){ return (s && s.velocity && s.velocity.score != null) ? s.velocity.score : null; };
   switch(key){
+    case 'velocity_desc':
+      return a.sort(function(x,y){
+        var vx=velOf(x), vy=velOf(y);
+        if(vx==null && vy==null) return (y.score||0)-(x.score||0); // tie-break on signal score
+        if(vx==null) return 1;
+        if(vy==null) return -1;
+        return vy - vx;
+      });
+    case 'velocity_asc':
+      return a.sort(function(x,y){
+        var vx=velOf(x), vy=velOf(y);
+        if(vx==null && vy==null) return (y.score||0)-(x.score||0);
+        if(vx==null) return 1;
+        if(vy==null) return -1;
+        return vx - vy;
+      });
     case 'score_desc':return a.sort(function(x,y){return y.score-x.score;});
     case 'score_asc':return a.sort(function(x,y){return x.score-y.score;});
     case 'mech_asc':return a.sort(function(x,y){return ((x.mechanism&&x.mechanism.name)||'').localeCompare((y.mechanism&&y.mechanism.name)||'');});
@@ -5572,7 +5730,13 @@ function sortSignalsBy(arr,key){
     case 'chg24_asc':return a.sort(function(x,y){return (x.chg24||0)-(y.chg24||0);});
     case 'recent':return a.sort(function(x,y){return (y.loggedAt||0)-(x.loggedAt||0);});
     case 'sym_asc':return a.sort(function(x,y){return (x.base||x.sym||'').localeCompare(y.base||y.sym||'');});
-    default:return a.sort(function(x,y){return y.score-x.score;});
+    default:return a.sort(function(x,y){
+      var vx=velOf(x), vy=velOf(y);
+      if(vx==null && vy==null) return (y.score||0)-(x.score||0);
+      if(vx==null) return 1;
+      if(vy==null) return -1;
+      return vy - vx;
+    });
   }
 }
 function pnlForSort(t){
@@ -6475,6 +6639,26 @@ function buildCard(s, moodKey){
     }
     verdictHtml = lines.join('');
   })();
+  /* L_VELOCITY_CARD_DISPLAY_V1 — single velocity line. Format:
+     "🟢 Velocity 87/100 (decile 10) · ~±1.95% / 15min · 2.7 bps spread"
+     Falls back to "insufficient data" when sanity gates fail (halted /
+     too-few klines / unranked because universe < 2). */
+  var velocityHtml = '';
+  (function(){
+    var v = s.velocity;
+    if(!v){ return; }
+    if(v.insufficient){
+      velocityHtml = '<div class="vel-line vel-gray">⚪ Velocity — insufficient data (n_1m_klines='+v.n_1m_klines+', avg='+(v.avg_1m_bps!=null?v.avg_1m_bps.toFixed(1):'—')+'bps)</div>';
+      return;
+    }
+    var emoji = velocityColorEmoji(v.decile);
+    var colorCls = velocityColorClass(v.decile);
+    var scoreTxt = (v.score != null) ? (v.score + '/100') : '—';
+    var decileTxt = (v.decile != null) ? ('decile ' + v.decile) : 'decile —';
+    var mfeTxt = (v.expected_mfe_pct != null) ? ('~±' + v.expected_mfe_pct.toFixed(2) + '% / ' + Math.round(v.expected_ttm_min) + 'min') : '—';
+    var spreadTxt = (v.spread_bps != null) ? (v.spread_bps.toFixed(1) + ' bps spread') : 'spread —';
+    velocityHtml = '<div class="vel-line '+colorCls+'">'+emoji+' Velocity <b>'+scoreTxt+'</b> ('+decileTxt+') · '+mfeTxt+' · '+spreadTxt+'</div>';
+  })();
   return '<div class="'+cardCls+'">'
     +'<div class="pc-head">'
       +'<div class="pc-sym-wrap">'
@@ -6496,6 +6680,7 @@ function buildCard(s, moodKey){
     +'<div class="pc-signals">'+signalHtml+'</div>'
     +ezHtml
     +verdictHtml  /* L_SCHEMA_POPULATE_V3 */
+    +velocityHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
@@ -6835,6 +7020,21 @@ function logToTracker(s){
     holdHours:(s.lateStageOI?(20/60):trackerCfg.hold),
     holdSource:(s.lateStageOI?'oi-late':'cfg-default'),
     chg24AtLog:s.chg24,
+    /* L_VELOCITY_SCORE_V1 — freeze the velocity readout at log time so the
+       tracker card can display the same line later, even after the live
+       signal has expired and the live velocity values have moved on. */
+    velocity: s.velocity ? {
+      score:            s.velocity.score,
+      decile:           s.velocity.decile,
+      avg_1m_bps:       s.velocity.avg_1m_bps,
+      max_5m_bps:       s.velocity.max_5m_bps,
+      spread_bps:       s.velocity.spread_bps,
+      expected_mfe_pct: s.velocity.expected_mfe_pct,
+      expected_ttm_min: s.velocity.expected_ttm_min,
+      n_1m_klines:      s.velocity.n_1m_klines,
+      insufficient:     s.velocity.insufficient,
+      logged_at:        Date.now(),
+    } : null,
     entryPrice:s.entryPrice,originalEntry:s.entryPrice,
     loggedAt:Date.now(),
     positionSize:trackerCfg.position,
@@ -7663,6 +7863,24 @@ function renderTracker(){
       }else{
         provHtml='<div class="tk-r-prov"><div class="tk-r-prov-empty">Signal provenance not captured for this entry (logged before v16+ context capture).</div></div>';
       }
+      /* L_VELOCITY_CARD_DISPLAY_V1 — tracker-side velocity line. Reads the
+         frozen snapshot captured at log time (t.velocity). Entries logged
+         pre-velocity render without this line. */
+      var tkVelHtml = '';
+      if(t.velocity){
+        var tv = t.velocity;
+        if(tv.insufficient){
+          tkVelHtml = '<div class="vel-line vel-gray" style="margin:6px 12px 0;">⚪ Velocity at log — insufficient data</div>';
+        }else{
+          var em = velocityColorEmoji(tv.decile);
+          var cls = velocityColorClass(tv.decile);
+          var sc = (tv.score != null) ? (tv.score + '/100') : '—';
+          var dec = (tv.decile != null) ? ('decile ' + tv.decile) : 'decile —';
+          var mfe = (tv.expected_mfe_pct != null) ? ('~±' + tv.expected_mfe_pct.toFixed(2) + '% / ' + Math.round(tv.expected_ttm_min) + 'min') : '—';
+          var sp  = (tv.spread_bps != null) ? (tv.spread_bps.toFixed(1) + ' bps spread') : 'spread —';
+          tkVelHtml = '<div class="vel-line '+cls+'" style="margin:6px 12px 0;">'+em+' Velocity at log <b>'+sc+'</b> ('+dec+') · '+mfe+' · '+sp+'</div>';
+        }
+      }
       html+='<div class="'+rowCls+'">'
         // Header bar
         +'<div class="tk-r-header">'
@@ -7676,6 +7894,7 @@ function renderTracker(){
         +'</div>'
         // v16+ — provenance row (score, mechanism, regime, gates)
         +provHtml
+        +tkVelHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
         +buildPulseWidget(t.mech||'Unknown',t.dir||'LONG')
         // Body: 3 columns
         +'<div class="tk-r-body">'
