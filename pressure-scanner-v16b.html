@@ -1035,8 +1035,10 @@ var pulseCache = { asOf: 0, byMechDir: {} };
 async function fetchPulse(profile){
   profile = profile || 'v16b';
   var now = Date.now();
-  // Cache for 10 seconds
-  if (pulseCache.asOf && (now - pulseCache.asOf) < 10000){
+  /* L_MOOD_SCANNER_FREQ_V1 — TTL dropped 10000→3000ms so the Mood Banner can
+     re-render at ~3s cadence. Backend /api/stats/pulse responds in ~1-2ms
+     (measured), so this is safe — caching just deduplicates concurrent calls. */
+  if (pulseCache.asOf && (now - pulseCache.asOf) < 3000){
     return pulseCache;
   }
   try {
@@ -7467,6 +7469,10 @@ try{
     if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
     if(typeof renderResults==='function'){try{renderResults();}catch(e){}}
   }).catch(function(){});
+  /* L_MOOD_SCANNER_FREQ_V1 — refresh cadence dropped 10000→3000ms so the
+     Mood Banner reacts to mood flips inside one signal-validity window.
+     Backend /api/stats/pulse responds in ~1-2ms; fetchPulse internal cache
+     (also 3s, see fetchPulse definition above) coalesces overlapping calls. */
   setInterval(function(){
     fetchPulse().then(function(){
       try{renderMarketMoodBanner();renderTopCombosWidget();renderDailyPnlWidget();}catch(e){}
@@ -7476,7 +7482,7 @@ try{
       }
       if(typeof renderTracker==='function'){try{renderTracker();}catch(e){}}
     }).catch(function(){});
-  },10000);
+  },3000);
 }catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
 try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
 try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
