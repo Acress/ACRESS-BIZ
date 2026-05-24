@@ -131,8 +131,21 @@ input{font-family:var(--font-ui);}
 @keyframes cardIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
 .pcard:hover{transform:translateY(-1px);}
 .pcard.surgical{box-shadow:var(--shadow),0 0 0 1px var(--cyan),0 0 20px rgba(65,209,255,.12);}
-.pcard.long{border-top:2px solid var(--green);}
-.pcard.short{border-top:2px solid var(--red);}
+/* L_CARD_BORDER_V1 — directional full-frame borders. Long=green, short=red.
+   Replaces the old border-top stripe so the card reads as a coloured frame.
+   The hover rule above keeps transform but no longer rewrites border-color,
+   so directional identity persists on hover. Tracker rows mirror this
+   treatment via the .tk-row.long/.tk-row.short rules further down. */
+.pcard.long{border:2px solid var(--green);}
+.pcard.short{border:2px solid var(--red);}
+/* L_HIGH_CONF_BORDER_V1 — HIGH CONFIDENCE override (canonical definition).
+   Wins against direction colour. Same class .card-high-confidence is re-asserted
+   inside injectUIPolishCSS, injectTrackerCardCSS, and the .tk-row block so
+   the override survives all three CSS layers (inline static, injected, and
+   tracker-specific). Trigger today: signal.highConfidence === true on the
+   card object (placeholder for Upgrade 13.5 Phase 1 scanner-side rule). */
+.pcard.card-high-confidence,
+.tk-row.card-high-confidence{border-color:#fff !important;}
 .pcard.expired{opacity:.35;pointer-events:none;}
 
 .pc-head{display:flex;align-items:center;justify-content:space-between;padding:8px 11px;background:var(--s2);border-bottom:1px solid var(--border);gap:8px;}
@@ -225,11 +238,13 @@ input{font-family:var(--font-ui);}
 
 .tk-rows{display:flex;flex-direction:column;gap:10px;padding:16px 12px 12px;}
 .tk-row{background:var(--s1);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
-.tk-row.long{border-left:3px solid var(--green);}
-.tk-row.short{border-left:3px solid var(--red);}
-.tk-row.win{border-left-color:var(--green);}
-.tk-row.loss{border-left-color:var(--red);}
-.tk-row.expired{border-left-color:var(--muted);opacity:.7;}
+/* L_CARD_BORDER_V1 — tracker row directional borders, full frame to match
+   the scanner card treatment. win/loss/expired re-color the same border. */
+.tk-row.long{border:2px solid var(--green);}
+.tk-row.short{border:2px solid var(--red);}
+.tk-row.win{border-color:var(--green);}
+.tk-row.loss{border-color:var(--red);}
+.tk-row.expired{border-color:var(--muted);opacity:.7;}
 
 /* Header bar */
 .tk-r-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--s2);border-bottom:1px solid var(--border);flex-wrap:wrap;}
@@ -2455,10 +2470,18 @@ function injectUIPolishCSS(){
     '@media (max-width:820px){#results{grid-template-columns:1fr !important;}}'+
     // Card visual separation
     '.pcard{position:relative !important;border:1px solid rgba(255,255,255,0.08) !important;border-radius:12px !important;background:rgba(20,25,40,0.4) !important;box-shadow:0 2px 10px rgba(0,0,0,0.25) !important;transition:border-color 0.15s,transform 0.15s,box-shadow 0.15s !important;}'+
-    '.pcard:hover{border-color:rgba(255,255,255,0.2) !important;transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.35) !important;}'+
+    /* L_CARD_BORDER_V1 — hover drops border-color override so directional
+       (long/short) and HIGH CONFIDENCE white borders stay stable on hover.
+       Lift + shadow still respond to hover for affordance. */
+    '.pcard:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.35) !important;}'+
     // Direction left-border accent — clear LONG/SHORT signal
-    '.pcard.long{border-left:4px solid var(--green) !important;}'+
-    '.pcard.short{border-left:4px solid var(--red) !important;}'+
+    /* L_CARD_BORDER_V1 — full 2px directional frame (was 4px left stripe).
+       The HIGH CONFIDENCE white-border override is re-asserted here so it
+       wins against the !important directional rules below — canonical
+       marker for that override lives near the static .pcard rules. */
+    '.pcard.long{border:2px solid var(--green) !important;}'+
+    '.pcard.short{border:2px solid var(--red) !important;}'+
+    '.pcard.card-high-confidence{border-color:#fff !important;}'+
     // Direction arrow boosted
     '.pcard .pc-arrow{font-size:18px !important;font-weight:900 !important;}'+
     '.pcard.long .pc-arrow{color:var(--green) !important;text-shadow:0 0 8px rgba(46,232,160,0.5) !important;}'+
@@ -2823,9 +2846,13 @@ function injectTrackerCardCSS(){
   s.id='tracker-card-css';
   s.textContent=
     '#tracker-body > *{position:relative !important;border:1px solid rgba(255,255,255,0.08) !important;border-radius:12px !important;background:rgba(20,25,40,0.45) !important;padding:14px 16px !important;margin-bottom:10px !important;box-shadow:0 2px 10px rgba(0,0,0,0.22) !important;transition:border-color 0.15s,transform 0.15s,box-shadow 0.15s !important;}'+
-    '#tracker-body > *:hover{border-color:rgba(255,255,255,0.2) !important;transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.32) !important;}'+
-    '#tracker-body > *.tk-long{border-left:4px solid var(--green) !important;}'+
-    '#tracker-body > *.tk-short{border-left:4px solid var(--red) !important;}'+
+    /* L_CARD_BORDER_V1 — tracker hover drops border-color override; full
+       directional frame replaces the 4px left stripe. card-high-confidence
+       override re-asserted so it wins against tk-long/tk-short !important. */
+    '#tracker-body > *:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,0.32) !important;}'+
+    '#tracker-body > *.tk-long{border:2px solid var(--green) !important;}'+
+    '#tracker-body > *.tk-short{border:2px solid var(--red) !important;}'+
+    '#tracker-body > *.card-high-confidence{border-color:#fff !important;}'+
     '#tracker-body > *.tk-win{background:linear-gradient(rgba(46,232,160,0.04),rgba(46,232,160,0.04)),rgba(20,25,40,0.45) !important;}'+
     '#tracker-body > *.tk-loss{background:linear-gradient(rgba(255,82,119,0.04),rgba(255,82,119,0.04)),rgba(20,25,40,0.45) !important;}'+
     '#tracker-body > * .pc-arrow,#tracker-body > * [class*="arrow"]{font-weight:900 !important;}'+
@@ -3088,9 +3115,14 @@ body{margin:0;overflow-x:hidden;-webkit-tap-highlight-color:transparent;}
 @media (min-width:1400px){#results{grid-template-columns:repeat(3,minmax(0,1fr)) !important;}}
 
 .pcard{position:relative !important;border-radius:var(--rad-lg) !important;background:rgba(20,25,40,0.45) !important;border:1px solid rgba(255,255,255,0.08) !important;padding:12px 14px !important;box-shadow:0 2px 10px rgba(0,0,0,0.25) !important;min-width:0;word-wrap:break-word;}
-.pcard.long{border-left:4px solid var(--green) !important;}
-.pcard.short{border-left:4px solid var(--red) !important;}
-.pcard:hover{border-color:rgba(255,255,255,0.2) !important;transform:translateY(-1px);}
+/* L_CARD_BORDER_V1 — duplicate-of-injectUIPolishCSS rules kept here as a
+   static fallback (in case the JS injection runs late or fails). Full
+   directional frame, white override for HIGH CONFIDENCE, hover drops the
+   border-color rewrite so directional identity survives interaction. */
+.pcard.long{border:2px solid var(--green) !important;}
+.pcard.short{border:2px solid var(--red) !important;}
+.pcard.card-high-confidence{border-color:#fff !important;}
+.pcard:hover{transform:translateY(-1px);}
 .pcard button,.pcard [role=button]{font-family:ui-monospace,monospace;min-height:30px;}
 .pcard .trade-actions{display:flex;gap:6px;margin-top:8px;}
 .pcard .trade-actions button{flex:1;}
@@ -6386,7 +6418,15 @@ function buildCard(s, moodKey){
      of SKIP-cohort cards. Other tiers carry the class for future styling
      hooks; only mood-skip currently has visual treatment. */
   var moodCls=moodKey?' mood-'+moodKey:'';
-  var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls+moodCls;
+  /* L_CARD_BORDER_V1 — direction class (long/short) already on cardCls drives
+     green/red full-frame border. Additional card-high-confidence class
+     (placeholder trigger below) overrides border to white. Tracker rows have
+     parallel wiring on rowCls. The actual signal.highConfidence flag is the
+     placeholder for Upgrade 13.5 Phase 1's scanner-side rule — it doesn't
+     fire on live signals today because window.signals doesn't carry the
+     bridge-side classification result. */
+  var hcCls=(s.highConfidence===true)?' card-high-confidence':'';
+  var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls+moodCls+hcCls;
   var signalHtml=s.reasons.map(function(r){
     var icon=r.lvl==='ok'?'✓':r.lvl==='partial'?'·':r.lvl==='weak'?'✗':'·';
     return '<div class="psig"><span class="psig-icon '+r.lvl+'">'+icon+'</span><span class="psig-tag">'+r.tag+'</span><span class="psig-text">'+r.text+'</span></div>';
@@ -6469,6 +6509,18 @@ function buildCard(s, moodKey){
         +'<a class="pc-act '+dc+'" href="'+bybit+'" target="_blank" rel="noopener noreferrer">Bybit</a>'
         +'<a class="pc-act '+dc+'" href="'+bn+'" target="_blank" rel="noopener noreferrer">Binance</a>'
       +'</div>'
+    +'</div>'
+    /* L_BUTTON_STABILITY_V1 — EXECUTE / REVERSE buttons now rendered inline
+       in buildCard so they are part of the card's first render and persist
+       across renderResults rebuilds. Previously addTradeButtonsToCard() ran
+       in the 500ms global decorator loop, AFTER each renderResults() wiped
+       innerHTML — leaving up to ~500ms gaps every 3 s when the buttons were
+       absent. That gap was the visible flicker. The decorator's idempotency
+       guard (querySelector('.trade-actions') early-return) still fires, so
+       it now no-ops on every tick — safe redundancy. */
+    +'<div class="trade-actions">'
+      +'<button class="trade-btn" data-trade-sig data-sym="'+s.base+'" data-dir="'+s.dir+'" title="Execute as recommended">⚡ EXECUTE</button>'
+      +'<button class="rev-trade-btn" data-rev-trade-sig data-sym="'+s.base+'" data-dir="'+s.dir+'" title="Execute the OPPOSITE direction">↻ REVERSE</button>'
     +'</div>'
   +'</div>';
 }
@@ -7534,7 +7586,12 @@ function renderTracker(){
       var entryDisplay=status==='open'
         ?'<input class="tk-r-entry-input" type="number" step="any" value="'+entryPrice+'" data-tk-edit-id="'+t.id+'">'
         :'$'+fP(entryPrice);
-      var rowCls='tk-row '+dc+' '+statusInfo.cls;
+      /* L_CARD_BORDER_V1 — append card-high-confidence to rowCls when the
+         tracker entry carries the (placeholder) HIGH CONFIDENCE flag.
+         t.highConfidence will be wired to the real classification when
+         Upgrade 13.5 Phase 1 ships scanner-side. */
+      var tkHcCls=(t.highConfidence===true)?' card-high-confidence':'';
+      var rowCls='tk-row '+dc+' '+statusInfo.cls+tkHcCls;
       // v16 — shape pill only shown for closed trades
       var shapePill=(t.shape&&t.status!=='open')?'<span class="shape-pill '+(t.shapeCls||'warn')+'" title="Trade shape classification — based on price-history trajectory">'+t.shape+'</span>':'';
       // v16+ — SIGNAL PROVENANCE block
