@@ -1091,6 +1091,54 @@ async function fetchPulse(profile){
   }
 }
 
+/* L_FILTER_OPTIONS_FROM_DB_V1 — DB-derived option lists for every filter select.
+   Replaces the per-page, locally-scoped populators that only saw what was in
+   memory (signals[] or tracker[]) and missed rare mechs entirely. Refreshes
+   every 5 minutes; safe-to-cache because adding a new mech to scoreCoin and
+   waiting up to one cycle is acceptable. Bridge endpoint server-side cache
+   is also 5min — so worst-case staleness is ~10min on a freshly-emitted
+   mechanism. */
+var filterOptionsCache = { asOf: 0, mechs: [], regimes: [], oi_stages: [], bases: [], dirs: [], error: null };
+var FILTER_OPTIONS_TTL_MS = 5 * 60 * 1000;
+async function loadFilterOptions(profile){
+  profile = profile || 'v16b';
+  var now = Date.now();
+  if (filterOptionsCache.asOf && (now - filterOptionsCache.asOf) < FILTER_OPTIONS_TTL_MS) {
+    return filterOptionsCache;
+  }
+  try {
+    var vpsUrl = '';
+    if (window.VPS){
+      var cfg = window.VPS.getConfig();
+      if (cfg.enabled && cfg.url && window.VPS.state.connected){
+        vpsUrl = cfg.url.replace(/\/$/, '');
+      }
+    }
+    if (!vpsUrl){
+      filterOptionsCache = { asOf: now, mechs: [], regimes: [], oi_stages: [], bases: [], dirs: [], error: 'VPS not configured' };
+      return filterOptionsCache;
+    }
+    var url = vpsUrl + '/api/filter_options?profile=' + encodeURIComponent(profile) + '&days=7';
+    var resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    filterOptionsCache = {
+      asOf: now,
+      mechs:     Array.isArray(data.mechs)     ? data.mechs     : [],
+      regimes:   Array.isArray(data.regimes)   ? data.regimes   : [],
+      oi_stages: Array.isArray(data.oi_stages) ? data.oi_stages : [],
+      bases:     Array.isArray(data.bases)     ? data.bases     : [],
+      dirs:      Array.isArray(data.dirs)      ? data.dirs      : [],
+      error: null,
+    };
+    return filterOptionsCache;
+  } catch(e){
+    console.warn('[FilterOptions] fetch failed:', e.message);
+    filterOptionsCache = { asOf: now, mechs: [], regimes: [], oi_stages: [], bases: [], dirs: [], error: e.message };
+    return filterOptionsCache;
+  }
+}
+
 function buildPulseWidget(mechName, dir){
   if (!mechName || !dir) return '';
   var key = mechName + '|' + dir;
@@ -3778,16 +3826,40 @@ function logAllVisible(){
   toast('Logged '+visible.length+' signal'+(visible.length===1?'':'s')+(skippedLosing>0?' · skipped '+skippedLosing+' LOSING':''),'ok');
 }
 // v16ab — Populate the mechanism filter from unique mechanism names found in live signals.
+/* L_FILTER_OPTIONS_FROM_DB_V1 — option set comes from filterOptionsCache
+   (DB-derived, last 7d). In-memory live counts become a secondary badge so
+   the user can still see which mechs are firing right now, while every mech
+   that has fired in the last week remains selectable — even ones absent from
+   the current scan. Falls back to the old in-memory-only behaviour if the
+   DB list is empty (first page load before fetch completes, or VPS down). */
 function refreshMechFilter(){
   var sel=document.getElementById('mech-filter');if(!sel)return;
   var live=signals.filter(function(s){return s.validUntil>Date.now()&&s.mechanism;});
-  var mechs={};live.forEach(function(s){mechs[s.mechanism.name]=(mechs[s.mechanism.name]||0)+1;});
+  var liveCounts={};live.forEach(function(s){liveCounts[s.mechanism.name]=(liveCounts[s.mechanism.name]||0)+1;});
   var current=sel.value;
-  var opts=['<option value="all">All mechanisms ('+live.length+')</option>'];
-  Object.keys(mechs).sort().forEach(function(m){opts.push('<option value="'+m.replace(/"/g,'&quot;')+'">'+m+' ('+mechs[m]+')</option>');});
+  var dbMechs=(filterOptionsCache&&Array.isArray(filterOptionsCache.mechs))?filterOptionsCache.mechs:[];
+  var mergedNames;
+  if(dbMechs.length){
+    // DB universe first, then any in-memory-only mechs (defensive — shouldn't happen but harmless)
+    var nameSet={};
+    dbMechs.forEach(function(m){nameSet[m.name]=true;});
+    Object.keys(liveCounts).forEach(function(n){nameSet[n]=true;});
+    mergedNames=Object.keys(nameSet).sort();
+  } else {
+    mergedNames=Object.keys(liveCounts).sort();
+  }
+  var opts=['<option value="all">All mechanisms ('+live.length+' live)</option>'];
+  mergedNames.forEach(function(m){
+    var liveN=liveCounts[m]||0;
+    var label=m+' ('+liveN+' live)';
+    opts.push('<option value="'+m.replace(/"/g,'&quot;')+'">'+label+'</option>');
+  });
   sel.innerHTML=opts.join('');
-  // Preserve user's previous selection if the mechanism is still present
-  if(current&&(current==='all'||mechs[current]))sel.value=current;
+  // Preserve user's previous selection if the mechanism still exists in the option set
+  if(current){
+    if(current==='all'){sel.value='all';}
+    else if(mergedNames.indexOf(current)>=0){sel.value=current;}
+  }
 }
 
 
@@ -7178,15 +7250,35 @@ function trackerPasses(t){
 // ════════════════════════════════════════════════════════════════════
 // v16ab — Tracker mechanism filter + CSV export
 // ════════════════════════════════════════════════════════════════════
+/* L_FILTER_OPTIONS_FROM_DB_V1 — same pattern as refreshMechFilter: DB-derived
+   list of mechs as the option universe; tracker[] gives the in-memory count
+   badge. Tracker has narrower coverage than the live scanner (only manually-
+   logged signals), so the DB list is the bigger win here. */
 function refreshTkMechFilter(){
   var sel=document.getElementById('tk-mech-filter');if(!sel)return;
-  var mechs={};
-  tracker.forEach(function(t){if(t.mech){mechs[t.mech]=(mechs[t.mech]||0)+1;}});
+  var trackerCounts={};
+  tracker.forEach(function(t){if(t.mech){trackerCounts[t.mech]=(trackerCounts[t.mech]||0)+1;}});
   var current=sel.value;
-  var opts=['<option value="all">All mechanisms ('+tracker.length+')</option>'];
-  Object.keys(mechs).sort().forEach(function(m){opts.push('<option value="'+m.replace(/"/g,'&quot;')+'">'+m+' ('+mechs[m]+')</option>');});
+  var dbMechs=(filterOptionsCache&&Array.isArray(filterOptionsCache.mechs))?filterOptionsCache.mechs:[];
+  var mergedNames;
+  if(dbMechs.length){
+    var nameSet={};
+    dbMechs.forEach(function(m){nameSet[m.name]=true;});
+    Object.keys(trackerCounts).forEach(function(n){nameSet[n]=true;});
+    mergedNames=Object.keys(nameSet).sort();
+  } else {
+    mergedNames=Object.keys(trackerCounts).sort();
+  }
+  var opts=['<option value="all">All mechanisms ('+tracker.length+' logged)</option>'];
+  mergedNames.forEach(function(m){
+    var n=trackerCounts[m]||0;
+    opts.push('<option value="'+m.replace(/"/g,'&quot;')+'">'+m+' ('+n+' logged)</option>');
+  });
   sel.innerHTML=opts.join('');
-  if(current&&(current==='all'||mechs[current]))sel.value=current;
+  if(current){
+    if(current==='all'){sel.value='all';}
+    else if(mergedNames.indexOf(current)>=0){sel.value=current;}
+  }
 }
 function exportTrackerCSV(){
   if(!tracker.length){toast('Tracker is empty — nothing to export','warn');return;}
@@ -7529,6 +7621,25 @@ try{
 try{migrateTracker();}catch(e){console.warn('[Acress] init: migrate tracker',e.message);}
 try{renderTracker();renderTrackerSummary();}catch(e){console.warn('[Acress] init: render tracker',e.message);}
 try{schedulePolling();}catch(e){console.warn('[Acress] init: schedule polling',e.message);}
+/* L_FILTER_OPTIONS_FROM_DB_V1 — load DB-derived filter options on init, then
+   refresh both mech dropdowns so the option set reflects the last 7 days of
+   actual data instead of only what's currently in browser memory. Re-poll
+   every 5 minutes (matches server cache TTL) so newly-emitted mechs surface
+   without a page reload. */
+try{
+  loadFilterOptions().then(function(){
+    try{refreshMechFilter();}catch(e){}
+    try{refreshTkMechFilter();}catch(e){}
+    console.log('[FilterOptions] loaded · '+filterOptionsCache.mechs.length+' mechs, '+filterOptionsCache.regimes.length+' regimes, '+filterOptionsCache.bases.length+' bases (last 7d)');
+  }).catch(function(){});
+  setInterval(function(){
+    filterOptionsCache.asOf = 0; // force refetch
+    loadFilterOptions().then(function(){
+      try{refreshMechFilter();}catch(e){}
+      try{refreshTkMechFilter();}catch(e){}
+    }).catch(function(){});
+  }, 5 * 60 * 1000);
+}catch(e){console.warn('[Acress] init: filter options',e.message);}
 try{
   // ── PULSE WIDGET — keep cache warm so buildPulseWidget can render ──
   fetchPulse().then(function(){
