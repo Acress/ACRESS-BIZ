@@ -3435,6 +3435,27 @@ function openTradeRiskGate(card){
     console.log('[ACRESS][trade] modal confirmed: actionUsed='+actionUsed+' | tradedDir='+tradedDir+' | signal._cardDir='+signal._cardDir);
     executeTradeViaBridge(signal,actionUsed).then(function(result){
       if(result&&result.success){
+        /* L_PLACE_ORDER_SAFETY_V1 — surface the post-order SL verification result.
+           Upgrade 19.0 added verified_ok and verified_sl_price to the response so
+           the user immediately sees whether Bybit actually attached the SL or
+           whether the position is naked and needs manual review. */
+        var safetyMsg, safetyKind;
+        if(result.verified_ok){
+          safetyMsg='✓ SL verified at $'+(typeof fP==='function'?fP(result.verified_sl_price):result.verified_sl_price);
+          safetyKind='ok';
+        }else{
+          safetyMsg='⚠ SL UNVERIFIED — review position on Bybit immediately'+(result.verify_notes?(' ('+result.verify_notes+')'):'');
+          safetyKind='warn';
+        }
+        try{ toast(safetyMsg, safetyKind, result.verified_ok?5000:15000); }catch(_){}
+        try{ emitNotif&&emitNotif(result.verified_ok?'trade':'safety',
+              result.verified_ok?'Order placed · SL verified':'⚠ SL UNVERIFIED',
+              (signal.sym||signal.base||'?')+' '+signal.dir+(actionUsed==='reverse'?' (REVERSED)':'')+' · '+safetyMsg); }catch(_){}
+        // Stash the verification result on the tracker entry so the card can
+        // render a persistent SL badge — see tagger block below.
+        signal._verifiedOk = !!result.verified_ok;
+        signal._verifiedSlPrice = result.verified_sl_price;
+        signal._verifyNotes = result.verify_notes;
         emitNotif&&emitNotif('trade','Order placed',(signal.sym||signal.base||'?')+' '+signal.dir+' qty '+result.qty+(actionUsed==='reverse'?' (REVERSED)':''));
         var logBtn=card.querySelector('[data-log-sig]');
         if(logBtn){
@@ -3485,6 +3506,10 @@ function openTradeRiskGate(card){
                   target.executedAt=Date.now();
                   target.mode=sigMode;
                   if(sigOrderId)target.orderId=sigOrderId;
+                  /* L_PLACE_ORDER_SAFETY_V1 — persist SL-verification result onto tracker entry */
+                  if(signal._verifiedOk!=null)target.verifiedOk=signal._verifiedOk;
+                  if(signal._verifiedSlPrice!=null)target.verifiedSlPrice=signal._verifiedSlPrice;
+                  if(signal._verifyNotes)target.verifyNotes=signal._verifyNotes;
                   if(sigAction==='reverse'){
                     target.originalSignalDir=target.dir;
                     target.dir=sigTradedDir;
