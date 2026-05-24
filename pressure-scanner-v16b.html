@@ -448,6 +448,14 @@ input{font-family:var(--font-ui);}
 .pulse-widget.wait{border-color:var(--amber);background:rgba(249,200,70,.08);}
 .pulse-widget.not-enough{border-color:var(--border2);background:var(--s3);}
 
+/* L_CARD_SORT_BY_MOOD_V1 — visual treatment for cards sorted into the SKIP
+   mood tier. Cards stay visible (not hidden, so the user can still spot a
+   high-score outlier in a SKIP cohort) but de-emphasized: lower opacity,
+   slight desaturation, and preceded by a divider strip. Hovering restores
+   full visibility. */
+.pcard.mood-skip{opacity:.55;filter:grayscale(.4);transition:opacity .15s ease, filter .15s ease;}
+.pcard.mood-skip:hover{opacity:1;filter:none;}
+.low-priority-divider{grid-column:1/-1;padding:6px 10px;margin:10px 0 4px;font-family:var(--font-mono);font-size:9.5px;color:var(--faint);background:var(--s1);border-top:1px dashed var(--border);border-bottom:1px dashed var(--border);letter-spacing:.6px;text-transform:uppercase;}
 
 /* v16ab — Per-mechanism stats badge on scanner cards.
    Shows a category label and historical performance for each mechanism so the
@@ -5423,6 +5431,56 @@ function sortTrackerBy(arr,key){
 function currentScannerSort(){var el=document.getElementById('scanner-sort');return el?el.value:'score_desc';}
 function currentTrackerSort(){var el=document.getElementById('tk-sort');return el?el.value:'logged_desc';}
 
+/* L_CARD_SORT_BY_MOOD_V1 — Result cards are now hierarchically ordered by the
+   Mood Scanner verdict for the signal's (mech, dir) cohort. Tier ordering:
+     0  TRADE IT             — confirmed-winning cohort (mood-trade)
+     1  WAIT                 — neutral / borderline (mood-wait)
+     2  NOT ENOUGH DATA      — no recent sample (mood-ned)
+     3  SKIP                 — confirmed-losing (mood-skip, de-emphasized below
+                                a low-priority divider)
+   Within each tier, the user-selected sort (currentScannerSort) decides order
+   — default is score descending. The /api/analysis/aggregate?dim=base&period=1d
+   symbol-rank tiebreak option in the spec is NOT wired in V1 — would require a
+   parallel fetch + per-symbol cache. Score remains the within-tier tiebreaker. */
+function moodTierFor(s){
+  try {
+    if (!s || !s.mechanism || !s.mechanism.name || !s.dir) return 2;
+    if (!pulseCache || !pulseCache.byMechDir) return 2;
+    var key = s.mechanism.name + '|' + s.dir;
+    var p = pulseCache.byMechDir[key];
+    if (!p) return 2;
+    if (p.verdict === 'TRADE IT') return 0;
+    if (p.verdict === 'WAIT') return 1;
+    if (p.verdict === 'SKIP') return 3;
+    return 2;
+  } catch(e) { return 2; }
+}
+function moodKeyFor(s){
+  var t = moodTierFor(s);
+  return t === 0 ? 'trade' : t === 1 ? 'wait' : t === 3 ? 'skip' : 'ned';
+}
+function groupCardsByMood(arr){
+  var g = { trade: [], wait: [], ned: [], skip: [] };
+  for (var i = 0; i < arr.length; i++){
+    var k = moodKeyFor(arr[i]);
+    g[k].push(arr[i]);
+  }
+  return g;
+}
+function renderMoodGroupedColumn(arr){
+  // arr is already sorted by the user's chosen within-tier order.
+  var g = groupCardsByMood(arr);
+  var html = '';
+  html += g.trade.map(function(s){return buildCard(s, 'trade');}).join('');
+  html += g.wait.map(function(s){return buildCard(s, 'wait');}).join('');
+  html += g.ned.map(function(s){return buildCard(s, 'ned');}).join('');
+  if (g.skip.length){
+    html += '<div class="low-priority-divider">Low priority — mood = SKIP · '+g.skip.length+' card'+(g.skip.length!==1?'s':'')+'</div>';
+    html += g.skip.map(function(s){return buildCard(s, 'skip');}).join('');
+  }
+  return html;
+}
+
 function renderResults(){invalidateMechanismStats();
   var dirFilter=document.getElementById('dir-filter').value;
   var mechFilterEl=document.getElementById('mech-filter');
@@ -5466,17 +5524,22 @@ function renderResults(){invalidateMechanismStats();
     document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">⚪</div><div class="empty-title">'+msgTitle+'</div><div class="empty-body">'+msgBody+'</div></div>';
     return;
   }
+  /* L_CARD_SORT_BY_MOOD_V1 — within-tier sort (currentScannerSort) runs first
+     so each mood tier is internally ordered by score (or whatever the user
+     picked); then renderMoodGroupedColumn slices into tiers and renders in
+     TRADE → WAIT → N.E.D. → SKIP order, with the SKIP cluster placed below
+     a low-priority divider and visually de-emphasized via CSS. */
   var longs=sortSignalsBy(filtered.filter(function(s){return s.dir==='LONG';}),currentScannerSort());
   var shorts=sortSignalsBy(filtered.filter(function(s){return s.dir==='SHORT';}),currentScannerSort());
   var html='<div class="col-grid">';
   if(dirFilter!=='short'){
     html+='<div class="col"><div class="col-hdr long"><span class="col-title long">▲ Long Pressure</span><span class="col-count">'+longs.length+' signal'+(longs.length!==1?'s':'')+'</span></div>';
-    html+='<div class="col-cards">'+(longs.map(buildCard).join('')||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No long pressure detected</div>')+'</div>';
+    html+='<div class="col-cards">'+(renderMoodGroupedColumn(longs)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No long pressure detected</div>')+'</div>';
     html+='</div>';
   }
   if(dirFilter!=='long'){
     html+='<div class="col"><div class="col-hdr short"><span class="col-title short">▼ Short Pressure</span><span class="col-count">'+shorts.length+' signal'+(shorts.length!==1?'s':'')+'</span></div>';
-    html+='<div class="col-cards">'+(shorts.map(buildCard).join('')||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No short pressure detected</div>')+'</div>';
+    html+='<div class="col-cards">'+(renderMoodGroupedColumn(shorts)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No short pressure detected</div>')+'</div>';
     html+='</div>';
   }
   html+='</div>';
@@ -6149,7 +6212,7 @@ if(document.readyState === 'loading'){
   }, 100);
 }
 
-function buildCard(s){
+function buildCard(s, moodKey){
   var dc=s.dir==='LONG'?'long':'short';
   var arrow=s.dir==='LONG'?'▲':'▼';
   var scoreCls=s.score>=SURGICAL_THR?'surgical':s.score>=HIGH_THR?'high':'marginal';
@@ -6157,7 +6220,11 @@ function buildCard(s){
   // v16 — Entry-Zone Validator
   var ez=entryZoneStatus(s);
   var chaseCls=ez.extended?' chase-risk':'';
-  var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls;
+  /* L_CARD_SORT_BY_MOOD_V1 — optional mood-tier class for visual de-emphasis
+     of SKIP-cohort cards. Other tiers carry the class for future styling
+     hooks; only mood-skip currently has visual treatment. */
+  var moodCls=moodKey?' mood-'+moodKey:'';
+  var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls+moodCls;
   var signalHtml=s.reasons.map(function(r){
     var icon=r.lvl==='ok'?'✓':r.lvl==='partial'?'·':r.lvl==='weak'?'✗':'·';
     return '<div class="psig"><span class="psig-icon '+r.lvl+'">'+icon+'</span><span class="psig-tag">'+r.tag+'</span><span class="psig-text">'+r.text+'</span></div>';
