@@ -5855,6 +5855,169 @@ function gateCVD(klines5m,base){
 }
 
 // ── GATE 5: Sweep + Reclaim on 5m ──────────────────────────────────
+/* L_SWEEP_STATE_TRACKING_V1 — Upgrade 21.1 Phase A (Sweep State Tracking).
+   Per-symbol level state machine. Each scan: identifies the 4h high/low levels
+   from the last 48 × 5min bars, then inspects the last 8 candles for retests.
+   Each retest is classified ('tested_and_held' | 'swept_and_rejected' |
+   'broke_through') and appended to the matching level's retest_events array.
+   Deduped by candle timestamp so overlapping-scan-windows don't double-count.
+
+   State shape (acress_levels_v1 in localStorage):
+     levelsState[base] = [
+       {
+         level_value:                  num   (anchored to the 4h high/low when first seen, refreshed on match)
+         level_kind:                   'high' | 'low'
+         first_seen:                   ts
+         last_tested_at:               ts (timestamp of most recent retest event)
+         retest_events: [
+           { ts, candle_close, classification, absorbed_volume },
+           ...
+         ]
+         cumulative_absorbed_volume:   sum of all retest_events' absorbed_volume
+         current_state:                last classification observed
+       },
+       ...up to LEVELS_PER_SYMBOL_CAP per symbol
+     ]
+
+   Persistence: load at scanner init from 'acress_levels_v1'; save once per scan
+   completion (paired with saveZBuffers).
+
+   Phase B (depletion_score, FFC P2 wiring, card subline) reads this state. */
+var levelsState = {};
+try { levelsState = JSON.parse(localStorage.getItem('acress_levels_v1') || '{}'); } catch(e) { levelsState = {}; }
+
+var LEVEL_MATCH_PCT       = 0.003;             // 0.3% — match candidate 4h high/low to existing level
+var HELD_TOLERANCE_PCT    = 0.002;             // 0.2% — close near level → tested_and_held
+var LEVEL_STALE_MS        = 4 * 60 * 60 * 1000; // 4h with no test → drop from active tracking
+var LEVELS_PER_SYMBOL_CAP = 10;
+var TEST_LOOKBACK_BARS    = 8;                 // last 8 × 5min bars = last 40min
+var RANGE_WINDOW_BARS     = 48;                // 48 × 5min bars = 4h
+
+function saveLevelsState(){
+  try { localStorage.setItem('acress_levels_v1', JSON.stringify(levelsState)); } catch(e) {}
+}
+
+/* Brief A3 classification with explicit priority ordering:
+     Priority 1: close within HELD_TOLERANCE_PCT of level → 'tested_and_held'
+                 (price physically held at the level — regardless of wick action)
+     Priority 2: wick crossed level AND close on the opposite side → 'swept_and_rejected'
+                 (i.e., for a high-side level: wicked above, closed below)
+     Priority 3: wick crossed level AND close on the same side → 'broke_through'
+                 (for a high-side level: wicked above, closed above)
+     Else: candle didn't materially interact with the level → return null (no event recorded) */
+function classifyLevelTest(candle, levelValue, levelKind){
+  var high = parseFloat(candle[2]);
+  var low  = parseFloat(candle[3]);
+  var close = parseFloat(candle[4]);
+  if (!isFinite(high) || !isFinite(low) || !isFinite(close) || !isFinite(levelValue) || levelValue <= 0) return null;
+  var heldTol = levelValue * HELD_TOLERANCE_PCT;
+  if (Math.abs(close - levelValue) <= heldTol) return 'tested_and_held';
+  if (levelKind === 'high') {
+    if (high > levelValue && close <  levelValue) return 'swept_and_rejected';
+    if (high > levelValue && close >= levelValue) return 'broke_through';
+    return null;
+  }
+  // 'low' side mirror
+  if (low <  levelValue && close >  levelValue) return 'swept_and_rejected';
+  if (low <  levelValue && close <= levelValue) return 'broke_through';
+  return null;
+}
+
+function updateSweepStateForSymbol(base, k5){
+  if (!Array.isArray(k5) || k5.length < RANGE_WINDOW_BARS) return;
+  var now = Date.now();
+
+  // Brief A1: recent_4h_high / recent_4h_low from last 48 × 5min bars.
+  // (Brief's formula 'high - body_high_top' was a typo per the parenthetical
+  // 'we want the wick high for sweep purposes' — using actual high/low.)
+  var win = k5.slice(-RANGE_WINDOW_BARS);
+  var current_high = -Infinity, current_low = +Infinity;
+  for (var i = 0; i < win.length; i++) {
+    var h = parseFloat(win[i][2]);
+    var l = parseFloat(win[i][3]);
+    if (isFinite(h) && h > current_high) current_high = h;
+    if (isFinite(l) && l < current_low)  current_low  = l;
+  }
+  if (!isFinite(current_high) || !isFinite(current_low) || current_high <= 0) return;
+
+  if (!levelsState[base]) levelsState[base] = [];
+  var levels = levelsState[base];
+
+  // Brief A2-A4: for each side (high, low), match candidate to existing or
+  // create new, then scan the last 8 bars for retest events.
+  var candidates = [
+    { kind: 'high', value: current_high },
+    { kind: 'low',  value: current_low  },
+  ];
+  for (var ci = 0; ci < candidates.length; ci++) {
+    var cand = candidates[ci];
+    if (!isFinite(cand.value) || cand.value <= 0) continue;
+    var matchTol = cand.value * LEVEL_MATCH_PCT;
+    var matched = null;
+    for (var li = 0; li < levels.length; li++) {
+      if (levels[li].level_kind === cand.kind &&
+          Math.abs(levels[li].level_value - cand.value) <= matchTol) {
+        matched = levels[li];
+        break;
+      }
+    }
+    if (!matched) {
+      matched = {
+        level_value:                cand.value,
+        level_kind:                 cand.kind,
+        first_seen:                 now,
+        last_tested_at:             0,
+        retest_events:              [],
+        cumulative_absorbed_volume: 0,
+        current_state:              null,
+      };
+      levels.push(matched);
+    } else {
+      // Refresh level_value to the current wick extreme (drift within tolerance)
+      matched.level_value = cand.value;
+    }
+
+    // Scan last TEST_LOOKBACK_BARS for retest events; dedupe by candle ts
+    var lookback = k5.slice(-TEST_LOOKBACK_BARS);
+    for (var bi = 0; bi < lookback.length; bi++) {
+      var c = lookback[bi];
+      var ts = parseInt(c[0]);
+      if (!isFinite(ts) || ts <= 0) continue;
+      var classification = classifyLevelTest(c, matched.level_value, matched.level_kind);
+      if (!classification) continue;
+      // Dedupe — same candle across overlapping scan windows
+      var dup = false;
+      for (var ei = 0; ei < matched.retest_events.length; ei++) {
+        if (matched.retest_events[ei].ts === ts) { dup = true; break; }
+      }
+      if (dup) continue;
+      var close = parseFloat(c[4]);
+      var quoteVol = parseFloat(c[7]);
+      var absVol = isFinite(quoteVol) ? quoteVol : 0;
+      matched.retest_events.push({
+        ts:              ts,
+        candle_close:    close,
+        classification:  classification,
+        absorbed_volume: absVol,
+      });
+      matched.last_tested_at         = ts;
+      matched.cumulative_absorbed_volume += absVol;
+      matched.current_state          = classification;
+    }
+  }
+
+  // Prune stale levels (no retest in 4h)
+  levelsState[base] = levels.filter(function(l){
+    return l.last_tested_at > 0 && (now - l.last_tested_at) <= LEVEL_STALE_MS;
+  });
+
+  // Per-symbol cap — keep most-recently-tested 10
+  if (levelsState[base].length > LEVELS_PER_SYMBOL_CAP) {
+    levelsState[base].sort(function(a, b){ return b.last_tested_at - a.last_tested_at; });
+    levelsState[base] = levelsState[base].slice(0, LEVELS_PER_SYMBOL_CAP);
+  }
+}
+
 function gateSweep(klines5m,atr5m){
   if(!klines5m||klines5m.length<30)return null;
   var n=klines5m.length;
@@ -6111,11 +6274,18 @@ async function analyzeCoin(symObj){
   var chg24=parseFloat(symObj.priceChangePercent);
   try{
     /* L_SPOT_PERP_DRIVE_V1 — resolve perp→spot pair and fetch spot klines in
-       parallel with futures fetches. Same pattern as analyzeCoinDiag. */
+       parallel with futures fetches. Same pattern as analyzeCoinDiag.
+       L_KLINE_RETENTION_BUMP_V1 — bumped from 40 to 60 bars on 2026-05-26 as
+       paired prerequisite to Upgrade 21.1 Phase A. 48 bars covers the brief's
+       4h sweep state window; 12 additional bars provide safety margin for
+       retest event classification near the buffer boundary. Every existing
+       kline consumer uses length-relative slicing so the larger buffer is
+       strictly additive (no breaking changes to gateSweep, gateOI, gateMTF,
+       efficiency, etc.). */
     var _spotPair = binanceSpotSet ? resolveSpotPair(sym) : null;
     var [k1,k5,k15,oi,prem,spotK5]=await Promise.all([
       fetchKlines(base,'1m',60),
-      fetchKlines(base,'5m',40),
+      fetchKlines(base,'5m',60),   /* L_KLINE_RETENTION_BUMP_V1 — was 40 */
       fetchKlines(base,'15m',30),
       fetchOIHist(base,'5m',30),
       fetchPremium(base).catch(function(){return null;}),
@@ -6143,6 +6313,10 @@ async function analyzeCoin(symObj){
       var cvdSlope=(cvdSeries[cvdSeries.length-1]-cvdSeries[0])/maxA;
       pushBaseline(base,'cvdSlope',cvdSlope);
     }
+    /* L_SWEEP_STATE_TRACKING_V1 — update per-symbol level state from k5 before
+       any consumer (gateSweep, FFC) reads. Safe to call early; mutates
+       levelsState in memory; persistence happens at scan-end (saveLevelsState). */
+    try { updateSweepStateForSymbol(base, k5); } catch(e) { console.warn('[sweep-state]', base, e.message); }
     var gates={
       oi:gateOI(k5,oi),
       taker:gateTaker(k1,base),       // v16: now Z-score-aware
@@ -6406,6 +6580,8 @@ async function runScan(){
   window._lastDiagnostics=diagnostics;
   // v16 — persist per-coin Z-score baselines to localStorage so warmup carries over between scans
   saveZBuffers();
+  /* L_SWEEP_STATE_TRACKING_V1 — persist per-symbol level state alongside zBuffers */
+  saveLevelsState();
   console.log('[Acress] Scan complete:',{checked,errors,diagnostics});
   console.log('[Acress] Top 20 scores:',diagnostics.topScores.slice(0,20));
   var live=signals.filter(function(s){return s.validUntil>Date.now();}).length;
@@ -6519,7 +6695,7 @@ async function analyzeCoinDiag(symObj,diag){
     var _spotPair = binanceSpotSet ? resolveSpotPair(sym) : null;
     var [k1,k5,k15,oiResult,prem,liqStats,oiAgg,spotK5]=await Promise.all([
       fetchKlines(base,'1m',60),
-      fetchKlines(base,'5m',40),
+      fetchKlines(base,'5m',60),   /* L_KLINE_RETENTION_BUMP_V1 — was 40 */
       fetchKlines(base,'15m',30),
       fetchCombinedOI(base),
       fetchPremium(base).catch(function(){return null;}),
@@ -6545,6 +6721,10 @@ async function analyzeCoinDiag(symObj,diag){
       var cvdSlope=(cvdSeries[cvdSeries.length-1]-cvdSeries[0])/maxA;
       pushBaseline(base,'cvdSlope',cvdSlope);
     }
+    /* L_SWEEP_STATE_TRACKING_V1 — update per-symbol level state from k5 before
+       any consumer (gateSweep, FFC) reads. Safe to call early; mutates
+       levelsState in memory; persistence happens at scan-end (saveLevelsState). */
+    try { updateSweepStateForSymbol(base, k5); } catch(e) { console.warn('[sweep-state]', base, e.message); }
     var gates={
       oi:gateOI(k5,oiResult.oi),
       taker:gateTaker(k1,base),
