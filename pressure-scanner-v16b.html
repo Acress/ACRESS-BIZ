@@ -5943,8 +5943,12 @@ function updateSweepStateForSymbol(base, k5){
   if (!levelsState[base]) levelsState[base] = [];
   var levels = levelsState[base];
 
-  // Brief A2-A4: for each side (high, low), match candidate to existing or
-  // create new, then scan the last 8 bars for retest events.
+  // Step 1 — Brief A1: for each candidate (current 4h high, current 4h low),
+  // ensure the matching level exists in state. CRITICAL: do NOT mutate the
+  // level_value of an existing match — level identity must stay stable across
+  // scans so we can detect when later candles BREAK an established level. A
+  // mutating level_value collapsed level identity into the latest wick and
+  // made sweep/broke classifications structurally unreachable.
   var candidates = [
     { kind: 'high', value: current_high },
     { kind: 'low',  value: current_low  },
@@ -5962,7 +5966,7 @@ function updateSweepStateForSymbol(base, k5){
       }
     }
     if (!matched) {
-      matched = {
+      levels.push({
         level_value:                cand.value,
         level_kind:                 cand.kind,
         first_seen:                 now,
@@ -5970,48 +5974,49 @@ function updateSweepStateForSymbol(base, k5){
         retest_events:              [],
         cumulative_absorbed_volume: 0,
         current_state:              null,
-      };
-      levels.push(matched);
-    } else {
-      // Refresh level_value to the current wick extreme (drift within tolerance)
-      matched.level_value = cand.value;
+      });
     }
+    // No else — existing match stays at its original level_value
+  }
 
-    // Scan last TEST_LOOKBACK_BARS for retest events; dedupe by candle ts
-    var lookback = k5.slice(-TEST_LOOKBACK_BARS);
+  // Step 2 — Brief A2-A3: classify each of the last 8 candles against EVERY
+  // existing level for this symbol. This is the fix that lets a candle break
+  // through an OLDER level register on that older level (rather than only on
+  // the newly-created level at its wick extreme). Dedupe by candle ts.
+  var lookback = k5.slice(-TEST_LOOKBACK_BARS);
+  for (var li2 = 0; li2 < levels.length; li2++) {
+    var level = levels[li2];
     for (var bi = 0; bi < lookback.length; bi++) {
       var c = lookback[bi];
       var ts = parseInt(c[0]);
       if (!isFinite(ts) || ts <= 0) continue;
-      var classification = classifyLevelTest(c, matched.level_value, matched.level_kind);
+      var classification = classifyLevelTest(c, level.level_value, level.level_kind);
       if (!classification) continue;
-      // Dedupe — same candle across overlapping scan windows
+      // Dedupe: same candle ts on this level
       var dup = false;
-      for (var ei = 0; ei < matched.retest_events.length; ei++) {
-        if (matched.retest_events[ei].ts === ts) { dup = true; break; }
+      for (var ei = 0; ei < level.retest_events.length; ei++) {
+        if (level.retest_events[ei].ts === ts) { dup = true; break; }
       }
       if (dup) continue;
       var close = parseFloat(c[4]);
       var quoteVol = parseFloat(c[7]);
       var absVol = isFinite(quoteVol) ? quoteVol : 0;
-      matched.retest_events.push({
+      level.retest_events.push({
         ts:              ts,
         candle_close:    close,
         classification:  classification,
         absorbed_volume: absVol,
       });
-      matched.last_tested_at         = ts;
-      matched.cumulative_absorbed_volume += absVol;
-      matched.current_state          = classification;
+      level.last_tested_at = ts;
+      level.cumulative_absorbed_volume += absVol;
+      level.current_state = classification;
     }
   }
 
-  // Prune stale levels (no retest in 4h)
+  // Step 3 — prune stale levels (no retest in 4h) and cap to 10 most-recent
   levelsState[base] = levels.filter(function(l){
     return l.last_tested_at > 0 && (now - l.last_tested_at) <= LEVEL_STALE_MS;
   });
-
-  // Per-symbol cap — keep most-recently-tested 10
   if (levelsState[base].length > LEVELS_PER_SYMBOL_CAP) {
     levelsState[base].sort(function(a, b){ return b.last_tested_at - a.last_tested_at; });
     levelsState[base] = levelsState[base].slice(0, LEVELS_PER_SYMBOL_CAP);
