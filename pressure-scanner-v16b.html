@@ -1656,6 +1656,7 @@ function computeForcedFlowConvexity(input){
   var signalDir = input.signalDir;     // 'LONG' | 'SHORT' | null
   var liquidation = input.liquidation; // L_FFC_P1_WIRING_V1 — bridge-pushed per-symbol liq stats (null until 8.6 P1 wiring shipped)
   var spotDrive = input.spotDrive;     // L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — classifySpotPerpDrive() result (null when not yet computed)
+  var sweepState = input.sweepState;   // L_FFC_P2_WIRING_V1 — computeSweepStateBundle() result (null when no levels at wearing_thin+)
 
   /* V1 input availability — P1 promotes to 'functional' when the bridge has
      pushed activity-bearing liquidation stats for this symbol (post-8.6
@@ -1809,27 +1810,46 @@ function computeForcedFlowConvexity(input){
     }
   }
 
-  /* L_FFC_P1_WIRING_V1 — weight + cap state machine
-       Both primaries out      → M1:22 M2:22 M3:22 M4:34 · cap 25 · LOW
-       P1 functional, P2 out   → P1:35 M1:15 M2:15 M3:15 M4:20 · cap 40 · MEDIUM
-       Both primaries in       → V2 full weights (not yet reachable; 21.1 pending) */
-  var w_P1, w_M1, w_M2, w_M3, w_M4, cap, reliability;
+  /* L_FFC_P2_WIRING_V1 — Upgrade 21.1 Phase B P2 unlock.
+     When computeSweepStateBundle returns a usable p2 (non-null), promote
+     inputs.P2 from 'missing' to 'functional' and feed sweepState.p2 into the
+     composite. Mirrors the P1 wiring pattern. */
+  var p2 = 0;
+  if (sweepState && typeof sweepState.p2 === 'number' && isFinite(sweepState.p2)) {
+    inputs.P2 = 'functional';
+    p2 = sweepState.p2;
+  }
+
+  /* L_FFC_P1_WIRING_V1 + L_FFC_P2_WIRING_V1 — weight + cap state machine.
+       Both primaries out          → M1:22 M2:22 M3:22 M4:34       · cap 25  · LOW
+       P1 functional, P2 missing   → P1:35 M1:15 M2:15 M3:15 M4:20 · cap 40  · MEDIUM
+       P2 functional, P1 missing   → P2:30 M1:18 M2:18 M3:18 M4:16 · cap 40  · MEDIUM
+       Both primaries functional   → P1:35 P2:30 M1:10 M2:10 M3:10 M4:15 · cap ∞ · HIGH
+     The both-primaries-functional weights are placeholder per Q2 2026-05-26:
+     V2 finisher will set canonical numbers. Phase B's bar is "P2 is wired and
+     contributing" — composite magnitude correctness is the V2 finisher's job. */
+  var w_P1, w_P2, w_M1, w_M2, w_M3, w_M4, cap, reliability;
   if (inputs.P1 === 'functional' && inputs.P2 === 'functional') {
-    // Reserved for V2 finisher — full primary weighting
-    w_P1 = 0.35; w_M1 = 0.10; w_M2 = 0.10; w_M3 = 0.10; w_M4 = 0.15; // placeholder; V2 finisher will set the canonical numbers (+ P2:30)
+    // Placeholder weights — V2 finisher will set the canonical numbers
+    w_P1 = 0.35; w_P2 = 0.30; w_M1 = 0.10; w_M2 = 0.10; w_M3 = 0.10; w_M4 = 0.15;
     cap = Infinity;
     reliability = 'HIGH';
   } else if (inputs.P1 === 'functional') {
-    w_P1 = 0.35; w_M1 = 0.15; w_M2 = 0.15; w_M3 = 0.15; w_M4 = 0.20;
+    w_P1 = 0.35; w_P2 = 0; w_M1 = 0.15; w_M2 = 0.15; w_M3 = 0.15; w_M4 = 0.20;
+    cap = 40;
+    reliability = 'MEDIUM';
+  } else if (inputs.P2 === 'functional') {
+    // Symmetric with P1-functional branch — P2 drives, modifiers backfill
+    w_P1 = 0; w_P2 = 0.30; w_M1 = 0.18; w_M2 = 0.18; w_M3 = 0.18; w_M4 = 0.16;
     cap = 40;
     reliability = 'MEDIUM';
   } else {
-    w_P1 = 0;
+    w_P1 = 0; w_P2 = 0;
     w_M1 = 0.22; w_M2 = 0.22; w_M3 = 0.22; w_M4 = 0.34;
     cap = 25;
     reliability = 'LOW';
   }
-  var raw = (p1 * w_P1 + m1 * w_M1 + m2 * w_M2 + m3 * w_M3 + m4 * w_M4) * 100;
+  var raw = (p1 * w_P1 + p2 * w_P2 + m1 * w_M1 + m2 * w_M2 + m3 * w_M3 + m4 * w_M4) * 100;
   var score = Math.round(Math.max(-cap, Math.min(cap, raw)));
 
   /* Alignment classifier. Threshold ±30: in V1 the cap of 25 means
@@ -1848,9 +1868,9 @@ function computeForcedFlowConvexity(input){
 
   /* Status — if zero modifiers contributed (degenerate scan with no
      premium AND no positioning AND no OI gate), report unavailable. */
-  var anyContrib = (inputs.P1 === 'functional' || inputs.M1 === 'functional' ||
-                    inputs.M2 !== 'unavailable' || inputs.M3 !== 'unavailable' ||
-                    inputs.M4 === 'functional');
+  var anyContrib = (inputs.P1 === 'functional' || inputs.P2 === 'functional' ||
+                    inputs.M1 === 'functional' || inputs.M2 !== 'unavailable' ||
+                    inputs.M3 !== 'unavailable' || inputs.M4 === 'functional');
   if (!anyContrib) {
     return { status: 'unavailable', score: null, alignment: null,
              reliability: null, inputs_status: inputs_status };
@@ -6023,6 +6043,144 @@ function updateSweepStateForSymbol(base, k5){
   }
 }
 
+/* L_PER_LEVEL_RETEST_V1 — Phase B depletion score.
+   Sum across retest_events of (absorbed_volume / normalized_baseline). The
+   baseline per brief is the symbol's median per-candle volume over last 4h
+   (computed from the 48-bar k5 window). Returns 0 for empty state — never
+   null/NaN — so downstream consumers (FFC) handle graceful degradation. */
+function computeDepletionScore(level, medianVol){
+  if (!level || !Array.isArray(level.retest_events)) return 0;
+  if (!isFinite(medianVol) || medianVol <= 0) return 0;
+  var sum = 0;
+  for (var i = 0; i < level.retest_events.length; i++) {
+    var av = level.retest_events[i].absorbed_volume;
+    if (isFinite(av) && av > 0) sum += av / medianVol;
+  }
+  return sum;
+}
+
+/* L_PER_LEVEL_RETEST_V1 — tier classification.
+   Boundary convention: lower bound INCLUSIVE.
+     score < 1.0       → 'fresh'
+     1.0 ≤ score < 2.0 → 'tested'
+     2.0 ≤ score < 3.5 → 'wearing_thin'
+     score ≥ 3.5       → 'near_breakthrough'
+   Tuning these thresholds is catalogued in Research Followups (post-21.1). */
+function classifyDepletionTier(score){
+  if (!isFinite(score) || score < 0) return 'fresh';
+  if (score < 1.0) return 'fresh';
+  if (score < 2.0) return 'tested';
+  if (score < 3.5) return 'wearing_thin';
+  return 'near_breakthrough';
+}
+
+/* L_PER_LEVEL_RETEST_V1 — median per-candle volume baseline from k5 window. */
+function medianVolumeOver(k5){
+  if (!Array.isArray(k5) || k5.length === 0) return 0;
+  var vols = [];
+  for (var i = 0; i < k5.length; i++) {
+    var v = parseFloat(k5[i][7]);  // quote volume
+    if (isFinite(v) && v > 0) vols.push(v);
+  }
+  if (!vols.length) return 0;
+  vols.sort(function(a, b){ return a - b; });
+  var m = Math.floor(vols.length / 2);
+  return vols.length % 2 ? vols[m] : (vols[m - 1] + vols[m]) / 2;
+}
+
+/* L_RESTING_LIQUIDITY_DEPLETION_V1 — assemble per-signal sweep-state bundle.
+   For each active level on the symbol, compute its depletion score and tier.
+   Identify the nearest 'wearing_thin'/'near_breakthrough' level above current
+   price (LONG signal: resistance risk) and below (SHORT: support risk).
+   Compute the P2 directional value as
+     p2 = clamp((depletion_above - depletion_below) / 5.0, -1, +1)
+   Positive = level above is wearing thinner than level below → upside
+   breakthrough more likely. */
+function computeSweepStateBundle(base, currentPrice, signalDir, medianVol){
+  var empty = { nearest_above: null, nearest_below: null, p2: null, for_signal: null };
+  if (!isFinite(currentPrice) || currentPrice <= 0) return empty;
+  var levs = levelsState[base];
+  if (!Array.isArray(levs) || levs.length === 0) return empty;
+
+  var aboveNearest = null, belowNearest = null;
+  for (var i = 0; i < levs.length; i++) {
+    var lev = levs[i];
+    var dep = computeDepletionScore(lev, medianVol);
+    var tier = classifyDepletionTier(dep);
+    if (tier !== 'wearing_thin' && tier !== 'near_breakthrough') continue;
+    var dist_pct = (lev.level_value - currentPrice) / currentPrice;
+    var candidate = {
+      level_value:     lev.level_value,
+      distance_pct:    dist_pct,
+      tier:            tier,
+      depletion_score: dep,
+      retest_count:    lev.retest_events.length,
+    };
+    if (dist_pct > 0) {
+      if (!aboveNearest || dist_pct < aboveNearest.distance_pct) aboveNearest = candidate;
+    } else if (dist_pct < 0) {
+      // For below, larger (closer to 0) signed distance = nearer
+      if (!belowNearest || dist_pct > belowNearest.distance_pct) belowNearest = candidate;
+    }
+  }
+
+  var depAbove = aboveNearest ? aboveNearest.depletion_score : 0;
+  var depBelow = belowNearest ? belowNearest.depletion_score : 0;
+  var p2 = null;
+  if (aboveNearest || belowNearest) {
+    var raw_p2 = (depAbove - depBelow) / 5.0;
+    p2 = Math.max(-1, Math.min(1, raw_p2));
+  }
+
+  var forSignal = null;
+  if (signalDir === 'LONG' && aboveNearest) {
+    forSignal = {
+      nearest_depletion_score: aboveNearest.depletion_score,
+      nearest_level_distance:  aboveNearest.distance_pct,
+      nearest_level_tier:      aboveNearest.tier,
+    };
+  } else if (signalDir === 'SHORT' && belowNearest) {
+    forSignal = {
+      nearest_depletion_score: belowNearest.depletion_score,
+      nearest_level_distance:  belowNearest.distance_pct,
+      nearest_level_tier:      belowNearest.tier,
+    };
+  }
+
+  return {
+    nearest_above: aboveNearest,
+    nearest_below: belowNearest,
+    p2: p2,
+    for_signal: forSignal,
+  };
+}
+
+/* L_LEVEL_PROXIMITY_DISPLAY_V1 — card subline. Renders only when the nearest
+   weakening level (in either direction) sits within 0.5% of current price.
+   Mechanical phrasing — no 'shield' or 'defender' framing per CLAUDE.md. */
+function buildLevelProximityHtml(sweepState, opts){
+  opts = opts || {};
+  var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
+  if (!sweepState) return '';
+  var SHOW_PCT = 0.005;
+  var closest = null;
+  if (sweepState.nearest_above && Math.abs(sweepState.nearest_above.distance_pct) <= SHOW_PCT) {
+    closest = sweepState.nearest_above;
+  }
+  if (sweepState.nearest_below && Math.abs(sweepState.nearest_below.distance_pct) <= SHOW_PCT) {
+    if (!closest || Math.abs(sweepState.nearest_below.distance_pct) < Math.abs(closest.distance_pct)) {
+      closest = sweepState.nearest_below;
+    }
+  }
+  if (!closest) return '';
+  var emoji = (closest.tier === 'near_breakthrough') ? ' ⚠️' : '';
+  var label = (closest.tier === 'near_breakthrough') ? 'near breakthrough' : 'resting liquidity thinning';
+  var cls   = (closest.tier === 'near_breakthrough') ? 'vel-red' : 'vel-amber';
+  var priceStr = '$' + (typeof fP === 'function' ? fP(closest.level_value) : closest.level_value.toFixed(4));
+  var timesStr = closest.retest_count + ' time' + (closest.retest_count === 1 ? '' : 's');
+  return '<div class="vel-line ' + cls + '"' + style + '>Nearby level <b>' + priceStr + '</b> tested ' + timesStr + ' — ' + label + emoji + '</div>';
+}
+
 function gateSweep(klines5m,atr5m){
   if(!klines5m||klines5m.length<30)return null;
   var n=klines5m.length;
@@ -6403,6 +6561,9 @@ async function analyzeCoin(symObj){
     var _liqBundle = (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null;
     /* L_SPOT_PERP_DRIVE_V1 */
     var _spotDrive = classifySpotPerpDrive(k5, spotK5);
+    /* L_FFC_P2_WIRING_V1 — Phase B sweep state bundle for P2 input. */
+    var _medianVol = medianVolumeOver(k5);
+    var _sweepState = computeSweepStateBundle(base, price, result.dir, _medianVol);
     var _ffc = computeForcedFlowConvexity({
       oiGate:      gates.oi,
       premium:     prem,
@@ -6410,6 +6571,7 @@ async function analyzeCoin(symObj){
       signalDir:   result.dir,
       liquidation: _liqBundle,
       spotDrive:   _spotDrive,
+      sweepState:  _sweepState,
     });
     var _signal = {
       sym:sym,base:base,price:price,chg24:chg24,
@@ -6442,6 +6604,8 @@ async function analyzeCoin(symObj){
       forcedFlow: _ffc,
       /* L_SPOT_PERP_DRIVE_V1 — drive bundle for card + DB + Telegram */
       spotDrive: _spotDrive,
+      /* L_FFC_P2_WIRING_V1 — sweep state bundle for card + DB + Telegram */
+      sweepState: _sweepState,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -6563,8 +6727,9 @@ async function runScan(){
                    this block with positioning/efficiency/velocity once those snapshot
                    bugs are addressed. The marker is the canonical reference for
                    "which fields participate in the refresh pattern." */
-                if (r && r.forcedFlow) existing.forcedFlow = r.forcedFlow;
-                if (r && r.spotDrive)  existing.spotDrive  = r.spotDrive;
+                if (r && r.forcedFlow)  existing.forcedFlow  = r.forcedFlow;
+                if (r && r.spotDrive)   existing.spotDrive   = r.spotDrive;
+                if (r && r.sweepState)  existing.sweepState  = r.sweepState;
               }
             }else{
               if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
@@ -6587,6 +6752,42 @@ async function runScan(){
   saveZBuffers();
   /* L_SWEEP_STATE_TRACKING_V1 — persist per-symbol level state alongside zBuffers */
   saveLevelsState();
+  /* L_FFC_P2_WIRING_V1 — TEMPORARY Phase B diagnostic. Surfaces per-scan
+     depletion-tier distribution + sample non-fresh symbol. Removed before
+     21.1 is declared SHIPPED. */
+  try {
+    var _tierBuckets = { fresh: 0, tested: 0, wearing_thin: 0, near_breakthrough: 0 };
+    var _withP2 = 0;
+    var _sweepSampleSym = null;
+    var _sweepSampleDump = '';
+    var _allBases = Object.keys(levelsState);
+    for (var _i = 0; _i < signals.length; _i++) {
+      var _s = signals[_i];
+      if (!_s || !_s.base || !_s.sweepState) continue;
+      if (typeof _s.sweepState.p2 === 'number') _withP2++;
+      var _sides = [_s.sweepState.nearest_above, _s.sweepState.nearest_below];
+      for (var _sd = 0; _sd < 2; _sd++) {
+        if (_sides[_sd] && _tierBuckets[_sides[_sd].tier] != null) _tierBuckets[_sides[_sd].tier]++;
+      }
+      // Prefer a sample symbol with at least wearing_thin
+      if (!_sweepSampleSym && (
+        (_s.sweepState.nearest_above && (_s.sweepState.nearest_above.tier === 'wearing_thin' || _s.sweepState.nearest_above.tier === 'near_breakthrough')) ||
+        (_s.sweepState.nearest_below && (_s.sweepState.nearest_below.tier === 'wearing_thin' || _s.sweepState.nearest_below.tier === 'near_breakthrough'))
+      )) {
+        _sweepSampleSym = _s.base;
+        _sweepSampleDump = JSON.stringify({
+          price: _s.price, dir: _s.dir,
+          nearest_above: _s.sweepState.nearest_above,
+          nearest_below: _s.sweepState.nearest_below,
+          p2: _s.sweepState.p2,
+        }).slice(0, 700);
+      }
+    }
+    console.log('[Acress DEPLETION-SUMMARY] signals=' + signals.length +
+      ' with_p2_value=' + _withP2 +
+      ' tiers=' + JSON.stringify(_tierBuckets) +
+      ' sample=' + (_sweepSampleSym || '(none)') + ':' + _sweepSampleDump);
+  } catch(e) { console.log('[Acress DEPLETION-SUMMARY] error: ' + e.message); }
   console.log('[Acress] Scan complete:',{checked,errors,diagnostics});
   console.log('[Acress] Top 20 scores:',diagnostics.topScores.slice(0,20));
   var live=signals.filter(function(s){return s.validUntil>Date.now();}).length;
@@ -6793,6 +6994,9 @@ async function analyzeCoinDiag(symObj,diag){
     var _be   = computeBreakEven(result.dir, price, _fr, _spr, _mtf);
     /* L_SPOT_PERP_DRIVE_V1 — compute drive bundle once for reuse by FFC + signal */
     var _spotDrive = classifySpotPerpDrive(k5, spotK5);
+    /* L_FFC_P2_WIRING_V1 — compute sweep state bundle once for reuse by FFC + signal */
+    var _medianVol = medianVolumeOver(k5);
+    var _sweepState = computeSweepStateBundle(base, price, result.dir, _medianVol);
     var _signal = {
       id:'sig_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
       sym:sym,base:base,price:price,chg24:chg24,
@@ -6823,7 +7027,8 @@ async function analyzeCoinDiag(symObj,diag){
       positioning: getPositioning(base),
       /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path.
          L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back.
-         L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — drive bundle passed for M3. */
+         L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — drive bundle passed for M3.
+         L_FFC_P2_WIRING_V1 — sweep state bundle for P2. */
       forcedFlow: computeForcedFlowConvexity({
         oiGate:      gates.oi,
         premium:     prem,
@@ -6831,10 +7036,12 @@ async function analyzeCoinDiag(symObj,diag){
         signalDir:   result.dir,
         liquidation: (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null,
         spotDrive:   _spotDrive,
+        sweepState:  _sweepState,
       }),
-      /* L_SPOT_PERP_DRIVE_V1 — drive bundle for card + DB + Telegram. Reuses
-         _spotDrive computed once above. */
+      /* L_SPOT_PERP_DRIVE_V1 — drive bundle for card + DB + Telegram. */
       spotDrive: _spotDrive,
+      /* L_FFC_P2_WIRING_V1 — sweep state bundle for card + DB + Telegram. */
+      sweepState: _sweepState,
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -7895,6 +8102,7 @@ function buildCard(s, moodKey){
     +buildPositioningHtml(s.positioning, s.dir) /* L_POSITIONING_CARD_V1 */
     +buildSpotPerpDriveHtml(s.spotDrive) /* L_SPOT_PERP_DRIVE_CARD_V1 */
     +buildForcedFlowHtml(s.forcedFlow) /* L_FFC_CARD_V1 */
+    +buildLevelProximityHtml(s.sweepState) /* L_LEVEL_PROXIMITY_DISPLAY_V1 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
