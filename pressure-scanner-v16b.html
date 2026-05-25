@@ -6606,9 +6606,24 @@ async function runScan(){
         }
       }
     }
-    // Pick a sample symbol with populated levels for manual inspection (Criterion 6)
-    var _sampleSym = _populated[0] || null;
-    var _sampleDump = _sampleSym ? JSON.stringify(levelsState[_sampleSym]).slice(0, 600) : '(none)';
+    // Pick a sample symbol with non-held events first (preferred for Criterion 6
+    // inspection); fall back to any populated symbol. Lets us see actual sweep/
+    // broke evidence in logs without an extra round-trip.
+    var _sampleSym = null;
+    for (var _sb = 0; _sb < _populated.length; _sb++) {
+      var _b2 = _populated[_sb];
+      var _has = false;
+      for (var _l2 = 0; _l2 < levelsState[_b2].length; _l2++) {
+        for (var _e2 = 0; _e2 < levelsState[_b2][_l2].retest_events.length; _e2++) {
+          var _c2 = levelsState[_b2][_l2].retest_events[_e2].classification;
+          if (_c2 === 'swept_and_rejected' || _c2 === 'broke_through') { _has = true; break; }
+        }
+        if (_has) break;
+      }
+      if (_has) { _sampleSym = _b2; break; }
+    }
+    if (!_sampleSym) _sampleSym = _populated[0] || null;
+    var _sampleDump = _sampleSym ? JSON.stringify(levelsState[_sampleSym]).slice(0, 1200) : '(none)';
     console.log('[Acress LEVELS-SUMMARY] symbols_with_levels=' + _populated.length +
       ' total_levels=' + _totalLevels +
       ' total_events=' + _totalEvents +
