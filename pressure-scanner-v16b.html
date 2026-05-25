@@ -6752,42 +6752,6 @@ async function runScan(){
   saveZBuffers();
   /* L_SWEEP_STATE_TRACKING_V1 — persist per-symbol level state alongside zBuffers */
   saveLevelsState();
-  /* L_FFC_P2_WIRING_V1 — TEMPORARY Phase B diagnostic. Surfaces per-scan
-     depletion-tier distribution + sample non-fresh symbol. Removed before
-     21.1 is declared SHIPPED. */
-  try {
-    var _tierBuckets = { fresh: 0, tested: 0, wearing_thin: 0, near_breakthrough: 0 };
-    var _withP2 = 0;
-    var _sweepSampleSym = null;
-    var _sweepSampleDump = '';
-    var _allBases = Object.keys(levelsState);
-    for (var _i = 0; _i < signals.length; _i++) {
-      var _s = signals[_i];
-      if (!_s || !_s.base || !_s.sweepState) continue;
-      if (typeof _s.sweepState.p2 === 'number') _withP2++;
-      var _sides = [_s.sweepState.nearest_above, _s.sweepState.nearest_below];
-      for (var _sd = 0; _sd < 2; _sd++) {
-        if (_sides[_sd] && _tierBuckets[_sides[_sd].tier] != null) _tierBuckets[_sides[_sd].tier]++;
-      }
-      // Prefer a sample symbol with at least wearing_thin
-      if (!_sweepSampleSym && (
-        (_s.sweepState.nearest_above && (_s.sweepState.nearest_above.tier === 'wearing_thin' || _s.sweepState.nearest_above.tier === 'near_breakthrough')) ||
-        (_s.sweepState.nearest_below && (_s.sweepState.nearest_below.tier === 'wearing_thin' || _s.sweepState.nearest_below.tier === 'near_breakthrough'))
-      )) {
-        _sweepSampleSym = _s.base;
-        _sweepSampleDump = JSON.stringify({
-          price: _s.price, dir: _s.dir,
-          nearest_above: _s.sweepState.nearest_above,
-          nearest_below: _s.sweepState.nearest_below,
-          p2: _s.sweepState.p2,
-        }).slice(0, 700);
-      }
-    }
-    console.log('[Acress DEPLETION-SUMMARY] signals=' + signals.length +
-      ' with_p2_value=' + _withP2 +
-      ' tiers=' + JSON.stringify(_tierBuckets) +
-      ' sample=' + (_sweepSampleSym || '(none)') + ':' + _sweepSampleDump);
-  } catch(e) { console.log('[Acress DEPLETION-SUMMARY] error: ' + e.message); }
   console.log('[Acress] Scan complete:',{checked,errors,diagnostics});
   console.log('[Acress] Top 20 scores:',diagnostics.topScores.slice(0,20));
   var live=signals.filter(function(s){return s.validUntil>Date.now();}).length;
