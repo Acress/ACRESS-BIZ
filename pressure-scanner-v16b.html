@@ -1820,30 +1820,52 @@ function computeForcedFlowConvexity(input){
     p2 = sweepState.p2;
   }
 
-  /* L_FFC_P1_WIRING_V1 + L_FFC_P2_WIRING_V1 — weight + cap state machine.
-       Both primaries out          → M1:22 M2:22 M3:22 M4:34       · cap 25  · LOW
-       P1 functional, P2 missing   → P1:35 M1:15 M2:15 M3:15 M4:20 · cap 40  · MEDIUM
-       P2 functional, P1 missing   → P2:30 M1:18 M2:18 M3:18 M4:16 · cap 40  · MEDIUM
-       Both primaries functional   → P1:35 P2:30 M1:10 M2:10 M3:10 M4:15 · cap ∞ · HIGH
-     The both-primaries-functional weights are placeholder per Q2 2026-05-26:
-     V2 finisher will set canonical numbers. Phase B's bar is "P2 is wired and
-     contributing" — composite magnitude correctness is the V2 finisher's job. */
+  /* L_FFC_V2_FINISHER_V1 — Upgrade 22.0 V2 fully calibrated (2026-05-26).
+     All three V2 prerequisites shipped earlier today: 8.6 (P1), 21.6 (M3),
+     21.1 (P2). This finisher sets canonical weights so each branch's
+     coefficients sum to exactly 1.00. */
+  /* L_FFC_V2_CANONICAL_WEIGHTS_V1
+     V2 modifier philosophy: with one or both primaries functional, modifiers
+     (M1 OI direction, M2 funding, M3 basis, M4 positioning) operate as a
+     unified confirmation tier weighted uniformly. They measure different
+     dimensions at roughly equal informational value — complementary to P1/P2's
+     structural heavy lifting, not redundant.
+     V1 fallback (no primaries) retains M4=0.34 because in that regime M4 is
+     the largest available structural signal, doing the structural heavy
+     lifting on its own. The 2026-05-26 ship rejected interpretations that
+     would have either deprioritized M4 (because P1/P2 cover its role) or
+     elevated M4 in V2 (because of V1 historical prominence) — both ignored
+     that M4's V1 weight was compensation for missing primaries, not intrinsic
+     importance.
+
+     Weight + cap state machine:
+       Both primaries out          → M1:22  M2:22  M3:22  M4:34          · cap 25  · LOW
+       P1 functional, P2 missing   → P1:35  M1-M4:16.25 each              · cap 40  · MEDIUM
+       P2 functional, P1 missing   → P2:30  M1-M4:17.5 each               · cap 40  · MEDIUM
+       Both primaries functional   → P1:35 P2:30  M1-M4:8.75 each         · cap ∞   · HIGH
+     Each branch's coefficients sum to exactly 1.00. */
   var w_P1, w_P2, w_M1, w_M2, w_M3, w_M4, cap, reliability;
   if (inputs.P1 === 'functional' && inputs.P2 === 'functional') {
-    // Placeholder weights — V2 finisher will set the canonical numbers
-    w_P1 = 0.35; w_P2 = 0.30; w_M1 = 0.10; w_M2 = 0.10; w_M3 = 0.10; w_M4 = 0.15;
+    // 0.35 + 0.30 + 4*0.0875 = 1.0000
+    w_P1 = 0.35;  w_P2 = 0.30;
+    w_M1 = 0.0875; w_M2 = 0.0875; w_M3 = 0.0875; w_M4 = 0.0875;
     cap = Infinity;
     reliability = 'HIGH';
   } else if (inputs.P1 === 'functional') {
-    w_P1 = 0.35; w_P2 = 0; w_M1 = 0.15; w_M2 = 0.15; w_M3 = 0.15; w_M4 = 0.20;
+    // 0.35 + 4*0.1625 = 1.0000 (P2's 0.30 redistributed uniformly across M1-M4)
+    w_P1 = 0.35;  w_P2 = 0;
+    w_M1 = 0.1625; w_M2 = 0.1625; w_M3 = 0.1625; w_M4 = 0.1625;
     cap = 40;
     reliability = 'MEDIUM';
   } else if (inputs.P2 === 'functional') {
-    // Symmetric with P1-functional branch — P2 drives, modifiers backfill
-    w_P1 = 0; w_P2 = 0.30; w_M1 = 0.18; w_M2 = 0.18; w_M3 = 0.18; w_M4 = 0.16;
+    // 0.30 + 4*0.175 = 1.0000 (P1's 0.35 redistributed uniformly across M1-M4)
+    w_P1 = 0;  w_P2 = 0.30;
+    w_M1 = 0.175; w_M2 = 0.175; w_M3 = 0.175; w_M4 = 0.175;
     cap = 40;
     reliability = 'MEDIUM';
   } else {
+    // V1 fallback: M4 retains 0.34 — largest available signal in no-primaries regime.
+    // 4*0.22 + 0.34 = 1.10? No: 0.22+0.22+0.22+0.34 = 1.00. ✓
     w_P1 = 0; w_P2 = 0;
     w_M1 = 0.22; w_M2 = 0.22; w_M3 = 0.22; w_M4 = 0.34;
     cap = 25;
