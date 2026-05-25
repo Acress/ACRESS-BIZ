@@ -164,6 +164,12 @@ input{font-family:var(--font-ui);}
 .pc-chg{font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);}
 .pc-chg.up{background:var(--green2);color:var(--green);}
 .pc-chg.dn{background:var(--red2);color:var(--red);}
+/* L_PRIME_CARD_TAG_V1 / L_HIGH_CONFIDENCE_CARD_CHIP_V1 — chip styles for the
+   dual-tag system. PRIME (💎) and HIGH CONFIDENCE (🎯) are independent
+   classifications and may appear together on the same card. */
+.pc-chip{font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);letter-spacing:.3px;line-height:1.4;}
+.pc-chip-prime{background:rgba(64,180,255,0.16);color:#5cc1ff;border:1px solid rgba(64,180,255,0.42);}
+.pc-chip-hc{background:rgba(240,200,80,0.14);color:#f0c850;border:1px solid rgba(240,200,80,0.36);}
 .pc-score-wrap{display:flex;align-items:baseline;gap:5px;flex-shrink:0;}
 .pc-score{font-family:var(--font-mono);font-size:16px;font-weight:900;line-height:1;letter-spacing:-.5px;}
 .pc-score.surgical{color:var(--cyan);}
@@ -790,8 +796,12 @@ input{font-family:var(--font-ui);}
       <span>Sort</span>
       <!-- L_VELOCITY_SORT_V1 — default switched to velocity_desc per spec
            (fastest movers first). All prior options preserved as alternatives. -->
-      <select id="scanner-sort" onchange="renderResults()">
-        <option value="velocity_desc" selected>Velocity (fast → slow)</option>
+      <select id="scanner-sort" onchange="renderResults()" title="Default sort: confluence quality (highest potential first)">
+        <!-- L_CONFLUENCE_SORT_V1 — new default that ranks cards by the
+             scanner-computed confluence_quality_score plus the bridge-supplied
+             HIGH CONFIDENCE bonus. LONG / SHORT cards interleave by quality. -->
+        <option value="confluence_quality_desc" selected>Confluence quality (highest first) ★</option>
+        <option value="velocity_desc">Velocity (fast → slow)</option>
         <option value="velocity_asc">Velocity (slow → fast)</option>
         <option value="score_desc">Score (high → low)</option>
         <option value="score_asc">Score (low → high)</option>
@@ -801,6 +811,7 @@ input{font-family:var(--font-ui);}
         <option value="recent">Most recently scored</option>
         <option value="sym_asc">Symbol (A → Z)</option>
       </select>
+      <span style="font-size:9px;color:var(--muted);margin-left:6px;">Default: confluence quality (highest potential first)</span>
     </div>
     <div class="cfg-group">
       <button class="scan-toggle" id="toggle-show-all" onclick="toggleShowAll()" title="Show every signal that passed the 25-point storage floor, bypassing the score-threshold slider">SHOW ALL</button>
@@ -1446,6 +1457,135 @@ function classifyPositioning(pos, signalDir){
   };
 }
 
+/* L_PRIME_CLASSIFIER_V1 — Upgrade 25.0. PRIME is a strict six-dimension
+   confluence gate that supersedes score as the master alert criterion. A
+   signal qualifies as PRIME only when ALL six dimensions sit explicitly in
+   their green tier — degraded / missing / pending states do NOT qualify.
+
+   Dimensions (all required):
+     1. Cohort verdict (mood)         — TRADE IT or WAIT (SKIP blocks)
+     2. Break-even cost               — < 0.20% (matches card CHEAP threshold,
+                                        direction-agnostic)
+     3. Velocity decile               — >= 9 (vel-green)
+     4. Displacement efficiency       — pct >= 70 (CLEAN tier)
+     5. Aggregate positioning state   — ALIGNED_WITH_TOPS or DIVERGENT_RETAIL
+     6. Forced flow convexity         — alignment === 'ALIGNED' (V1: unreachable
+                                        until magnitude cap raised in V2)
+
+   Returns:
+     { prime: boolean, failed: string[], quality: number }
+   where failed lists which dimensions were not green (empty if prime) and
+   quality is the additive confluence score used as default sort key:
+     +30 if prime
+     +5  per green dimension
+     -10 per red/degraded dimension (SKIP cohort, EXPENSIVE BE, decile 1-3,
+         efficiency < 30, AGAINST positioning / DIVERGENT_RISK, FFC AGAINST)
+     0   for neutral states (WAIT cohort, mid-tier BE, decile 4-8, efficiency
+         30-69, BALANCED positioning, FFC NEUTRAL)
+
+   HIGH CONFIDENCE 🎯 contributes +15 to the final sort key, but is added
+   on top of confluence_quality_score in sortSignalsBy (not here) because the
+   bridge supplies that flag asynchronously after polling.
+*/
+var PRIME_BE_GREEN_PCT       = 0.20;
+var PRIME_VELOCITY_GREEN_MIN = 9;
+var PRIME_EFFICIENCY_GREEN_MIN = 70;
+
+function moodVerdictFor(mechName, dir){
+  if (!mechName || !dir) return null;
+  if (typeof pulseCache === 'undefined' || !pulseCache || !pulseCache.byMechDir) return null;
+  var e = pulseCache.byMechDir[mechName + '|' + dir];
+  return e ? (e.verdict || null) : null;
+}
+
+function classifyPRIME(s, opts){
+  opts = opts || {};
+  var failed = [];
+  var quality = 0;
+  if (!s) return { prime: false, failed: ['signal_missing'], quality: 0 };
+
+  // 1. Cohort verdict (mood scanner verdict)
+  var mechName = (s.mechanism && s.mechanism.name) ? s.mechanism.name : '';
+  var verdict = moodVerdictFor(mechName, s.dir);
+  var cohortGreen = (verdict === 'TRADE IT');
+  var cohortRed   = (verdict === 'SKIP');
+  if (cohortGreen)      quality += 5;
+  else if (cohortRed)   quality -= 10;
+  // WAIT, NOT ENOUGH DATA, UNKNOWN, null → neutral (0)
+  if (verdict !== 'TRADE IT' && verdict !== 'WAIT') failed.push('cohort');
+
+  // 2. Break-even cost
+  var bep = s.break_even_pct;
+  var beGreen = (bep != null && isFinite(bep) && bep < PRIME_BE_GREEN_PCT);
+  var beRed   = (bep != null && isFinite(bep) && bep > 0.40);
+  if (beGreen)     quality += 5;
+  else if (beRed)  quality -= 10;
+  if (!beGreen) failed.push('be');
+
+  // 3. Velocity decile
+  var dec = (s.velocity && s.velocity.decile != null) ? s.velocity.decile : null;
+  var velGreen = (dec != null && dec >= PRIME_VELOCITY_GREEN_MIN);
+  var velRed   = (dec != null && dec <= 3);
+  if (velGreen)     quality += 5;
+  else if (velRed)  quality -= 10;
+  if (!velGreen) failed.push('velocity');
+
+  // 4. Displacement efficiency
+  var effPct    = (s.efficiency && s.efficiency.status === 'ok' && s.efficiency.pct != null) ? s.efficiency.pct : null;
+  var effGreen  = (effPct != null && effPct >= PRIME_EFFICIENCY_GREEN_MIN);
+  var effRed    = (effPct != null && effPct < 30);
+  if (effGreen)     quality += 5;
+  else if (effRed)  quality -= 10;
+  if (!effGreen) failed.push('efficiency');
+
+  // 5. Positioning state
+  var posBundle = classifyPositioning(s.positioning, s.dir);
+  var posState  = posBundle ? posBundle.state : null;
+  var posGreen  = (posState === 'ALIGNED_WITH_TOPS' || posState === 'DIVERGENT_RETAIL');
+  var posRed    = (posState === 'AGAINST_TOPS' || posState === 'DIVERGENT_RISK');
+  if (posGreen)     quality += 5;
+  else if (posRed)  quality -= 10;
+  if (!posGreen) failed.push('positioning');
+
+  // 6. Forced Flow Convexity alignment
+  var ffcAlign = (s.forcedFlow && s.forcedFlow.alignment) ? s.forcedFlow.alignment : null;
+  var ffcGreen = (ffcAlign === 'ALIGNED');
+  var ffcRed   = (ffcAlign === 'AGAINST');
+  if (ffcGreen)     quality += 5;
+  else if (ffcRed)  quality -= 10;
+  if (!ffcGreen) failed.push('ffc');
+
+  var prime = (failed.length === 0);
+  if (prime) quality += 30;
+
+  return { prime: prime, failed: failed, quality: quality };
+}
+
+function attachPrimeFields(s){
+  if (!s) return s;
+  var r = classifyPRIME(s);
+  s.prime = r.prime;
+  s.prime_failed_dimensions = r.failed.join(',');
+  s.confluence_quality_score = r.quality;
+  return s;
+}
+
+/* L_HIGH_CONFIDENCE_PROPAGATION_V1 — bridge pushes HC flags back to the
+   scanner after each poll via window.__acressHcFlags[signalId] = true. This
+   lookup is consulted by the chip render and the sort comparator. The +15
+   confluence bonus for HC is applied dynamically at sort time so the bridge
+   can push fresh flags without re-running classifyPRIME on every poll. */
+function isHighConfidence(s){
+  if (!s || s.id == null) return false;
+  if (typeof window === 'undefined' || !window.__acressHcFlags) return false;
+  return window.__acressHcFlags[s.id] === true;
+}
+function confluenceQualityForSort(s){
+  var base = (s && typeof s.confluence_quality_score === 'number') ? s.confluence_quality_score : 0;
+  if (isHighConfidence(s)) base += 15;
+  return base;
+}
+
 /* L_POSITIONING_CARD_V1 — shared HTML renderer. Reuses vel-line / vel-{green,
    amber,red,gray} CSS classes for visual pairing with Velocity and Efficiency. */
 function buildPositioningHtml(pos, signalDir, opts){
@@ -1693,6 +1833,11 @@ var SYMBOL_BLACKLIST = new Set([
   'AIA','1000PEPE','EWY','DOGE','AVAX','PLAY','LINK','ADA','XLM'
 ]);
 var MECH_BLACKLIST = new Set([]); /* disabled — use recent-perf gate instead */
+/* L_SCORE_CAP_REMOVAL_V2 — Score cap at 80 removed alongside PRIME deployment
+   2026-05-25. PRIME is now the sole gate for Telegram alerts. Score is no
+   longer a gate at any layer. See Risk T-1 in CLAUDE.md for monitoring
+   discipline on the 80+ score band. The previous L_SCORE_CAP_V1 logic below
+   is intentionally retained as commented-out reference but does not execute. */
 /* L_SCORE_CAP_80_V1 — Upgrade 7: simulator-validated score cap at 80.
    Score>80 bucket showed −0.371% mean PnL vs −0.252% for the 60-74 bucket
    in the 15K-signal simulator run; capping removes the worst-performing tail
@@ -1705,7 +1850,9 @@ function shouldAcceptSignal(r){
   if(b && SYMBOL_BLACKLIST.has(b)){ shouldAcceptSignal._lastReason='blacklist_sym:'+b; return false; }
   var mn = r.mechanism && r.mechanism.name;
   if(mn && MECH_BLACKLIST.has(mn)){ shouldAcceptSignal._lastReason='blacklist_mech:'+mn; return false; }
-  if(r.score > SCORE_CAP_MAX){ shouldAcceptSignal._lastReason='score_cap:'+r.score; return false; }
+  /* L_SCORE_CAP_REMOVAL_V2 — score-cap rejection removed. PRIME is now the
+     sole alert gate. The score>SCORE_CAP_MAX branch previously returned false
+     here and is intentionally deleted so high-score signals enter the pipeline. */
   shouldAcceptSignal._lastReason=null;
   return true;
 }
@@ -5827,7 +5974,7 @@ async function analyzeCoin(symObj){
       positioning: _pos,
       signalDir:   result.dir,
     });
-    return{
+    var _signal = {
       sym:sym,base:base,price:price,chg24:chg24,
       /* L_RANGE_FILTER_REMOVED_V1 */
       range24Pct:(symObj.range24Pct!=null?symObj.range24Pct:null),
@@ -5860,6 +6007,10 @@ async function analyzeCoin(symObj){
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
     };
+    /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
+       confluence_quality_score so the bridge can poll and gate alerts. */
+    attachPrimeFields(_signal);
+    return _signal;
   }catch(e){
     return null;
   }
@@ -6160,7 +6311,7 @@ async function analyzeCoinDiag(symObj,diag){
     var _dist = distFrom5mExtremes(k5, price);
     var _mtf  = computeMinutesToFunding();
     var _be   = computeBreakEven(result.dir, price, _fr, _spr, _mtf);
-    return{
+    var _signal = {
       id:'sig_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
       sym:sym,base:base,price:price,chg24:chg24,
       range24Pct:(symObj.range24Pct!=null?symObj.range24Pct:null),
@@ -6200,6 +6351,9 @@ async function analyzeCoinDiag(symObj,diag){
       loggedAt:Date.now(),
       entryPrice:price
     };
+    /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
+       confluence_quality_score on the diag/emit path. */
+    return attachPrimeFields(_signal);
   }catch(e){
     throw e;
   }
@@ -6252,7 +6406,20 @@ function sortSignalsBy(arr,key){
      velocity score with nulls (insufficient-data cards) pushed to the
      bottom in both directions. */
   var velOf = function(s){ return (s && s.velocity && s.velocity.score != null) ? s.velocity.score : null; };
+  /* L_CONFLUENCE_SORT_V1 — confluence_quality_score is the new default sort
+     key. Combines per-signal confluence_quality_score (scanner-computed at
+     signal creation) with a +15 bonus when the bridge-supplied HIGH CONFIDENCE
+     flag is present (looked up via isHighConfidence). */
+  var qualityOf = (typeof confluenceQualityForSort === 'function')
+    ? confluenceQualityForSort
+    : function(s){ return (s && typeof s.confluence_quality_score === 'number') ? s.confluence_quality_score : 0; };
   switch(key){
+    case 'confluence_quality_desc':
+      return a.sort(function(x,y){
+        var qx=qualityOf(x), qy=qualityOf(y);
+        if(qy !== qx) return qy - qx;
+        return (y.score||0)-(x.score||0); // tie-break on signal score
+      });
     case 'velocity_desc':
       return a.sort(function(x,y){
         var vx=velOf(x), vy=velOf(y);
@@ -6276,13 +6443,17 @@ function sortSignalsBy(arr,key){
     case 'chg24_asc':return a.sort(function(x,y){return (x.chg24||0)-(y.chg24||0);});
     case 'recent':return a.sort(function(x,y){return (y.loggedAt||0)-(x.loggedAt||0);});
     case 'sym_asc':return a.sort(function(x,y){return (x.base||x.sym||'').localeCompare(y.base||y.sym||'');});
-    default:return a.sort(function(x,y){
-      var vx=velOf(x), vy=velOf(y);
-      if(vx==null && vy==null) return (y.score||0)-(x.score||0);
-      if(vx==null) return 1;
-      if(vy==null) return -1;
-      return vy - vx;
-    });
+    default:
+      /* L_CONFLUENCE_SORT_V1 — default is now confluence_quality_score DESC.
+         Replaces the previous velocity-desc default. The L_CARD_SORT_BY_MOOD_V1
+         tier grouping (TRADE IT / WAIT / NOT ENOUGH DATA / SKIP) is dissolved;
+         mood verdict still contributes to confluence_quality_score numerically
+         (+5 TRADE IT, 0 WAIT, -10 SKIP) so SKIP cards naturally cluster low. */
+      return a.sort(function(x,y){
+        var qx=qualityOf(x), qy=qualityOf(y);
+        if(qy !== qx) return qy - qx;
+        return (y.score||0)-(x.score||0);
+      });
   }
 }
 function pnlForSort(t){
@@ -6315,17 +6486,11 @@ function sortTrackerBy(arr,key){
 function currentScannerSort(){var el=document.getElementById('scanner-sort');return el?el.value:'score_desc';}
 function currentTrackerSort(){var el=document.getElementById('tk-sort');return el?el.value:'logged_desc';}
 
-/* L_CARD_SORT_BY_MOOD_V1 — Result cards are now hierarchically ordered by the
-   Mood Scanner verdict for the signal's (mech, dir) cohort. Tier ordering:
-     0  TRADE IT             — confirmed-winning cohort (mood-trade)
-     1  WAIT                 — neutral / borderline (mood-wait)
-     2  NOT ENOUGH DATA      — no recent sample (mood-ned)
-     3  SKIP                 — confirmed-losing (mood-skip, de-emphasized below
-                                a low-priority divider)
-   Within each tier, the user-selected sort (currentScannerSort) decides order
-   — default is score descending. The /api/analysis/aggregate?dim=base&period=1d
-   symbol-rank tiebreak option in the spec is NOT wired in V1 — would require a
-   parallel fetch + per-symbol cache. Score remains the within-tier tiebreaker. */
+/* L_CONFLUENCE_SORT_V1 — replaces L_CARD_SORT_BY_MOOD_V1 grouping. Mood tier
+   still contributes to confluence_quality_score (+5 TRADE IT, 0 WAIT, -10 SKIP)
+   but is no longer the primary visual grouping. moodKeyFor / moodTierFor are
+   preserved so the CSS hooks (mood-trade / mood-wait / mood-skip etc.) remain
+   available for any future styling — but no grouping or divider is rendered. */
 function moodTierFor(s){
   try {
     if (!s || !s.mechanism || !s.mechanism.name || !s.dir) return 2;
@@ -6343,26 +6508,12 @@ function moodKeyFor(s){
   var t = moodTierFor(s);
   return t === 0 ? 'trade' : t === 1 ? 'wait' : t === 3 ? 'skip' : 'ned';
 }
-function groupCardsByMood(arr){
-  var g = { trade: [], wait: [], ned: [], skip: [] };
-  for (var i = 0; i < arr.length; i++){
-    var k = moodKeyFor(arr[i]);
-    g[k].push(arr[i]);
-  }
-  return g;
-}
-function renderMoodGroupedColumn(arr){
-  // arr is already sorted by the user's chosen within-tier order.
-  var g = groupCardsByMood(arr);
-  var html = '';
-  html += g.trade.map(function(s){return buildCard(s, 'trade');}).join('');
-  html += g.wait.map(function(s){return buildCard(s, 'wait');}).join('');
-  html += g.ned.map(function(s){return buildCard(s, 'ned');}).join('');
-  if (g.skip.length){
-    html += '<div class="low-priority-divider">Low priority — mood = SKIP · '+g.skip.length+' card'+(g.skip.length!==1?'s':'')+'</div>';
-    html += g.skip.map(function(s){return buildCard(s, 'skip');}).join('');
-  }
-  return html;
+/* L_CONFLUENCE_SORT_V1 — renderSortedColumn replaces renderMoodGroupedColumn.
+   No tier grouping, no SKIP divider — the sort key (default
+   confluence_quality_desc) alone determines order. SKIP cards naturally
+   cluster low because their cohort contributes -10 to confluence_quality_score. */
+function renderSortedColumn(arr){
+  return arr.map(function(s){ return buildCard(s, moodKeyFor(s)); }).join('');
 }
 
 function renderResults(){invalidateMechanismStats();
@@ -6428,25 +6579,36 @@ function renderResults(){invalidateMechanismStats();
     document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">⚪</div><div class="empty-title">'+msgTitle+'</div><div class="empty-body">'+msgBody+'</div></div>';
     return;
   }
-  /* L_CARD_SORT_BY_MOOD_V1 — within-tier sort (currentScannerSort) runs first
-     so each mood tier is internally ordered by score (or whatever the user
-     picked); then renderMoodGroupedColumn slices into tiers and renders in
-     TRADE → WAIT → N.E.D. → SKIP order, with the SKIP cluster placed below
-     a low-priority divider and visually de-emphasized via CSS. */
-  var longs=sortSignalsBy(filtered.filter(function(s){return s.dir==='LONG';}),currentScannerSort());
-  var shorts=sortSignalsBy(filtered.filter(function(s){return s.dir==='SHORT';}),currentScannerSort());
-  var html='<div class="col-grid">';
-  if(dirFilter!=='short'){
-    html+='<div class="col"><div class="col-hdr long"><span class="col-title long">▲ Long Pressure</span><span class="col-count">'+longs.length+' signal'+(longs.length!==1?'s':'')+'</span></div>';
-    html+='<div class="col-cards">'+(renderMoodGroupedColumn(longs)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No long pressure detected</div>')+'</div>';
+  /* L_CONFLUENCE_SORT_V1 — when the default confluence_quality_desc sort is
+     active AND no direction filter is applied, render a SINGLE merged column
+     with LONG / SHORT interleaved by quality. Other sort keys (or an explicit
+     direction filter) preserve the two-column layout, with each column still
+     ordered by the user's chosen sort key but without the mood-tier grouping. */
+  var sortKey = currentScannerSort();
+  var html;
+  if (sortKey === 'confluence_quality_desc' && dirFilter === 'all') {
+    var allSorted = sortSignalsBy(filtered, sortKey);
+    html  = '<div class="col-grid col-grid-merged">';
+    html += '<div class="col"><div class="col-hdr"><span class="col-title">Confluence quality (LONG / SHORT interleaved)</span><span class="col-count">'+allSorted.length+' signal'+(allSorted.length!==1?'s':'')+'</span></div>';
+    html += '<div class="col-cards">'+(renderSortedColumn(allSorted)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No signals detected</div>')+'</div>';
+    html += '</div>';
+    html += '</div>';
+  } else {
+    var longs=sortSignalsBy(filtered.filter(function(s){return s.dir==='LONG';}),sortKey);
+    var shorts=sortSignalsBy(filtered.filter(function(s){return s.dir==='SHORT';}),sortKey);
+    html='<div class="col-grid">';
+    if(dirFilter!=='short'){
+      html+='<div class="col"><div class="col-hdr long"><span class="col-title long">▲ Long Pressure</span><span class="col-count">'+longs.length+' signal'+(longs.length!==1?'s':'')+'</span></div>';
+      html+='<div class="col-cards">'+(renderSortedColumn(longs)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No long pressure detected</div>')+'</div>';
+      html+='</div>';
+    }
+    if(dirFilter!=='long'){
+      html+='<div class="col"><div class="col-hdr short"><span class="col-title short">▼ Short Pressure</span><span class="col-count">'+shorts.length+' signal'+(shorts.length!==1?'s':'')+'</span></div>';
+      html+='<div class="col-cards">'+(renderSortedColumn(shorts)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No short pressure detected</div>')+'</div>';
+      html+='</div>';
+    }
     html+='</div>';
   }
-  if(dirFilter!=='long'){
-    html+='<div class="col"><div class="col-hdr short"><span class="col-title short">▼ Short Pressure</span><span class="col-count">'+shorts.length+' signal'+(shorts.length!==1?'s':'')+'</span></div>';
-    html+='<div class="col-cards">'+(renderMoodGroupedColumn(shorts)||'<div style="padding:24px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);grid-column:1/-1">No short pressure detected</div>')+'</div>';
-    html+='</div>';
-  }
-  html+='</div>';
   document.getElementById('results').innerHTML=html;
   startCardTimers();
   try{renderTrackerSummary();}catch(e){}
@@ -7135,8 +7297,20 @@ function buildCard(s, moodKey){
      placeholder for Upgrade 13.5 Phase 1's scanner-side rule — it doesn't
      fire on live signals today because window.signals doesn't carry the
      bridge-side classification result. */
-  var hcCls=(s.highConfidence===true)?' card-high-confidence':'';
+  /* L_HIGH_CONFIDENCE_CARD_CHIP_V1 — the white-border placeholder still uses
+     s.highConfidence (always false today); the actual chip render reads the
+     bridge-supplied flag via isHighConfidence(s). Border kept as secondary
+     visual reinforcement; chip is the canonical display tag. */
+  var isHc = (typeof isHighConfidence === 'function') ? isHighConfidence(s) : false;
+  var hcCls=(s.highConfidence===true || isHc)?' card-high-confidence':'';
   var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls+moodCls+hcCls;
+  /* L_PRIME_CARD_TAG_V1 + L_HIGH_CONFIDENCE_CARD_CHIP_V1 — dual chips in the
+     card head. PRIME (💎) is computed scanner-side at signal creation;
+     HIGH CONFIDENCE (🎯) is computed bridge-side and pushed back. Both can
+     appear simultaneously; both are independent of one another. */
+  var chipsHtml = '';
+  if (s.prime === true)  chipsHtml += '<span class="pc-chip pc-chip-prime" title="PRIME — all six confluence dimensions in green tier">💎 PRIME</span>';
+  if (isHc)              chipsHtml += '<span class="pc-chip pc-chip-hc" title="HIGH CONFIDENCE — qualifying hour + mechanism + symbol + cluster + low BE">🎯 HIGH CONFIDENCE</span>';
   var signalHtml=s.reasons.map(function(r){
     var icon=r.lvl==='ok'?'✓':r.lvl==='partial'?'·':r.lvl==='weak'?'✗':'·';
     return '<div class="psig"><span class="psig-icon '+r.lvl+'">'+icon+'</span><span class="psig-tag">'+r.tag+'</span><span class="psig-text">'+r.text+'</span></div>';
@@ -7212,6 +7386,7 @@ function buildCard(s, moodKey){
         +'<span class="pc-sym">'+s.base+'</span>'
         +'<span class="pc-price">$'+fP(s.price)+'</span>'
         +'<span class="pc-chg '+(s.chg24>=0?'up':'dn')+'">'+fPct(s.chg24,1)+'</span>'
+        +chipsHtml /* L_PRIME_CARD_TAG_V1 + L_HIGH_CONFIDENCE_CARD_CHIP_V1 */
       +'</div>'
       +'<div class="pc-score-wrap">'
         +'<span class="pc-score '+scoreCls+'">'+s.score+'</span>'
