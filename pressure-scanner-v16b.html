@@ -1654,14 +1654,14 @@ function computeForcedFlowConvexity(input){
   var premium   = input.premium;       // fetchPremium result (markPrice, indexPrice, lastFundingRate)
   var positioning = input.positioning; // cached positioning bundle (raw pcts)
   var signalDir = input.signalDir;     // 'LONG' | 'SHORT' | null
+  var liquidation = input.liquidation; // L_FFC_P1_WIRING_V1 — bridge-pushed per-symbol liq stats (null until 8.6 P1 wiring shipped)
 
-  /* V1 input availability — these are STRUCTURAL (always degraded/missing
-     until 8.6/21.1/21.6 ship) plus availability checks for the current
-     premium / positioning bundles which may legitimately be null for a
-     given symbol on a given scan. */
+  /* V1 input availability — P1 promotes to 'functional' when the bridge has
+     pushed activity-bearing liquidation stats for this symbol (post-8.6
+     P1 wiring). P2 still 'missing' until 21.1 ships per-level retest state. */
   var inputs = {
-    P1: 'degraded',   // V1 always
-    P2: 'missing',    // V1 always
+    P1: 'degraded',   // promoted below if liquidation bundle qualifies
+    P2: 'missing',    // V1 always (awaits 21.1)
     M1: 'unavailable',
     M2: 'unavailable',
     M3: 'unavailable',
@@ -1737,14 +1737,84 @@ function computeForcedFlowConvexity(input){
     m4 = Math.max(-1, Math.min(1, topSkew * retailFactor));
   }
 
-  /* V1 weights (both primaries out, per spec table) */
-  var w_M1 = 0.22, w_M2 = 0.22, w_M3 = 0.22, w_M4 = 0.34;
-  var raw = (m1 * w_M1 + m2 * w_M2 + m3 * w_M3 + m4 * w_M4) * 100;
+  /* L_FFC_P1_WIRING_V1 — Upgrade 8.6 P1 unlock.
+     When the bridge has pushed activity-bearing liquidation stats for this
+     symbol (window.__acressLiqStats[sym]), compute the P1 directional value
+     and promote inputs.P1 from 'degraded' to 'functional'. Otherwise P1
+     stays 'degraded' and contributes 0 (current V1 behavior). */
+  var p1 = 0;
+  /* L_FFC_P1_ACTIVITY_FLOOR_V1
+     Fixed $5K floor for V1 ship. Per-symbol scaled threshold (percentile-based
+     against each symbol's rolling 24h liquidation distribution) is V2 refinement
+     — would prevent BTC/ETH from under-triggering and low-volume alts from
+     over-triggering. Not blocking for V1; revisit after symbols accumulate
+     enough distributional history. */
+  var MIN_ACTIVITY_USD = 5000;
+  if (liquidation && liquidation.ready === true) {
+    var longUsd  = liquidation.fiveMinLong  || 0;
+    var shortUsd = liquidation.fiveMinShort || 0;
+    var totalUsd = longUsd + shortUsd;
+    if (totalUsd >= MIN_ACTIVITY_USD) {
+      inputs.P1 = 'functional';
+      /* L_FFC_P1_DIRECTION_V1
+         Sign convention: positive when SHORT liquidations dominate (squeeze
+         continuation up), negative when LONG liquidations dominate (capitulation
+         continuation down). This is the continuation-bias interpretation.
+         The alternative mean-reversion bias (sign-flipped: LONG liquidations →
+         positive P1 because bounce follows) is structurally valid and should be
+         empirically tested. After 500+ closed signals with non-zero P1 values
+         accumulate, run an outcome-correlation analysis: do ALIGNED signals
+         under continuation-bias outperform ALIGNED signals under sign-flipped
+         mean-reversion bias? If mean-reversion wins, flip this sign with marker
+         bump to L_FFC_P1_DIRECTION_V2. */
+      var net = (shortUsd - longUsd) / totalUsd;   // [-1, +1]
+      /* L_FFC_P1_INTENSITY_SCALE_V1
+         intensity_scale capped at 3.0 — matches MAD-based statistical-extreme
+         threshold from liquidations.js intensity score. Values >3 are
+         statistically extreme; capping prevents single outliers from dominating
+         directional value. After empirical data, evaluate whether 2.5 (more
+         sensitive) or 4.0 (more selective) calibrates better.
+         Fallback: when intensityTotal is null (first 30 min before MAD baseline
+         stabilises) or non-positive (calm market), use an activity-based scale
+         so P1 can fire during the warmup window. */
+      var intT = liquidation.intensityTotal;
+      var intensityScale;
+      if (intT != null && intT > 0) {
+        intensityScale = Math.min(1, intT / 3.0);
+      } else if (intT != null && intT <= 0) {
+        intensityScale = 0;
+      } else {
+        // First 30 min — no MAD baseline. Use activity proxy: $100K total
+        // 5-min liquidations → scale=1; below that, linear ramp.
+        intensityScale = Math.min(1, totalUsd / 100000);
+      }
+      p1 = net * intensityScale;
+      if (p1 > 1) p1 = 1; else if (p1 < -1) p1 = -1;
+    }
+  }
 
-  /* V1 magnitude cap: 25 (both primaries out). LOW reliability. */
-  var cap = 25;
+  /* L_FFC_P1_WIRING_V1 — weight + cap state machine
+       Both primaries out      → M1:22 M2:22 M3:22 M4:34 · cap 25 · LOW
+       P1 functional, P2 out   → P1:35 M1:15 M2:15 M3:15 M4:20 · cap 40 · MEDIUM
+       Both primaries in       → V2 full weights (not yet reachable; 21.1 pending) */
+  var w_P1, w_M1, w_M2, w_M3, w_M4, cap, reliability;
+  if (inputs.P1 === 'functional' && inputs.P2 === 'functional') {
+    // Reserved for V2 finisher — full primary weighting
+    w_P1 = 0.35; w_M1 = 0.10; w_M2 = 0.10; w_M3 = 0.10; w_M4 = 0.15; // placeholder; V2 finisher will set the canonical numbers (+ P2:30)
+    cap = Infinity;
+    reliability = 'HIGH';
+  } else if (inputs.P1 === 'functional') {
+    w_P1 = 0.35; w_M1 = 0.15; w_M2 = 0.15; w_M3 = 0.15; w_M4 = 0.20;
+    cap = 40;
+    reliability = 'MEDIUM';
+  } else {
+    w_P1 = 0;
+    w_M1 = 0.22; w_M2 = 0.22; w_M3 = 0.22; w_M4 = 0.34;
+    cap = 25;
+    reliability = 'LOW';
+  }
+  var raw = (p1 * w_P1 + m1 * w_M1 + m2 * w_M2 + m3 * w_M3 + m4 * w_M4) * 100;
   var score = Math.round(Math.max(-cap, Math.min(cap, raw)));
-  var reliability = 'LOW';
 
   /* Alignment classifier. Threshold ±30: in V1 the cap of 25 means
      alignment is ALWAYS NEUTRAL — by design. ALIGNED/AGAINST will start
@@ -1762,8 +1832,9 @@ function computeForcedFlowConvexity(input){
 
   /* Status — if zero modifiers contributed (degenerate scan with no
      premium AND no positioning AND no OI gate), report unavailable. */
-  var anyContrib = (inputs.M1 === 'functional' || inputs.M2 !== 'unavailable' ||
-                    inputs.M3 !== 'unavailable' || inputs.M4 === 'functional');
+  var anyContrib = (inputs.P1 === 'functional' || inputs.M1 === 'functional' ||
+                    inputs.M2 !== 'unavailable' || inputs.M3 !== 'unavailable' ||
+                    inputs.M4 === 'functional');
   if (!anyContrib) {
     return { status: 'unavailable', score: null, alignment: null,
              reliability: null, inputs_status: inputs_status };
@@ -5967,12 +6038,16 @@ async function analyzeCoin(symObj){
        background on miss/stale and returns null (= "gathering") this scan. */
     var _pos = getPositioning(base);
     /* L_FORCED_FLOW_CONVEXITY_V1 — composite from gates.oi (M1), premium (M2 + M3),
-       cached positioning (M4). P1 + P2 left as DEGRADED/MISSING per V1 spec. */
+       cached positioning (M4). P1 wiring landed in Upgrade 8.6 (2026-05-26) via
+       bridge-pushed window.__acressLiqStats. P2 still missing pending 21.1. */
+    /* L_FFC_P1_WIRING_V1 */
+    var _liqBundle = (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null;
     var _ffc = computeForcedFlowConvexity({
       oiGate:      gates.oi,
       premium:     prem,
       positioning: _pos,
       signalDir:   result.dir,
+      liquidation: _liqBundle,
     });
     var _signal = {
       sym:sym,base:base,price:price,chg24:chg24,
@@ -6339,12 +6414,14 @@ async function analyzeCoinDiag(symObj,diag){
       efficiency: computeDisplacementEfficiency(k5, oiResult, base),
       /* L_AGGREGATE_POSITIONING_V1 — diag/emit path; non-blocking cache lookup. */
       positioning: getPositioning(base),
-      /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path. */
+      /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path.
+         L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back. */
       forcedFlow: computeForcedFlowConvexity({
         oiGate:      gates.oi,
         premium:     prem,
         positioning: getPositioning(base),
         signalDir:   result.dir,
+        liquidation: (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null,
       }),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
