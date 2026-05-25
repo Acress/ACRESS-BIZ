@@ -6418,14 +6418,11 @@ async function analyzeCoinDiag(symObj,diag){
          L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back. */
       forcedFlow: (function(){
         var _liq = (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null;
-        // Acress LIQ-READ: log once per scan for active symbols
-        if (_liq) {
-          console.log('[Acress LIQ-READ] sym=' + sym + ' base=' + base + ' bundle=' + JSON.stringify(_liq));
-        } else if (typeof window !== 'undefined' && window.__acressLiqStats) {
-          var _keys = Object.keys(window.__acressLiqStats);
-          if (_keys.length > 0 && (sym === 'BTCUSDT' || sym === 'ETHUSDT' || sym === 'SOLUSDT')) {
-            console.log('[Acress LIQ-READ-MISS] sym=' + sym + ' (not in liqMap of size ' + _keys.length + ', sample keys=' + _keys.slice(0,3).join(',') + ')');
-          }
+        // Acress LIQ-READ: UNCONDITIONAL log for BTC/ETH/SOL so we always see state
+        if (sym === 'BTCUSDT' || sym === 'ETHUSDT' || sym === 'SOLUSDT') {
+          var _has = (typeof window !== 'undefined' && window.__acressLiqStats);
+          var _keys = _has ? Object.keys(window.__acressLiqStats) : [];
+          console.log('[Acress LIQ-READ] sym=' + sym + ' has_window_var=' + (!!_has) + ' liqMap_size=' + _keys.length + ' first_keys=' + _keys.slice(0,5).join(',') + ' bundle_for_sym=' + JSON.stringify(_liq));
         }
         return computeForcedFlowConvexity({
           oiGate:      gates.oi,
