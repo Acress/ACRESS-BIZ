@@ -7798,7 +7798,9 @@ function renderResults(){invalidateMechanismStats();
      PRIME alert gate. This filter ONLY affects what shows on the dashboard. */
   var _hideNonGreen = localStorage.getItem('acress_hide_non_green_velocity');
   if (_hideNonGreen == null) _hideNonGreen = 'true';   // default ON at first scan
-  if (_hideNonGreen === 'true') {
+  var _velFilterActive = (_hideNonGreen === 'true');
+  var _preVelocityCount = filtered.length;
+  if (_velFilterActive) {
     filtered = filtered.filter(function(s){
       return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9;
     });
@@ -7818,7 +7820,17 @@ function renderResults(){invalidateMechanismStats();
     // The old "diagnostic fallback" that showed top 8 cards regardless of
     // threshold has been removed — it made the score range filter appear broken.
     var msgTitle, msgBody;
-    if(live.length){
+    /* L_VELOCITY_FILTER_EMPTY_STATE_V1 — when the velocity green-display
+       filter cut signals to zero AND signals exist pre-velocity, show a
+       filter-specific informational message rather than the generic
+       "no signals match your filter" copy. */
+    if (_velFilterActive && _preVelocityCount > 0) {
+      msgTitle = '0 cards meet velocity filter';
+      msgBody = '0 of ' + _preVelocityCount + ' signal' + (_preVelocityCount !== 1 ? 's' : '') +
+        ' qualify under the current velocity-green threshold (decile 9+). ' +
+        'This is the filter working as designed in current market conditions — non-green-velocity signals are still logged to the DB and flow through PRIME alerts. ' +
+        'Toggle the filter off in Settings → Position Discipline → "Hide non-green velocity signals" to see all signals on the dashboard.';
+    } else if(live.length){
       msgTitle='No signals match your filter';
       var rangeStr=__sr.min+'–'+__sr.max;
       var bits=['score range '+rangeStr];
