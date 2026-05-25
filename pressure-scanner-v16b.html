@@ -1744,17 +1744,24 @@ function computeForcedFlowConvexity(input){
      stays 'degraded' and contributes 0 (current V1 behavior). */
   var p1 = 0;
   /* L_FFC_P1_ACTIVITY_FLOOR_V1
-     Fixed $5K floor for V1 ship. Per-symbol scaled threshold (percentile-based
-     against each symbol's rolling 24h liquidation distribution) is V2 refinement
-     — would prevent BTC/ETH from under-triggering and low-volume alts from
-     over-triggering. Not blocking for V1; revisit after symbols accumulate
-     enough distributional history. */
-  var MIN_ACTIVITY_USD = 5000;
+     V1 floor: $1,000 absolute OR intensity score > 0.5. Recalibrated from initial
+     $5K after 2026-05-26 deploy revealed the scanner's mid-cap universe rarely
+     produces $5K+ of liquidations in 5min during normal conditions. Empirical
+     observation: only 4 of 21 observed symbols ever cleared $5K in 30 min of
+     normal market activity. Hybrid threshold catches active mid-cap symbols via
+     dollar floor AND statistical bursts on quieter symbols via intensity floor.
+     V2 refinement: per-symbol percentile floor against rolling 24h distribution.
+     Status: DATA COLLECTING for V2 calibration. */
+  var MIN_ACTIVITY_USD = 1000;
+  var MIN_INTENSITY    = 0.5;
   if (liquidation && liquidation.ready === true) {
     var longUsd  = liquidation.fiveMinLong  || 0;
     var shortUsd = liquidation.fiveMinShort || 0;
     var totalUsd = longUsd + shortUsd;
-    if (totalUsd >= MIN_ACTIVITY_USD) {
+    var intT_pre = liquidation.intensityTotal;
+    var passesFloor = (totalUsd >= MIN_ACTIVITY_USD) ||
+                       (intT_pre != null && intT_pre > MIN_INTENSITY);
+    if (passesFloor) {
       inputs.P1 = 'functional';
       /* L_FFC_P1_DIRECTION_V1
          Sign convention: positive when SHORT liquidations dominate (squeeze
@@ -6172,7 +6179,28 @@ async function runScan(){
           if(r.score>=25){
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
-              if(r.score>existing.score && shouldAcceptSignal(r)){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}else if(r.score>existing.score){console.log('[ACRESS-FILTER] upgrade rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
+              if(r.score>existing.score && shouldAcceptSignal(r)){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
+              else if(r.score>existing.score){console.log('[ACRESS-FILTER] upgrade rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
+              else {
+                /* L_FFC_REFRESH_ON_EXISTING_V1
+                   FFC composite refreshes on every scan regardless of whether the new
+                   scan upgraded the mechanism score. Mechanism-firing fields (score,
+                   reasons, mechanism name, entryPrice, loggedAt) stay locked to the
+                   best-scoring scan that won the existing slot. Structural state fields
+                   (FFC composite, alignment, reliability, inputs_status) track the most
+                   recent observation.
+
+                   Architectural principle: mechanism firing is a moment-in-time event.
+                   Structural state is a continuously-evolving observation. The DB row
+                   for an active signal should reflect the current structural state when
+                   PRIME evaluates it, not the state at the original firing moment.
+
+                   Scoped to FFC only in 8.6. Same principle applies to positioning,
+                   efficiency, and velocity snapshot fields — those carry analogous
+                   staleness bugs that are out of scope for this upgrade. Cataloged as
+                   Upgrade 8.7 — Structural State Refresh Generalization. */
+                if (r && r.forcedFlow) existing.forcedFlow = r.forcedFlow;
+              }
             }else{
               if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
             }
@@ -6416,22 +6444,13 @@ async function analyzeCoinDiag(symObj,diag){
       positioning: getPositioning(base),
       /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path.
          L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back. */
-      forcedFlow: (function(){
-        var _liq = (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null;
-        // Acress LIQ-READ: UNCONDITIONAL log for BTC/ETH/SOL so we always see state
-        if (sym === 'BTCUSDT' || sym === 'ETHUSDT' || sym === 'SOLUSDT') {
-          var _has = (typeof window !== 'undefined' && window.__acressLiqStats);
-          var _keys = _has ? Object.keys(window.__acressLiqStats) : [];
-          console.log('[Acress LIQ-READ] sym=' + sym + ' has_window_var=' + (!!_has) + ' liqMap_size=' + _keys.length + ' first_keys=' + _keys.slice(0,5).join(',') + ' bundle_for_sym=' + JSON.stringify(_liq));
-        }
-        return computeForcedFlowConvexity({
-          oiGate:      gates.oi,
-          premium:     prem,
-          positioning: getPositioning(base),
-          signalDir:   result.dir,
-          liquidation: _liq,
-        });
-      })(),
+      forcedFlow: computeForcedFlowConvexity({
+        oiGate:      gates.oi,
+        premium:     prem,
+        positioning: getPositioning(base),
+        signalDir:   result.dir,
+        liquidation: (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null,
+      }),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
