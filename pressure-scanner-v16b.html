@@ -1978,7 +1978,13 @@ function buildForcedFlowHtml(ffc, opts){
     '</div>';
 }
 
-var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
+/* Added 2026-05-26 — L_UNIVERSE_NONCRYPTO_EXCLUDE_V1
+   STABLE (synthetic stablecoin perp) extends the STABLES exclusion. Discovery
+   on 2026-05-26 surfaced 4 unambiguous additions truly missing from existing
+   exclusion infrastructure (15 of 22 originally-proposed exclusions were
+   already in production via STOCKS and TRADFI lists). */
+var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX',
+                             'STABLE'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
 var EXCLUDE_BASES_MEGACAPS = (function(){
@@ -1987,7 +1993,12 @@ var EXCLUDE_BASES_MEGACAPS = (function(){
   catch(_){ return EXCLUDE_BASES_MEGACAPS_DEFAULT; }
 })();
 var EXCLUDE_BASES_STOCKS=['TSLA','INTC','HOOD','MSTR','AMZN','CRCL','COIN','PLTR','SOXL','MRVL','CRWV','WMT','JPM','V','BRKB','TSM','NVDA','MU','SNDK','META','GOOGL','MSFT','ORCL','AAPL'];
-var EXCLUDE_BASES_TRADFI=['XAU','XAG','XPT','XPD','QQQ','EWJ','EWY'];
+/* Added 2026-05-26 — L_UNIVERSE_NONCRYPTO_EXCLUDE_V1
+   CL (crude oil perp), XAUT (Tether Gold — gold microstructure regardless of
+   crypto wrapper), SPY (S&P 500 ETF perp) extend the existing TRADFI exclusion.
+   See STABLES note above for context. */
+var EXCLUDE_BASES_TRADFI=['XAU','XAG','XPT','XPD','QQQ','EWJ','EWY',
+                         'CL','XAUT','SPY'];
 var EXCLUDE_BASES=new Set(EXCLUDE_BASES_STABLES.concat(EXCLUDE_BASES_MEGACAPS).concat(EXCLUDE_BASES_STOCKS).concat(EXCLUDE_BASES_TRADFI));
 
 // ── STATE ──────────────────────────────────────────────────────────
