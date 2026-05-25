@@ -170,6 +170,42 @@ input{font-family:var(--font-ui);}
 .pc-chip{font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);letter-spacing:.3px;line-height:1.4;}
 .pc-chip-prime{background:rgba(64,180,255,0.16);color:#5cc1ff;border:1px solid rgba(64,180,255,0.42);}
 .pc-chip-hc{background:rgba(240,200,80,0.14);color:#f0c850;border:1px solid rgba(240,200,80,0.36);}
+
+/* L_DISCIPLINE_CARD_V1 — Position-level Discipline Surface section between
+   .pc-head and .pc-mech. Collapsed by default (just verdict + sizing
+   headline). Click header to expand the full body (sizing + pricing + budget
+   + fitness). Preference persists via acress_discipline_section_expanded. */
+.pc-discipline{
+  background:rgba(255,255,255,0.02);
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  font-family:var(--font-mono);
+  font-size:10.5px;
+}
+.pc-discipline-head{
+  display:flex; align-items:center; gap:8px; padding:6px 11px;
+  cursor:pointer; user-select:none;
+  background:rgba(255,255,255,0.015);
+}
+.pc-discipline-head:hover{background:rgba(255,255,255,0.04);}
+.pc-verdict{font-weight:900; letter-spacing:.5px; padding:2px 7px; border-radius:var(--r-pill); font-size:10px;}
+.pc-verdict.verdict-take   {background:rgba(46,232,160,.18); color:#34d690; border:1px solid rgba(46,232,160,.4);}
+.pc-verdict.verdict-caution{background:rgba(240,179,65,.18); color:#f0b441; border:1px solid rgba(240,179,65,.4);}
+.pc-verdict.verdict-skip   {background:rgba(255,90,107,.18); color:#ff6b78; border:1px solid rgba(255,90,107,.4);}
+.pc-verdict-detail{color:var(--muted); font-size:10px;}
+.pc-disc-sizing{color:var(--hi); font-weight:700; margin-left:auto;}
+.pc-disc-toggle{color:var(--faint); font-size:11px; margin-left:6px; width:10px; text-align:center;}
+.pc-discipline-body{display:none; padding:8px 11px 10px;}
+.pc-discipline.expanded .pc-discipline-body{display:block;}
+.pc-disc-block{margin-top:8px;}
+.pc-disc-block:first-child{margin-top:0;}
+.pc-disc-block-title{font-size:9.5px; font-weight:800; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; margin-bottom:3px;}
+.pc-disc-row{font-size:10.5px; line-height:1.45; color:var(--hi);}
+.pc-disc-cap-note{color:var(--amber); font-size:9.5px; font-weight:700;}
+.pc-disc-fit-row{font-size:10.5px; line-height:1.45; padding:1px 0;}
+.pc-disc-fit-green {color:#34d690;}
+.pc-disc-fit-yellow{color:#f0b441;}
+.pc-disc-fit-red   {color:#ff6b78;}
 .pc-score-wrap{display:flex;align-items:baseline;gap:5px;flex-shrink:0;}
 .pc-score{font-family:var(--font-mono);font-size:16px;font-weight:900;line-height:1;letter-spacing:-.5px;}
 .pc-score.surgical{color:var(--cyan);}
@@ -2628,6 +2664,388 @@ function getMaxRiskPct(){
 function setMaxRiskPct(v){
   if(isNaN(v)||v<=0||v>50)return;
   localStorage.setItem(MAX_RISK_KEY,String(v));
+}
+
+/* L_DISCIPLINE_SETTINGS_V1 — Upgrade 19.0a Position-Level Discipline Surface.
+   Three new keys (leverage, TP target, liquidity participation) layered on top
+   of the three existing risk-gate keys (acct balance, max risk %, daily loss
+   limit) per Q1 decision 2026-05-26 to reuse existing keys for the matching
+   discipline parameters. All six form the FIXED discipline parameter set —
+   configured once via Settings UI, applied across every signal. */
+var LEVERAGE_CAP_KEY     = 'acress_leverage_cap';
+var TP_TARGET_PCT_KEY    = 'acress_tp_target_pct';
+var LIQ_PARTICIPATION_KEY= 'acress_liquidity_participation_pct';
+
+function getLeverageCap(){
+  var v=parseFloat(localStorage.getItem(LEVERAGE_CAP_KEY));
+  return isNaN(v)||v<=0||v>125?10:v;
+}
+function setLeverageCap(v){
+  if(isNaN(v)||v<=0||v>125)return;
+  localStorage.setItem(LEVERAGE_CAP_KEY,String(v));
+}
+function getTpTargetPct(){
+  var v=parseFloat(localStorage.getItem(TP_TARGET_PCT_KEY));
+  return isNaN(v)||v<=0||v>50?4.0:v;
+}
+function setTpTargetPct(v){
+  if(isNaN(v)||v<=0||v>50)return;
+  localStorage.setItem(TP_TARGET_PCT_KEY,String(v));
+}
+function getLiqParticipationPct(){
+  var v=parseFloat(localStorage.getItem(LIQ_PARTICIPATION_KEY));
+  return isNaN(v)||v<=0||v>50?1.0:v;
+}
+function setLiqParticipationPct(v){
+  if(isNaN(v)||v<=0||v>50)return;
+  localStorage.setItem(LIQ_PARTICIPATION_KEY,String(v));
+}
+
+/* L_DISCIPLINE_SETTINGS_V1 — card collapsible state. Default false (collapsed)
+   per Q2 2026-05-26. Persists across reloads — operator only expands cards
+   they're actively evaluating. */
+var DISCIPLINE_EXPANDED_KEY = 'acress_discipline_section_expanded';
+function getDisciplineExpanded(){
+  return localStorage.getItem(DISCIPLINE_EXPANDED_KEY) === 'true';
+}
+function setDisciplineExpanded(v){
+  localStorage.setItem(DISCIPLINE_EXPANDED_KEY, v ? 'true' : 'false');
+}
+
+/* L_DAILY_BUDGET_V1 — UTC midnight anchor per CLAUDE.md "today's UTC 00:00"
+   convention. Distinct from the existing isDateToday() which uses NY time
+   for the paper-trading widget. */
+function todayUtcMidnightMs(){
+  var d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0);
+}
+
+/* L_DAILY_BUDGET_V1 — computes today's realized loss from the local tracker.
+   Tracker is the authoritative client-side record of paper + live trades.
+   For LIVE-only daily budget, this includes ALL closed trades regardless of
+   mode; can be refined later to filter by tradeMode. */
+function computeTodayRealizedLossUsd(){
+  if (typeof tracker === 'undefined' || !Array.isArray(tracker) || !tracker.length) return 0;
+  var cutoff = todayUtcMidnightMs();
+  var loss = 0;
+  for (var i = 0; i < tracker.length; i++) {
+    var t = tracker[i];
+    if (!t || t.status !== 'closed' || !t.closedAt) continue;
+    if (t.closedAt < cutoff) continue;
+    var p = (t.finalPnlUsd != null) ? t.finalPnlUsd : 0;
+    if (p < 0) loss += p;  // accumulate negative values
+  }
+  return loss;  // negative number or 0
+}
+
+function computeDailyBudget(){
+  var limit = getDailyLossLimit();   // positive USD value
+  var realizedLoss = computeTodayRealizedLossUsd(); // ≤ 0
+  var used = Math.abs(realizedLoss);
+  var remaining = Math.max(0, limit - used);
+  var pct = limit > 0 ? (remaining / limit * 100) : 0;
+  return {
+    limit_usd:     limit,
+    used_usd:      used,
+    remaining_usd: remaining,
+    remaining_pct: Math.round(pct),
+  };
+}
+
+/* L_POSITION_SIZING_V1 — per-mechanism SL distance + position sizing.
+   Per Q5 2026-05-26: sweep-reclaim mechs derive SL from gates.sweep.ref
+   ± 0.1% buffer; OI-based + fallback use static 1.5% LONG / 1.0% SHORT.
+   Empirical per-mech calibration deferred to Upgrade 19.0c. */
+function computeSlDistancePct(signal){
+  if (!signal) return 1.5;
+  var dir = signal.dir;
+  var mechType = signal.mechanism && signal.mechanism.type || '';
+  var mechName = signal.mechanism && signal.mechanism.name || '';
+  // Sweep-reclaim mechanisms — derive from swept level
+  if (signal._gateSweep && signal._gateSweep.ref && signal.entryPrice) {
+    var swept = signal._gateSweep.ref;
+    var entry = signal.entryPrice;
+    if (dir === 'LONG') {
+      var sl_price = swept * (1 - 0.001);
+      return Math.max(0.1, (entry - sl_price) / entry * 100);
+    } else {
+      var sl_price2 = swept * (1 + 0.001);
+      return Math.max(0.1, (sl_price2 - entry) / entry * 100);
+    }
+  }
+  // OI-based + fallback (static V1 defaults)
+  return (dir === 'LONG') ? 1.5 : 1.0;
+}
+
+function computePositionSize(signal){
+  var acct = getAcctBalance();
+  var riskPct = getMaxRiskPct();
+  var leverage = getLeverageCap();
+  var liqPct = getLiqParticipationPct();
+  var slPct = computeSlDistancePct(signal);
+  var maxLossUsd = acct * (riskPct / 100);
+  var notionalRisk = (slPct > 0) ? (maxLossUsd / (slPct / 100)) : 0;
+  // Liquidity participation cap: position notional capped at liqPct of 5-min quote volume
+  var notionalLiqCap = Infinity;
+  if (signal && signal._medianVol5m && signal._medianVol5m > 0) {
+    notionalLiqCap = signal._medianVol5m * (liqPct / 100);
+  }
+  var notional = Math.min(notionalRisk, notionalLiqCap);
+  var bound = (notional === notionalRisk) ? 'risk' : 'liquidity';
+  var margin = (leverage > 0) ? (notional / leverage) : notional;
+  // SL price
+  var entry = signal.entryPrice || signal.price || 0;
+  var sl_price = 0;
+  if (signal.dir === 'LONG')      sl_price = entry * (1 - slPct/100);
+  else if (signal.dir === 'SHORT') sl_price = entry * (1 + slPct/100);
+  return {
+    sl_distance_pct: slPct,
+    sl_price:        sl_price,
+    max_loss_usd:    maxLossUsd,
+    notional_usd:    notional,
+    notional_risk_cap_usd: notionalRisk,
+    notional_liq_cap_usd:  notionalLiqCap,
+    bound_by:        bound,
+    margin_usd:      margin,
+    leverage:        leverage,
+  };
+}
+
+/* L_TRUE_BREAKEVEN_V1 — round-trip cost + true BE + first profit + TP price.
+   Static fee assumptions for V1 (Bybit regular perp). Real fee API + dynamic
+   slippage deferred to Upgrade 19.1. */
+var DISCIPLINE_MAKER_REBATE_PCT = -0.01;   // -0.01% (rebate, negative cost)
+var DISCIPLINE_TAKER_FEE_PCT    =  0.055;  //  0.055%
+var DISCIPLINE_SLIPPAGE_PCT     =  0.05;   //  0.05% conservative
+function computeRoundTripCostPct(){
+  // |maker rebate| absorbed via the absolute (because rebate REDUCES net cost on close, but we conservatively assume taker on entry+close):
+  // Conservative interpretation: round-trip = taker_entry + slippage + taker_exit (treating rebate as zero margin of safety)
+  // The brief's formula: -0.01 + 0.055 + 0.05 = 0.095% — uses ONE leg of each + slippage. We follow the brief verbatim.
+  return Math.abs(DISCIPLINE_MAKER_REBATE_PCT) * -1 + DISCIPLINE_TAKER_FEE_PCT + DISCIPLINE_SLIPPAGE_PCT;
+}
+function computePricing(signal){
+  var entry = signal.entryPrice || signal.price || 0;
+  var dir   = signal.dir;
+  var tpPct = getTpTargetPct();
+  var rtCost = computeRoundTripCostPct();
+  if (!entry || entry <= 0) {
+    return { entry: entry, true_be: 0, first_profit: 0, tp_price: 0, round_trip_cost_pct: rtCost };
+  }
+  if (dir === 'LONG') {
+    var be   = entry * (1 + rtCost / 100);
+    var fp   = be * (1 + 0.10 / 100);
+    var tp   = entry * (1 + tpPct / 100);
+    return { entry: entry, true_be: be, first_profit: fp, tp_price: tp, round_trip_cost_pct: rtCost };
+  } else {
+    var be2  = entry * (1 - rtCost / 100);
+    var fp2  = be2 * (1 - 0.10 / 100);
+    var tp2  = entry * (1 - tpPct / 100);
+    return { entry: entry, true_be: be2, first_profit: fp2, tp_price: tp2, round_trip_cost_pct: rtCost };
+  }
+}
+
+/* L_FITNESS_VERDICT_V1 — five-dimension structural fitness verdict.
+   Each dimension grades GREEN / YELLOW / RED. Composite verdict computed per
+   Q3 2026-05-26: critical-RED on sophisticated_flow OR structural_pull forces
+   SKIP regardless of others. Otherwise counts reds + yellows. */
+function gradeExecution(signal, sizing){
+  // Dimension 1 — liquidity capacity + volatility regime
+  if (!signal || !sizing) return { grade: 'YELLOW', detail: 'incomplete data' };
+  var medVol = signal._medianVol5m;
+  var notional = sizing.notional_usd;
+  var atrPct = (signal.atr5m && signal.entryPrice > 0) ? (signal.atr5m / signal.entryPrice * 100) : null;
+  var slPct = sizing.sl_distance_pct;
+  var liqRatio = (medVol > 0) ? (notional / medVol) : Infinity;
+  var atrRatio = (atrPct != null && slPct > 0) ? (atrPct / slPct) : null;
+  // Combine — worst dimension wins
+  var liqGrade = (liqRatio < 0.01) ? 'GREEN' : (liqRatio < 0.03) ? 'YELLOW' : 'RED';
+  var volGrade;
+  if (atrRatio == null)                   volGrade = 'YELLOW';
+  else if (atrRatio < 0.5)                volGrade = 'GREEN';
+  else if (atrRatio < 1.0)                volGrade = 'YELLOW';
+  else                                    volGrade = 'RED';
+  var rank = { GREEN: 0, YELLOW: 1, RED: 2 };
+  var grade = (rank[liqGrade] >= rank[volGrade]) ? liqGrade : volGrade;
+  var liqPctTxt = isFinite(liqRatio) ? (liqRatio * 100).toFixed(1) + '%' : 'n/a';
+  var atrTxt = (atrRatio != null) ? (atrRatio.toFixed(2) + '× SL') : 'ATR n/a';
+  var detail;
+  if (grade === 'GREEN')      detail = '$' + Math.round(notional) + ' fits ' + liqPctTxt + ' of 5-min vol · ATR safe vs SL (' + atrTxt + ')';
+  else if (grade === 'YELLOW') detail = '$' + Math.round(notional) + ' at ' + liqPctTxt + ' of 5-min vol · ATR ' + atrTxt;
+  else                        detail = '$' + Math.round(notional) + ' is ' + liqPctTxt + ' of 5-min vol — slippage likely · ATR ' + atrTxt;
+  return { grade: grade, detail: detail };
+}
+
+function gradeSophisticatedFlow(signal){
+  // Dimension 2 — top-trader alignment + taker flow direction
+  if (!signal) return { grade: 'YELLOW', detail: 'incomplete data' };
+  var pos = signal.positioning;
+  var dir = signal.dir;
+  var posState = null;
+  if (pos && typeof classifyPositioning === 'function') {
+    var c = classifyPositioning(pos, dir);
+    posState = c.state;
+  }
+  var topLong  = pos ? pos.top_long_pct : null;
+  var topShort = pos ? pos.top_short_pct : null;
+  var topMaxPct = (topLong != null && topShort != null) ? Math.max(topLong, topShort) : null;
+  // Taker flow alignment from last k5 bar: bv/qv > 0.55 → buy-aligned, < 0.45 → sell-aligned
+  var takerAligned = null;
+  if (signal._takerRatio5m != null && isFinite(signal._takerRatio5m)) {
+    if (dir === 'LONG'  && signal._takerRatio5m > 0.55) takerAligned = true;
+    else if (dir === 'SHORT' && signal._takerRatio5m < 0.45) takerAligned = true;
+    else if ((dir === 'LONG' && signal._takerRatio5m < 0.45) || (dir === 'SHORT' && signal._takerRatio5m > 0.55)) takerAligned = false;
+    else takerAligned = null;
+  }
+  var greenPos = (posState === 'ALIGNED_WITH_TOPS' || posState === 'DIVERGENT_RETAIL');
+  var redPos   = (posState === 'AGAINST_TOPS' || posState === 'DIVERGENT_RISK');
+  if (redPos || takerAligned === false) {
+    return { grade: 'RED', detail: 'tops ' + (topMaxPct != null ? Math.round(topMaxPct) + '% ' + (topLong > topShort ? 'long' : 'short') + ' · ' : '') + 'positioning AGAINST your direction' };
+  }
+  if (greenPos && takerAligned !== false) {
+    return { grade: 'GREEN', detail: 'tops ' + (topMaxPct != null ? Math.round(topMaxPct) + '% ' + (topLong > topShort ? 'long' : 'short') + ' · ' : '') + posState };
+  }
+  return { grade: 'YELLOW', detail: 'positioning ' + (posState || 'unknown') + ' · taker ' + (takerAligned == null ? 'mixed' : (takerAligned ? 'aligned' : 'opposed')) };
+}
+
+function gradeBoundary(signal, sizing){
+  // Dimension 3 — nearest weakening level vs SL distance
+  if (!signal || !sizing) return { grade: 'YELLOW', detail: 'incomplete data' };
+  var slPct = sizing.sl_distance_pct;
+  // Use sweepState.for_signal if present (already filtered by dir), else neither side qualifies
+  var ss = signal.sweepState;
+  if (!ss || !ss.for_signal || ss.for_signal.nearest_depletion_score == null) {
+    return { grade: 'GREEN', detail: 'no weakening levels nearby (clean boundary)' };
+  }
+  var distPct = Math.abs(ss.for_signal.nearest_level_distance * 100);
+  var ratio = (slPct > 0) ? (distPct / slPct) : Infinity;
+  var tier = ss.for_signal.nearest_level_tier || 'unknown';
+  if (ratio > 2.0) return { grade: 'GREEN',  detail: tier + ' level ' + distPct.toFixed(2) + '% away (SL is ' + slPct.toFixed(2) + '%)' };
+  if (ratio > 1.0) return { grade: 'YELLOW', detail: tier + ' level ' + distPct.toFixed(2) + '% away · ratio ' + ratio.toFixed(2) + '× SL' };
+  return { grade: 'RED', detail: tier + ' level ' + distPct.toFixed(2) + '% away (within SL ' + slPct.toFixed(2) + '%) — high stop-hunt risk' };
+}
+
+function gradeStructuralPull(signal){
+  // Dimension 4 — FFC composite + alignment + reliability (direct read).
+  // Critical-RED dimension per Q3.
+  if (!signal || !signal.forcedFlow) return { grade: 'YELLOW', detail: 'FFC unavailable', critical_red: false };
+  var ff = signal.forcedFlow;
+  var sign = (typeof ff.score === 'number') ? (ff.score >= 0 ? '+' : '') + ff.score : '?';
+  if (ff.alignment === 'AGAINST') {
+    return { grade: 'RED', detail: 'FFC ' + sign + ' AGAINST · ' + (ff.reliability || '?') + ' reliability', critical_red: true };
+  }
+  if (ff.alignment === 'ALIGNED' && (ff.reliability === 'MEDIUM' || ff.reliability === 'HIGH')) {
+    return { grade: 'GREEN', detail: 'FFC ' + sign + ' ALIGNED · ' + ff.reliability + ' reliability', critical_red: false };
+  }
+  // NEUTRAL or LOW with concurring sign — yellow
+  return { grade: 'YELLOW', detail: 'FFC ' + sign + ' ' + (ff.alignment || 'NEUTRAL') + ' · ' + (ff.reliability || 'LOW') + ' reliability', critical_red: false };
+}
+
+function gradeTrapRisk(signal){
+  // Dimension 5 — cascade-position + absorption + drive
+  if (!signal) return { grade: 'YELLOW', detail: 'incomplete data' };
+  var liq = signal.liquidation || (typeof window !== 'undefined' && window.__acressLiqStats ? window.__acressLiqStats[signal.sym] : null);
+  var eff = signal.efficiency;
+  var drive = signal.spotDrive;
+  // P1 intensity rating
+  var intT = liq && liq.intensityTotal;
+  var p1State;
+  if (intT == null)             p1State = 'unknown';
+  else if (intT < 1.0)          p1State = 'fresh';
+  else if (intT < 2.5)          p1State = 'mid';
+  else                          p1State = 'exhausted';
+  // Efficiency
+  var effPct = eff && eff.pct;
+  var effState;
+  if (effPct == null)           effState = 'unknown';
+  else if (effPct >= 70)        effState = 'clean';
+  else if (effPct >= 30)        effState = 'mid';
+  else                          effState = 'absorption';
+  // Drive
+  var driveState = drive && drive.state || 'unknown';
+  // Worst grade wins
+  var bad = (p1State === 'exhausted') || (effState === 'absorption') || (driveState === 'PERP_LED');
+  var ok  = (p1State === 'fresh' || p1State === 'unknown') && (effState === 'clean' || effState === 'unknown') && (driveState === 'SPOT_LED' || driveState === 'BALANCED' || driveState === 'SPOT_UNAVAILABLE');
+  if (bad) {
+    var causes = [];
+    if (p1State === 'exhausted')        causes.push('P1 exhausted');
+    if (effState === 'absorption')       causes.push('absorption rising');
+    if (driveState === 'PERP_LED')       causes.push('perp-led divergence');
+    return { grade: 'RED', detail: causes.join(' · ') + ' — late-cycle' };
+  }
+  if (ok) {
+    return { grade: 'GREEN', detail: 'P1 ' + p1State + ' · ' + effState + ' displacement · ' + driveState };
+  }
+  return { grade: 'YELLOW', detail: 'P1 ' + p1State + ' · ' + effState + ' · drive ' + driveState };
+}
+
+/* L_POSITION_SIZING_V1 — extract the latest 5m bar taker buy/sell ratio.
+   bv (col 10) / qv (col 7). Returns 0.5 (balanced) on missing data. */
+function takerRatioFromLastBar(k5){
+  if (!Array.isArray(k5) || !k5.length) return null;
+  var last = k5[k5.length - 1];
+  var qv = parseFloat(last[7]);
+  var bv = parseFloat(last[10]);
+  if (!isFinite(qv) || qv <= 0 || !isFinite(bv)) return null;
+  return bv / qv;
+}
+
+/* L_FITNESS_VERDICT_V1 — assemble the complete discipline bundle for a signal.
+   Called from analyzeCoin / analyzeCoinDiag right before signal emission so the
+   bundle rides on the signal object through poll + render. */
+function computeDisciplineBundle(signal){
+  if (!signal) return null;
+  var sizing  = computePositionSize(signal);
+  var pricing = computePricing(signal);
+  var fitness = computeFitnessVerdict(signal, sizing);
+  return {
+    sizing:  sizing,
+    pricing: pricing,
+    fitness: fitness,
+    // budget snapshot is read at render time (depends on global tracker, which
+    // is updated continuously) — not bundled at scan time
+  };
+}
+
+function computeFitnessVerdict(signal, sizing){
+  var d1 = gradeExecution(signal, sizing);
+  var d2 = gradeSophisticatedFlow(signal);
+  var d3 = gradeBoundary(signal, sizing);
+  var d4 = gradeStructuralPull(signal);
+  var d5 = gradeTrapRisk(signal);
+  var dims = [
+    { key: 'execution',           label: 'Execution',         emoji: '⚙', result: d1 },
+    { key: 'sophisticated_flow',  label: 'Smart money',       emoji: '🎯', result: d2 },
+    { key: 'boundary',            label: 'Boundary',          emoji: '🧱', result: d3 },
+    { key: 'structural_pull',     label: 'Structural pull',   emoji: '🌊', result: d4 },
+    { key: 'trap_risk',           label: 'Trap risk',         emoji: '🪤', result: d5 },
+  ];
+  // Q3 critical-RED forces SKIP
+  var criticalRed = false;
+  if (d2.grade === 'RED') criticalRed = true;
+  if (d4.grade === 'RED') criticalRed = true;
+  var reds = dims.filter(function(d){ return d.result.grade === 'RED'; }).length;
+  var yellows = dims.filter(function(d){ return d.result.grade === 'YELLOW'; }).length;
+  var greens  = dims.filter(function(d){ return d.result.grade === 'GREEN'; }).length;
+  var verdict;
+  if (criticalRed) {
+    verdict = 'SKIP';
+  } else if (reds === 0 && yellows <= 1) {
+    verdict = 'TAKE';
+  } else if (reds === 1 && yellows <= 2) {
+    verdict = 'CAUTION';
+  } else if (reds >= 2 || yellows >= 3) {
+    verdict = 'SKIP';
+  } else {
+    verdict = 'CAUTION';
+  }
+  return {
+    verdict:      verdict,
+    critical_red: criticalRed,
+    greens:       greens,
+    yellows:      yellows,
+    reds:         reds,
+    dimensions:   dims,
+  };
 }
 function extractSignalFromCard(btn){
   var card=btn.closest('.pcard');
@@ -5177,6 +5595,12 @@ function computeBreakEven(dir, entryPrice, fundingRatePct, spreadBps, minutesToF
   };
 }
 
+/* L_UNIVERSE_TOP100_VOLUME_V2 — universe selection rank is pure 24h quote
+   volume DESC. Confirmed during 2026-05-26 audit that no velocity-based
+   universe filtering exists at the symbol-selection layer — this marker
+   documents the architectural choice: liquidity rank determines universe;
+   velocity-tier filtering happens at the card-display layer
+   (L_VELOCITY_GREEN_DISPLAY_FILTER_V1) per operator preference. */
 async function fetchTopCoins(n){
   var d=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json();});
   var excludedMegacap = 0, excludedLowRange = 0;
@@ -5407,6 +5831,125 @@ function buildSpotPerpDriveHtml(drive, opts){
   }
   // BALANCED
   return '<div class="vel-line vel-amber"' + style + '>🟡 Drive: <b>BALANCED</b> · no clear lead</div>';
+}
+
+/* L_DISCIPLINE_CARD_V1 — Upgrade 19.0a Position-Level Discipline Surface V1.
+   Render the discipline section between .pc-head and .pc-mech on every card.
+   Default collapsed (per Q2). Only verdict header + position notional + max
+   loss visible on collapse. Expand reveals full sizing/pricing/budget/fitness. */
+function buildDisciplineHtml(s){
+  if (!s || !s.discipline) return '';
+  var d = s.discipline;
+  if (!d.sizing || !d.fitness) return '';
+  var verdict = d.fitness.verdict;
+  var greens  = d.fitness.greens;
+  var yellows = d.fitness.yellows;
+  var reds    = d.fitness.reds;
+  var critRed = d.fitness.critical_red;
+  // Verdict header
+  var verdictEmoji, verdictCls, verdictDetail;
+  if (verdict === 'TAKE') {
+    verdictEmoji = '✓';
+    verdictCls   = 'verdict-take';
+    verdictDetail = greens + ' green' + (yellows ? ' · ' + yellows + ' yellow' : '');
+  } else if (verdict === 'CAUTION') {
+    verdictEmoji = '⚠️';
+    verdictCls   = 'verdict-caution';
+    verdictDetail = greens + ' green · ' + yellows + ' yellow' + (reds ? ' · ' + reds + ' red non-critical' : '');
+  } else {
+    verdictEmoji = '🛑';
+    verdictCls   = 'verdict-skip';
+    if (critRed) {
+      var causes = [];
+      for (var i = 0; i < d.fitness.dimensions.length; i++) {
+        var dm = d.fitness.dimensions[i];
+        if ((dm.key === 'sophisticated_flow' || dm.key === 'structural_pull') && dm.result.grade === 'RED') causes.push(dm.label);
+      }
+      verdictDetail = 'critical-RED on ' + causes.join(' · ');
+    } else {
+      verdictDetail = reds + ' red · ' + yellows + ' yellow';
+    }
+  }
+  // Budget snapshot at render time (depends on tracker which updates continuously)
+  var budget = computeDailyBudget();
+  var expanded = getDisciplineExpanded();
+  var sectClass = 'pc-discipline' + (expanded ? ' expanded' : '');
+  // Sizing summary (always visible)
+  var notionalUsd = Math.round(d.sizing.notional_usd);
+  var maxLossUsd  = Math.round(d.sizing.max_loss_usd);
+  var slPctTxt    = d.sizing.sl_distance_pct.toFixed(2);
+  // Build collapsed header
+  var head = '<div class="pc-discipline-head" onclick="toggleDisciplineSection(this)">'
+    + '<span class="pc-verdict ' + verdictCls + '">' + verdictEmoji + ' ' + verdict + '</span>'
+    + '<span class="pc-verdict-detail">' + verdictDetail + '</span>'
+    + '<span class="pc-disc-sizing">$' + notionalUsd.toLocaleString() + ' · $' + maxLossUsd + ' max loss · SL ' + slPctTxt + '%</span>'
+    + '<span class="pc-disc-toggle">' + (expanded ? '▾' : '▸') + '</span>'
+    + '</div>';
+  // Build expanded body — only when expanded class on root
+  var p = d.pricing;
+  var entryStr = '$' + fP(p.entry);
+  var beStr    = '$' + fP(p.true_be);
+  var fpStr    = '$' + fP(p.first_profit);
+  var tpStr    = '$' + fP(p.tp_price);
+  var tpPct    = getTpTargetPct().toFixed(1);
+  var slPriceStr = '$' + fP(d.sizing.sl_price);
+  var marginUsd  = Math.round(d.sizing.margin_usd);
+  var lev        = d.sizing.leverage;
+  // TP profit potential (USD) — direction-aware
+  var tpProfitUsd = 0;
+  if (p.entry > 0 && p.tp_price > 0) {
+    if (s.dir === 'LONG') tpProfitUsd = (p.tp_price - p.entry) / p.entry * d.sizing.notional_usd;
+    else                  tpProfitUsd = (p.entry - p.tp_price) / p.entry * d.sizing.notional_usd;
+  }
+  var budgetTxt = '$' + Math.round(budget.remaining_usd) + ' of $' + Math.round(budget.limit_usd) + ' remaining (' + budget.remaining_pct + '%)';
+  // Fitness rows
+  var fitRows = '';
+  for (var di = 0; di < d.fitness.dimensions.length; di++) {
+    var dim = d.fitness.dimensions[di];
+    var emoji = dim.result.grade === 'GREEN' ? '🟢' : (dim.result.grade === 'YELLOW' ? '🟡' : '🔴');
+    var rowCls = 'pc-disc-fit-row pc-disc-fit-' + dim.result.grade.toLowerCase();
+    fitRows += '<div class="' + rowCls + '">' + emoji + ' <b>' + dim.label + ':</b> ' + dim.result.detail + '</div>';
+  }
+  var body = '<div class="pc-discipline-body">'
+    + '<div class="pc-disc-block">'
+      + '<div class="pc-disc-block-title">Sizing</div>'
+      + '<div class="pc-disc-row">Position: <b>$' + notionalUsd.toLocaleString() + '</b> notional · $' + marginUsd + ' margin at ' + lev + 'x'
+      + (d.sizing.bound_by === 'liquidity' ? ' <span class="pc-disc-cap-note">(liquidity-capped)</span>' : '') + '</div>'
+      + '<div class="pc-disc-row">Max loss: <b>$' + maxLossUsd + '</b> · SL: ' + slPriceStr + ' (' + slPctTxt + '%)</div>'
+    + '</div>'
+    + '<div class="pc-disc-block">'
+      + '<div class="pc-disc-block-title">Pricing</div>'
+      + '<div class="pc-disc-row">Entry: ' + entryStr + '</div>'
+      + '<div class="pc-disc-row">True BE: ' + beStr + '</div>'
+      + '<div class="pc-disc-row">First profit: ' + fpStr + '</div>'
+      + '<div class="pc-disc-row">TP: <b>' + tpStr + '</b> (' + tpPct + '% · $' + Math.round(tpProfitUsd) + ' potential)</div>'
+    + '</div>'
+    + '<div class="pc-disc-block">'
+      + '<div class="pc-disc-block-title">Daily budget</div>'
+      + '<div class="pc-disc-row">' + budgetTxt + '</div>'
+    + '</div>'
+    + '<div class="pc-disc-block">'
+      + '<div class="pc-disc-block-title">Fitness</div>'
+      + fitRows
+    + '</div>'
+  + '</div>';
+  return '<div class="' + sectClass + '">' + head + body + '</div>';
+}
+
+/* L_DISCIPLINE_CARD_V1 — click handler on the header toggles expand state and
+   persists to localStorage so the operator's preference survives reloads. */
+function toggleDisciplineSection(headEl){
+  var sect = headEl.closest('.pc-discipline');
+  if (!sect) return;
+  var nowExpanded = !sect.classList.contains('expanded');
+  // Toggle ALL discipline sections on the page (operator preference, not per-card)
+  setDisciplineExpanded(nowExpanded);
+  var all = document.querySelectorAll('.pc-discipline');
+  for (var i = 0; i < all.length; i++) {
+    all[i].classList.toggle('expanded', nowExpanded);
+    var tog = all[i].querySelector('.pc-disc-toggle');
+    if (tog) tog.textContent = nowExpanded ? '▾' : '▸';
+  }
 }
 // OI comes from Bybit. Binance's openInterestHist rejects file:// origin and
 // CORS proxies are too unreliable for hundred-coin scans. Bybit returns CORS
@@ -6628,6 +7171,12 @@ async function analyzeCoin(symObj){
       spotDrive: _spotDrive,
       /* L_FFC_P2_WIRING_V1 — sweep state bundle for card + DB + Telegram */
       sweepState: _sweepState,
+      /* L_POSITION_SIZING_V1 + L_FITNESS_VERDICT_V1 — inputs the discipline
+         bundle needs at compute time (carried alongside the signal so the
+         bundle can be recomputed from a re-emitted signal during refresh). */
+      _medianVol5m:   _medianVol,
+      _takerRatio5m:  takerRatioFromLastBar(k5),
+      _gateSweep:     gates.sweep,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -6635,6 +7184,9 @@ async function analyzeCoin(symObj){
     /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
        confluence_quality_score so the bridge can poll and gate alerts. */
     attachPrimeFields(_signal);
+    /* L_FITNESS_VERDICT_V1 — discipline bundle computed once at signal birth,
+       reused in card render + bridge Telegram template. */
+    _signal.discipline = computeDisciplineBundle(_signal);
     return _signal;
   }catch(e){
     return null;
@@ -7028,6 +7580,10 @@ async function analyzeCoinDiag(symObj,diag){
       spotDrive: _spotDrive,
       /* L_FFC_P2_WIRING_V1 — sweep state bundle for card + DB + Telegram. */
       sweepState: _sweepState,
+      /* L_POSITION_SIZING_V1 + L_FITNESS_VERDICT_V1 — diag/emit path discipline inputs */
+      _medianVol5m:   _medianVol,
+      _takerRatio5m:  takerRatioFromLastBar(k5),
+      _gateSweep:     gates.sweep,
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -7035,7 +7591,10 @@ async function analyzeCoinDiag(symObj,diag){
     };
     /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
        confluence_quality_score on the diag/emit path. */
-    return attachPrimeFields(_signal);
+    attachPrimeFields(_signal);
+    /* L_FITNESS_VERDICT_V1 — discipline bundle for card + Telegram + DB. */
+    _signal.discipline = computeDisciplineBundle(_signal);
+    return _signal;
   }catch(e){
     throw e;
   }
@@ -7231,6 +7790,19 @@ function renderResults(){invalidateMechanismStats();
   if(dirFilter==='long')filtered=filtered.filter(function(s){return s.dir==='LONG';});
   if(dirFilter==='short')filtered=filtered.filter(function(s){return s.dir==='SHORT';});
   if(mechFilter&&mechFilter!=='all')filtered=filtered.filter(function(s){return s.mechanism&&s.mechanism.name===mechFilter;});
+  /* L_VELOCITY_GREEN_DISPLAY_FILTER_V1 — Issue 2 (folded into 19.0a deploy).
+     Display-layer filter: hide signals with velocity decile < 9 unless the
+     operator has toggled the setting off. DB logging happens upstream in
+     runScan via signals.push(r) before this render, so filtered signals
+     still log to analysis_log + count in cohort tracking + flow through
+     PRIME alert gate. This filter ONLY affects what shows on the dashboard. */
+  var _hideNonGreen = localStorage.getItem('acress_hide_non_green_velocity');
+  if (_hideNonGreen == null) _hideNonGreen = 'true';   // default ON at first scan
+  if (_hideNonGreen === 'true') {
+    filtered = filtered.filter(function(s){
+      return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9;
+    });
+  }
   /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — apply the new filters. For OI stage,
      'untagged' matches signals where s.oiStage is null/undefined (the DB
      stores those as NULL and the endpoint surfaces them via
@@ -8075,6 +8647,7 @@ function buildCard(s, moodKey){
         +'<span class="pc-score-lbl">'+tierLbl+'</span>'
       +'</div>'
     +'</div>'
+    +buildDisciplineHtml(s) /* L_DISCIPLINE_CARD_V1 */
     +'<div class="pc-mech">'
       +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+oiStageBadge(s)+'</div>'
       +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+'</div>'
@@ -9763,9 +10336,48 @@ function updateCrossSummary(){
 // ════════════════════════════════════════════════════════════════════
 // v16ab — Settings modal
 // ════════════════════════════════════════════════════════════════════
+/* L_DISCIPLINE_SETTINGS_V1 — change handlers persist values via the existing
+   setter pattern. Validation lives inside each setter (rejects NaN, <=0, etc).
+   No restart needed — next scan picks up new values. */
+function onDisciplineSettingChange(key, value){
+  var v = parseFloat(value);
+  if (!isFinite(v) || v <= 0) return;
+  if      (key === 'acct')  setAcctBalance(v);
+  else if (key === 'risk')  setMaxRiskPct(v);
+  else if (key === 'lev')   setLeverageCap(v);
+  else if (key === 'tp')    setTpTargetPct(v);
+  else if (key === 'daily') setDailyLossLimit(v);
+  else if (key === 'liq')   setLiqParticipationPct(v);
+}
+
+/* L_VELOCITY_GREEN_DISPLAY_FILTER_V1 — visual filter toggle in settings. */
+function onVelocityFilterToggle(enabled){
+  localStorage.setItem('acress_hide_non_green_velocity', enabled ? 'true' : 'false');
+  if (typeof renderResults === 'function') {
+    try { renderResults(); } catch(e) {}
+  }
+}
+
 function openSettingsModal(){
   var bg=document.getElementById('settings-modal-bg');
-  if(bg){ bg.classList.add('open'); renderSettingsModal(); }
+  if(bg){ bg.classList.add('open'); renderSettingsModal(); populateDisciplineSettings(); }
+}
+
+/* L_DISCIPLINE_SETTINGS_V1 — populate input fields from current persisted
+   values when the settings modal opens. */
+function populateDisciplineSettings(){
+  var el;
+  el = document.getElementById('disc-acct-balance');  if (el) el.value = getAcctBalance();
+  el = document.getElementById('disc-risk-pct');      if (el) el.value = getMaxRiskPct();
+  el = document.getElementById('disc-leverage');      if (el) el.value = getLeverageCap();
+  el = document.getElementById('disc-tp-pct');        if (el) el.value = getTpTargetPct();
+  el = document.getElementById('disc-daily-limit');   if (el) el.value = getDailyLossLimit();
+  el = document.getElementById('disc-liq-pct');       if (el) el.value = getLiqParticipationPct();
+  el = document.getElementById('disc-hide-non-green-vel');
+  if (el) {
+    var stored = localStorage.getItem('acress_hide_non_green_velocity');
+    el.checked = (stored == null) ? true : (stored === 'true');
+  }
 }
 function closeSettingsModal(){
   var bg=document.getElementById('settings-modal-bg');
@@ -11056,6 +11668,51 @@ function openDrilldownByHourFromVPS(hour){
       <button class="settings-modal-close" onclick="closeSettingsModal()" title="Close (Esc)">×</button>
     </div>
     <div class="settings-modal-body">
+      <!-- L_DISCIPLINE_SETTINGS_V1 — Position Discipline section consolidates
+           the six FIXED discipline parameters used by 19.0a's per-signal
+           sizing + verdict. Three of these keys (acct balance, max risk %,
+           daily loss limit) are existing; three are new (leverage cap, TP
+           target, liquidity participation). Values persist via localStorage,
+           apply on next scan. -->
+      <div class="settings-section" style="border:1px solid rgba(140,200,140,.3);background:rgba(140,200,140,.04);padding:14px;border-radius:6px;">
+        <h4 style="color:#86d186;">🎯 Position Discipline — fixed parameters applied to every signal</h4>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.55;">
+          These six parameters are <b style="color:var(--hi);">FIXED across all signals</b>. The system computes whether each signal is worthy of this fixed sizing, surfaces a TAKE/CAUTION/SKIP verdict, and shows your position size + true breakeven + TP target on every card. Changes apply on the next scan; no restart needed.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;font-size:11px;">
+          <label style="display:flex;flex-direction:column;gap:3px;">
+            <span style="color:var(--muted);font-weight:700;">Account size (USD)</span>
+            <input type="number" id="disc-acct-balance" min="100" step="100" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);" onchange="onDisciplineSettingChange('acct',this.value)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;">
+            <span style="color:var(--muted);font-weight:700;">Risk per trade (%)</span>
+            <input type="number" id="disc-risk-pct" min="0.1" max="50" step="0.1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);" onchange="onDisciplineSettingChange('risk',this.value)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;">
+            <span style="color:var(--muted);font-weight:700;">Leverage cap (×)</span>
+            <input type="number" id="disc-leverage" min="1" max="125" step="1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);" onchange="onDisciplineSettingChange('lev',this.value)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;">
+            <span style="color:var(--muted);font-weight:700;">TP target (%)</span>
+            <input type="number" id="disc-tp-pct" min="0.5" max="50" step="0.5" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);" onchange="onDisciplineSettingChange('tp',this.value)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;">
+            <span style="color:var(--muted);font-weight:700;">Daily loss limit (USD)</span>
+            <input type="number" id="disc-daily-limit" min="10" step="10" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);" onchange="onDisciplineSettingChange('daily',this.value)" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:3px;">
+            <span style="color:var(--muted);font-weight:700;">Liquidity participation (% of 5-min vol)</span>
+            <input type="number" id="disc-liq-pct" min="0.1" max="50" step="0.1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);" onchange="onDisciplineSettingChange('liq',this.value)" />
+          </label>
+        </div>
+        <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);">
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);cursor:pointer;">
+            <input type="checkbox" id="disc-hide-non-green-vel" onchange="onVelocityFilterToggle(this.checked)" />
+            <span><b>Hide non-green velocity signals</b> from card display (DB logging continues — only visual filtering)</span>
+          </label>
+        </div>
+      </div>
+
       <div class="settings-section" style="border:1px solid rgba(65,209,255,.3);background:rgba(65,209,255,.04);padding:14px;border-radius:6px;">
         <h4 style="color:var(--cyan);">💾 Backup &amp; Restore — protect your data before any change</h4>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55;">
