@@ -6582,6 +6582,36 @@ async function runScan(){
   saveZBuffers();
   /* L_SWEEP_STATE_TRACKING_V1 — persist per-symbol level state alongside zBuffers */
   saveLevelsState();
+  /* L_SWEEP_STATE_TRACKING_V1 — TEMPORARY Phase A diagnostic log. Emits a one-line
+     summary of per-symbol level state at scan-end. Relayed to bridge logs via the
+     '[Acress' filter. Removed before Phase B ships. */
+  try {
+    var _syms = Object.keys(levelsState);
+    var _populated = _syms.filter(function(b){ return levelsState[b].length > 0; });
+    var _totalLevels = _syms.reduce(function(a,b){ return a + levelsState[b].length; }, 0);
+    var _totalEvents = 0;
+    var _classBuckets = { tested_and_held: 0, swept_and_rejected: 0, broke_through: 0 };
+    for (var _b = 0; _b < _syms.length; _b++) {
+      var _levs = levelsState[_syms[_b]];
+      for (var _li = 0; _li < _levs.length; _li++) {
+        _totalEvents += _levs[_li].retest_events.length;
+        for (var _ei = 0; _ei < _levs[_li].retest_events.length; _ei++) {
+          var _cls = _levs[_li].retest_events[_ei].classification;
+          if (_classBuckets[_cls] != null) _classBuckets[_cls]++;
+        }
+      }
+    }
+    // Pick a sample symbol with populated levels for manual inspection (Criterion 6)
+    var _sampleSym = _populated[0] || null;
+    var _sampleDump = _sampleSym ? JSON.stringify(levelsState[_sampleSym]).slice(0, 600) : '(none)';
+    console.log('[Acress LEVELS-SUMMARY] symbols_with_levels=' + _populated.length +
+      ' total_levels=' + _totalLevels +
+      ' total_events=' + _totalEvents +
+      ' held=' + _classBuckets.tested_and_held +
+      ' swept=' + _classBuckets.swept_and_rejected +
+      ' broke=' + _classBuckets.broke_through +
+      ' sample=' + _sampleSym + ':' + _sampleDump);
+  } catch(e) { console.log('[Acress LEVELS-SUMMARY] error: ' + e.message); }
   console.log('[Acress] Scan complete:',{checked,errors,diagnostics});
   console.log('[Acress] Top 20 scores:',diagnostics.topScores.slice(0,20));
   var live=signals.filter(function(s){return s.validUntil>Date.now();}).length;
