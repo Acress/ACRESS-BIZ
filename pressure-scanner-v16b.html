@@ -1655,6 +1655,7 @@ function computeForcedFlowConvexity(input){
   var positioning = input.positioning; // cached positioning bundle (raw pcts)
   var signalDir = input.signalDir;     // 'LONG' | 'SHORT' | null
   var liquidation = input.liquidation; // L_FFC_P1_WIRING_V1 — bridge-pushed per-symbol liq stats (null until 8.6 P1 wiring shipped)
+  var spotDrive = input.spotDrive;     // L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — classifySpotPerpDrive() result (null when not yet computed)
 
   /* V1 input availability — P1 promotes to 'functional' when the bridge has
      pushed activity-bearing liquidation stats for this symbol (post-8.6
@@ -1700,12 +1701,20 @@ function computeForcedFlowConvexity(input){
     }
   }
 
-  /* M3 — Spot vs perp basis (DEGRADED proxy: using futures mark-vs-index
-     until 21.6 ships true spot data). Perp premium (mark > index) implies
-     perp expected to compress DOWN toward index → negative directional
-     value. Capped at ±0.5 because this is a weak proxy. */
+  /* L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — M3 — Spot vs perp drive.
+     When classifySpotPerpDrive returned a state (SPOT_LED/PERP_LED/BALANCED),
+     M3 uses the spot-derived directional value and promotes to 'functional'.
+     When state is SPOT_UNAVAILABLE (no Binance spot pair) or spotDrive is
+     null (computation didn't happen), fall back to the existing mark-vs-index
+     proxy at 'degraded' — preserves structural information for symbols that
+     lack spot pairs rather than zeroing M3. Confirmed 2026-05-26 via Q3:
+     "Zeroing M3 would be philosophical purity at the cost of useful signal." */
   var m3 = 0;
-  if (premium && premium.markPrice != null && premium.indexPrice != null) {
+  if (spotDrive && (spotDrive.state === 'SPOT_LED' || spotDrive.state === 'PERP_LED' || spotDrive.state === 'BALANCED')) {
+    inputs.M3 = 'functional';
+    if (typeof spotDrive.m3 === 'number' && isFinite(spotDrive.m3)) m3 = spotDrive.m3;
+  } else if (premium && premium.markPrice != null && premium.indexPrice != null) {
+    // SPOT_UNAVAILABLE or spotDrive missing — graceful degradation to mark-vs-index proxy
     var idx = parseFloat(premium.indexPrice);
     var mark = parseFloat(premium.markPrice);
     if (isFinite(idx) && idx > 0 && isFinite(mark)) {
@@ -5199,6 +5208,164 @@ async function fetchKlines(base,interval,limit){
   if(!r.ok)throw new Error('klines '+interval);
   return r.json();
 }
+
+/* L_SPOT_PERP_DRIVE_V1 — Upgrade 21.6 (Spot vs Perp Drive Detection)
+   Polls Binance spot to compare spot CVD + price-change vs perp CVD + price-change
+   over the same 15-min window. Classifies each symbol's current drive as
+   SPOT_LED, PERP_LED, BALANCED, or SPOT_UNAVAILABLE. Feeds M3 in FFC composite.
+
+   Architectural note: scanner-side fetch by deliberate choice (Q1 confirmed
+   2026-05-26). Binance spot REST has no bridge-only constraint (no WS, no
+   auth). Fits the existing Promise.all parallel-fetch pattern in analyzeCoin
+   and analyzeCoinDiag. */
+var binanceSpotSet = null;       // Set of USDT-quoted TRADING spot symbols
+var binanceSpotSetAt = 0;
+var BINANCE_SPOT_REFRESH_MS = 24 * 60 * 60 * 1000;   // 24h
+var binanceSpotResolveCache = {};    // perp_form → spot_form_or_null (session cache)
+
+async function ensureBinanceSpotSet(){
+  if (binanceSpotSet && (Date.now() - binanceSpotSetAt) < BINANCE_SPOT_REFRESH_MS) return binanceSpotSet;
+  try {
+    var d = await fetch('https://api.binance.com/api/v3/exchangeInfo', {signal: AbortSignal.timeout(10000)}).then(function(r){ return r.json(); });
+    var s = new Set();
+    if (d && Array.isArray(d.symbols)) {
+      d.symbols.forEach(function(sym){
+        if (sym.status === 'TRADING' && sym.quoteAsset === 'USDT' && sym.symbol) s.add(sym.symbol);
+      });
+    }
+    binanceSpotSet = s;
+    binanceSpotSetAt = Date.now();
+    console.log('[Acress] Binance spot universe:', s.size, 'USDT pairs');
+  } catch (e) {
+    console.warn('[Acress] Binance spot exchangeInfo failed:', e.message);
+    if (!binanceSpotSet) binanceSpotSet = new Set();   // empty → all resolutions return null → SPOT_UNAVAILABLE
+  }
+  return binanceSpotSet;
+}
+
+/* L_SPOT_PERP_DRIVE_V1 — variant-fallback resolver for scanner→spot pair mapping.
+   Empirically derived from 2026-05-26 enumeration of Binance fapi (12 prefixed
+   symbols total):
+     1000PEPE/BONK/FLOKI/LUNC/SHIB/XEC perps → strip-1000 → spot pair exists
+     1000CAT/CHEEMS/SATS perps             → as-is → spot pair exists (keeps prefix)
+     1000RATS, 1000000BOB, 1000000MOG       → no spot pair (returns null)
+   Variant order: as-is, strip-1000, strip-10000, strip-1000000. First match wins.
+   Cached per session (Set is stable for 24h refresh interval). */
+function resolveSpotPair(perpSym){
+  if (binanceSpotResolveCache.hasOwnProperty(perpSym)) return binanceSpotResolveCache[perpSym];
+  if (!binanceSpotSet || !perpSym || !perpSym.endsWith('USDT')) {
+    binanceSpotResolveCache[perpSym] = null;
+    return null;
+  }
+  var base = perpSym.slice(0, -4);
+  var candidates = [
+    perpSym,                                      // as-is
+    base.replace(/^1000/, '')      + 'USDT',      // strip-1000
+    base.replace(/^10000/, '')     + 'USDT',      // strip-10000
+    base.replace(/^1000000/, '')   + 'USDT',      // strip-1000000
+  ];
+  var resolved = null;
+  for (var i = 0; i < candidates.length; i++) {
+    if (candidates[i] && candidates[i] !== 'USDT' && binanceSpotSet.has(candidates[i])) {
+      resolved = candidates[i];
+      break;
+    }
+  }
+  binanceSpotResolveCache[perpSym] = resolved;
+  return resolved;
+}
+
+async function fetchSpotKlines(spotPair, interval, limit){
+  if (!spotPair) return null;
+  var url = 'https://api.binance.com/api/v3/klines?symbol=' + spotPair + '&interval=' + interval + '&limit=' + limit;
+  var r = await fetch(url, {signal: AbortSignal.timeout(8000)});
+  if (!r.ok) throw new Error('spot klines ' + r.status);
+  return r.json();
+}
+
+/* L_SPOT_PERP_DRIVE_V1 — drive classification from spot vs perp 15-min CVD + price-change.
+   Inputs:
+     perpK5: array of 5-min perp klines (last 3 used for 15-min window)
+     spotK5: array of 5-min spot klines (last 3 used; or null when no spot pair)
+   Output:
+     { state: 'SPOT_LED' | 'PERP_LED' | 'BALANCED' | 'SPOT_UNAVAILABLE',
+       spot_cvd_15m, perp_cvd_15m, spot_change_15m, perp_change_15m, m3 }
+   m3 is the FFC directional contribution: 0 for SPOT_LED/BALANCED, ±0.6 for PERP_LED,
+   null for SPOT_UNAVAILABLE (FFC will fall back to mark-vs-index proxy). */
+function classifySpotPerpDrive(perpK5, spotK5){
+  if (!Array.isArray(spotK5) || spotK5.length < 3) {
+    return { state: 'SPOT_UNAVAILABLE', m3: null };
+  }
+  if (!Array.isArray(perpK5) || perpK5.length < 3) {
+    return { state: 'SPOT_UNAVAILABLE', m3: null };
+  }
+  function cvd15m(bars){
+    var n = bars.length;
+    var slice = bars.slice(n - 3);
+    var c = 0;
+    for (var i = 0; i < slice.length; i++) {
+      var qv = parseFloat(slice[i][7]);
+      var tbqv = parseFloat(slice[i][10]);
+      if (isFinite(qv) && isFinite(tbqv)) c += (2 * tbqv - qv);
+    }
+    return c;
+  }
+  function change15m(bars){
+    var n = bars.length;
+    var slice = bars.slice(n - 3);
+    var open0 = parseFloat(slice[0][1]);
+    var closeN = parseFloat(slice[slice.length - 1][4]);
+    if (!isFinite(open0) || open0 <= 0 || !isFinite(closeN)) return 0;
+    return (closeN - open0) / open0;
+  }
+  var spotCvd  = cvd15m(spotK5);
+  var perpCvd  = cvd15m(perpK5);
+  var spotChg  = change15m(spotK5);
+  var perpChg  = change15m(perpK5);
+  var absSpotCvd = Math.abs(spotCvd);
+  var absPerpCvd = Math.abs(perpCvd);
+
+  // SPOT_LED: spot CVD direction matches spot price change AND spot CVD magnitude
+  //           is at least 50% of perp CVD magnitude — real demand confirming the move
+  var spotDirAligned = (Math.sign(spotCvd) === Math.sign(spotChg)) && spotChg !== 0;
+  var spotCvdMaterial = absSpotCvd >= 0.5 * absPerpCvd && absSpotCvd > 0;
+  if (spotDirAligned && spotCvdMaterial) {
+    return { state: 'SPOT_LED', spot_cvd_15m: spotCvd, perp_cvd_15m: perpCvd,
+             spot_change_15m: spotChg, perp_change_15m: perpChg, m3: 0 };
+  }
+
+  // PERP_LED: perp CVD dominates spot AND perp price-change is materially larger
+  //           than spot price-change — leveraged move ahead of cash market
+  var perpCvdDominates = absPerpCvd > 2 * absSpotCvd && absPerpCvd > 0;
+  var perpChgLeads = Math.abs(perpChg) > 1.5 * Math.abs(spotChg);
+  if (perpCvdDominates && perpChgLeads) {
+    // Directional value: when perp ahead of spot to the upside, expect compression DOWN → negative M3
+    //                    when perp ahead of spot to the downside, expect compression UP → positive M3
+    var m3 = (perpChg > 0) ? -0.6 : +0.6;
+    return { state: 'PERP_LED', spot_cvd_15m: spotCvd, perp_cvd_15m: perpCvd,
+             spot_change_15m: spotChg, perp_change_15m: perpChg, m3: m3 };
+  }
+
+  return { state: 'BALANCED', spot_cvd_15m: spotCvd, perp_cvd_15m: perpCvd,
+           spot_change_15m: spotChg, perp_change_15m: perpChg, m3: 0 };
+}
+
+/* L_SPOT_PERP_DRIVE_CARD_V1 — card render line between Positioning and ForcedFlow. */
+function buildSpotPerpDriveHtml(drive, opts){
+  opts = opts || {};
+  var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
+  if (!drive || drive.state === 'SPOT_UNAVAILABLE') {
+    return '<div class="vel-line vel-gray"' + style + '>Drive: spot unavailable (no Binance spot pair)</div>';
+  }
+  if (drive.state === 'SPOT_LED') {
+    return '<div class="vel-line vel-green"' + style + '>🟢 Drive: <b>SPOT_LED</b> · real demand · sustainable</div>';
+  }
+  if (drive.state === 'PERP_LED') {
+    return '<div class="vel-line vel-red"' + style + '>🔴 Drive: <b>PERP_LED</b> · leveraged · fragile ⚠️</div>';
+  }
+  // BALANCED
+  return '<div class="vel-line vel-amber"' + style + '>🟡 Drive: <b>BALANCED</b> · no clear lead</div>';
+}
 // OI comes from Bybit. Binance's openInterestHist rejects file:// origin and
 // CORS proxies are too unreliable for hundred-coin scans. Bybit returns CORS
 // headers properly and covers virtually every liquid USDT perpetual.
@@ -5943,12 +6110,16 @@ async function analyzeCoin(symObj){
   var price=parseFloat(symObj.lastPrice);
   var chg24=parseFloat(symObj.priceChangePercent);
   try{
-    var [k1,k5,k15,oi,prem]=await Promise.all([
+    /* L_SPOT_PERP_DRIVE_V1 — resolve perp→spot pair and fetch spot klines in
+       parallel with futures fetches. Same pattern as analyzeCoinDiag. */
+    var _spotPair = binanceSpotSet ? resolveSpotPair(sym) : null;
+    var [k1,k5,k15,oi,prem,spotK5]=await Promise.all([
       fetchKlines(base,'1m',60),
       fetchKlines(base,'5m',40),
       fetchKlines(base,'15m',30),
       fetchOIHist(base,'5m',30),
-      fetchPremium(base).catch(function(){return null;})
+      fetchPremium(base).catch(function(){return null;}),
+      _spotPair ? fetchSpotKlines(_spotPair,'5m',12).catch(function(){return null;}) : Promise.resolve(null)
     ]);
     // v16 — compute ATR(14) on 5m bars for sweep validation
     var atr5m=computeATR(k5,14);
@@ -6046,15 +6217,20 @@ async function analyzeCoin(symObj){
     var _pos = getPositioning(base);
     /* L_FORCED_FLOW_CONVEXITY_V1 — composite from gates.oi (M1), premium (M2 + M3),
        cached positioning (M4). P1 wiring landed in Upgrade 8.6 (2026-05-26) via
-       bridge-pushed window.__acressLiqStats. P2 still missing pending 21.1. */
+       bridge-pushed window.__acressLiqStats. P2 still missing pending 21.1.
+       L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — M3 now from spot vs perp drive when
+       spot pair exists; falls back to mark-vs-index (degraded) when SPOT_UNAVAILABLE. */
     /* L_FFC_P1_WIRING_V1 */
     var _liqBundle = (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null;
+    /* L_SPOT_PERP_DRIVE_V1 */
+    var _spotDrive = classifySpotPerpDrive(k5, spotK5);
     var _ffc = computeForcedFlowConvexity({
       oiGate:      gates.oi,
       premium:     prem,
       positioning: _pos,
       signalDir:   result.dir,
       liquidation: _liqBundle,
+      spotDrive:   _spotDrive,
     });
     var _signal = {
       sym:sym,base:base,price:price,chg24:chg24,
@@ -6085,6 +6261,8 @@ async function analyzeCoin(symObj){
       positioning: _pos,
       /* L_FORCED_FLOW_CONVEXITY_V1 — composite bundle (signed -25..+25 in V1) */
       forcedFlow: _ffc,
+      /* L_SPOT_PERP_DRIVE_V1 — drive bundle for card + DB + Telegram */
+      spotDrive: _spotDrive,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -6147,6 +6325,10 @@ async function runScan(){
     setProgress(setProgress.last+' · loading Bybit universe…');
     await ensureBybitSymbols();
   }
+  /* L_SPOT_PERP_DRIVE_V1 — preload Binance spot symbol set (one-shot, 24h-cached)
+     so per-coin spot pair resolution is instant. */
+  setProgress(setProgress.last+' · loading Binance spot universe…');
+  await ensureBinanceSpotSet();
   console.log('[Acress v16] Scan starting, pool size:',pool.length,'· regime:',marketRegime.kind,'· Bybit aggregation:',document.getElementById('bybit-agg').checked);
   var checked=0,errors=0;
   var diagnostics={oiPass:0,takerPass:0,mtfPass:0,cvdPass:0,sweepPass:0,scored:0,aggregatedOI:0,topScores:[]};
@@ -6183,23 +6365,27 @@ async function runScan(){
               else if(r.score>existing.score){console.log('[ACRESS-FILTER] upgrade rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
               else {
                 /* L_FFC_REFRESH_ON_EXISTING_V1
-                   FFC composite refreshes on every scan regardless of whether the new
-                   scan upgraded the mechanism score. Mechanism-firing fields (score,
-                   reasons, mechanism name, entryPrice, loggedAt) stay locked to the
-                   best-scoring scan that won the existing slot. Structural state fields
-                   (FFC composite, alignment, reliability, inputs_status) track the most
-                   recent observation.
+                   Structural state snapshot fields refresh on every scan regardless of
+                   whether the new scan upgraded the mechanism score. Mechanism-firing
+                   fields (score, reasons, mechanism name, entryPrice, loggedAt) stay
+                   locked to the best-scoring scan that won the existing slot.
+
+                   Fields that refresh:
+                     - forcedFlow      (FFC composite, alignment, reliability, inputs_status)
+                     - spotDrive       (added in 21.6 — Spot vs Perp Drive classification)
+                     - positioning/efficiency/velocity (planned in Upgrade 8.7)
 
                    Architectural principle: mechanism firing is a moment-in-time event.
                    Structural state is a continuously-evolving observation. The DB row
                    for an active signal should reflect the current structural state when
                    PRIME evaluates it, not the state at the original firing moment.
 
-                   Scoped to FFC only in 8.6. Same principle applies to positioning,
-                   efficiency, and velocity snapshot fields — those carry analogous
-                   staleness bugs that are out of scope for this upgrade. Cataloged as
-                   Upgrade 8.7 — Structural State Refresh Generalization. */
+                   Upgrade 8.7 — Structural State Refresh Generalization — will extend
+                   this block with positioning/efficiency/velocity once those snapshot
+                   bugs are addressed. The marker is the canonical reference for
+                   "which fields participate in the refresh pattern." */
                 if (r && r.forcedFlow) existing.forcedFlow = r.forcedFlow;
+                if (r && r.spotDrive)  existing.spotDrive  = r.spotDrive;
               }
             }else{
               if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
@@ -6326,14 +6512,20 @@ async function analyzeCoinDiag(symObj,diag){
   var price=parseFloat(symObj.lastPrice);
   var chg24=parseFloat(symObj.priceChangePercent);
   try{
-    var [k1,k5,k15,oiResult,prem,liqStats,oiAgg]=await Promise.all([
+    /* L_SPOT_PERP_DRIVE_V1 — resolve perp→spot pair once at the top, then fetch
+       spot klines in parallel with the existing futures-data fetches. Returns
+       null when no spot pair or fetch fails — classifySpotPerpDrive maps that
+       to SPOT_UNAVAILABLE. */
+    var _spotPair = binanceSpotSet ? resolveSpotPair(sym) : null;
+    var [k1,k5,k15,oiResult,prem,liqStats,oiAgg,spotK5]=await Promise.all([
       fetchKlines(base,'1m',60),
       fetchKlines(base,'5m',40),
       fetchKlines(base,'15m',30),
       fetchCombinedOI(base),
       fetchPremium(base).catch(function(){return null;}),
       fetchLiqStats(base).catch(function(){return null;}),
-      fetchOIAgg(base).catch(function(){return null;})
+      fetchOIAgg(base).catch(function(){return null;}),
+      _spotPair ? fetchSpotKlines(_spotPair,'5m',12).catch(function(){return null;}) : Promise.resolve(null)
     ]);
     // v16 — ATR + absorption + Z-score baseline maintenance
     var atr5m=computeATR(k5,14);
@@ -6414,6 +6606,8 @@ async function analyzeCoinDiag(symObj,diag){
     var _dist = distFrom5mExtremes(k5, price);
     var _mtf  = computeMinutesToFunding();
     var _be   = computeBreakEven(result.dir, price, _fr, _spr, _mtf);
+    /* L_SPOT_PERP_DRIVE_V1 — compute drive bundle once for reuse by FFC + signal */
+    var _spotDrive = classifySpotPerpDrive(k5, spotK5);
     var _signal = {
       id:'sig_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
       sym:sym,base:base,price:price,chg24:chg24,
@@ -6443,14 +6637,19 @@ async function analyzeCoinDiag(symObj,diag){
       /* L_AGGREGATE_POSITIONING_V1 — diag/emit path; non-blocking cache lookup. */
       positioning: getPositioning(base),
       /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path.
-         L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back. */
+         L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back.
+         L_SPOT_PERP_DRIVE_FFC_INTEGRATION_V1 — drive bundle passed for M3. */
       forcedFlow: computeForcedFlowConvexity({
         oiGate:      gates.oi,
         premium:     prem,
         positioning: getPositioning(base),
         signalDir:   result.dir,
         liquidation: (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null,
+        spotDrive:   _spotDrive,
       }),
+      /* L_SPOT_PERP_DRIVE_V1 — drive bundle for card + DB + Telegram. Reuses
+         _spotDrive computed once above. */
+      spotDrive: _spotDrive,
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -7509,6 +7708,7 @@ function buildCard(s, moodKey){
     +velocityHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
     +buildEfficiencyHtml(s.efficiency) /* L_DISPLACEMENT_EFFICIENCY_CARD_V1 */
     +buildPositioningHtml(s.positioning, s.dir) /* L_POSITIONING_CARD_V1 */
+    +buildSpotPerpDriveHtml(s.spotDrive) /* L_SPOT_PERP_DRIVE_CARD_V1 */
     +buildForcedFlowHtml(s.forcedFlow) /* L_FFC_CARD_V1 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
