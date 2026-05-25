@@ -1317,6 +1317,169 @@ function buildEfficiencyHtml(eff, opts) {
   return '<div class="vel-line ' + cls + '"' + style + '>' + emoji + ' Efficiency <b>' + p + '%</b>' + suffix + '</div>';
 }
 
+/* L_AGGREGATE_POSITIONING_V1 — Aggregate Positioning Consumption (Upgrade 21.4)
+   Surfaces top-trader vs retail account-ratio skew on every card and Telegram
+   alert. Source priority: Bybit top traders (preferred) → Binance top traders
+   (fallback) → Binance global as retail proxy (always polled when available).
+   Per-symbol in-memory cache, 5-min TTL, fire-and-forget refresh on miss/stale
+   so analyzeCoin never blocks waiting on positioning fetches. First scan after
+   bridge restart shows "Positioning: gathering data"; cards populate within
+   1-2 scans (≈3 min on 90s cadence). All three endpoints accept 1000-prefix
+   symbols (1000PEPE/1000BONK/1000LUNC/1000SHIB) directly — no name
+   normalisation needed. */
+var positioningCache = {};       // base → { asOf, top_long_pct, top_short_pct, retail_long_pct, retail_short_pct, top_source, error }
+var positioningInflight = {};
+var POSITIONING_TTL_MS = 5 * 60 * 1000;
+var POSITIONING_STALE_MS = 15 * 60 * 1000;
+
+async function fetchAccountRatioBybit(base){
+  var url = 'https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=' + base + 'USDT&period=5min&limit=1';
+  var r = await fetch(url, {signal: AbortSignal.timeout(8000)});
+  if(!r.ok) throw new Error('bybit accountRatio ' + r.status);
+  var d = await r.json();
+  if(!d || d.retCode !== 0 || !d.result || !Array.isArray(d.result.list) || !d.result.list.length){
+    throw new Error('bybit accountRatio shape ' + (d && d.retMsg ? d.retMsg : ''));
+  }
+  var item = d.result.list[0];
+  return {
+    long_pct:  parseFloat(item.buyRatio) * 100,
+    short_pct: parseFloat(item.sellRatio) * 100,
+    ts:        parseInt(item.timestamp, 10),
+  };
+}
+async function fetchTopLongShortBinance(base){
+  var url = 'https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=' + base + 'USDT&period=5m&limit=1';
+  var r = await fetch(url, {signal: AbortSignal.timeout(8000)});
+  if(!r.ok) throw new Error('binance topLS ' + r.status);
+  var d = await r.json();
+  if(!Array.isArray(d) || !d.length) throw new Error('binance topLS empty');
+  var item = d[0];
+  return {
+    long_pct:  parseFloat(item.longAccount) * 100,
+    short_pct: parseFloat(item.shortAccount) * 100,
+    ts:        parseInt(item.timestamp, 10),
+  };
+}
+async function fetchGlobalLongShortBinance(base){
+  var url = 'https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=' + base + 'USDT&period=5m&limit=1';
+  var r = await fetch(url, {signal: AbortSignal.timeout(8000)});
+  if(!r.ok) throw new Error('binance globalLS ' + r.status);
+  var d = await r.json();
+  if(!Array.isArray(d) || !d.length) throw new Error('binance globalLS empty');
+  var item = d[0];
+  return {
+    long_pct:  parseFloat(item.longAccount) * 100,
+    short_pct: parseFloat(item.shortAccount) * 100,
+    ts:        parseInt(item.timestamp, 10),
+  };
+}
+
+async function fetchPositioningForBase(base){
+  // Top traders: Bybit first, Binance fallback
+  var top = null, topSource = null;
+  try { top = await fetchAccountRatioBybit(base); topSource = 'bybit'; }
+  catch(_){
+    try { top = await fetchTopLongShortBinance(base); topSource = 'binance'; }
+    catch(__){ top = null; }
+  }
+  // Retail proxy: Binance global only
+  var retail = null;
+  try { retail = await fetchGlobalLongShortBinance(base); } catch(_){ retail = null; }
+  return {
+    asOf:            Date.now(),
+    top_long_pct:    top ? top.long_pct : null,
+    top_short_pct:   top ? top.short_pct : null,
+    top_source:      topSource,
+    retail_long_pct: retail ? retail.long_pct : null,
+    retail_short_pct:retail ? retail.short_pct : null,
+    error:           top ? null : 'no_top_source',
+  };
+}
+
+function getPositioning(base){
+  var c = positioningCache[base];
+  var now = Date.now();
+  var fresh = c && (now - c.asOf) < POSITIONING_TTL_MS;
+  if (!fresh) {
+    if (!positioningInflight[base]) {
+      positioningInflight[base] = true;
+      fetchPositioningForBase(base).then(function(res){
+        positioningCache[base] = res;
+        positioningInflight[base] = false;
+      }).catch(function(){ positioningInflight[base] = false; });
+    }
+    // Return stale within 15-min window; else null (gathering data)
+    if (c && (now - c.asOf) < POSITIONING_STALE_MS) return Object.assign({}, c, { stale: true });
+    return null;
+  }
+  return c;
+}
+
+/* L_AGGREGATE_POSITIONING_V1 — categorical classifier per Upgrade 21.4 Step 2.
+   Skew threshold: >60% on one side. Returns { state, top_long, top_short,
+   retail_long, retail_short, top_source }. */
+function classifyPositioning(pos, signalDir){
+  if (!pos) return { state: 'gathering' };
+  if (pos.error === 'no_top_source' && pos.top_long_pct == null) return { state: 'unavailable' };
+  if (pos.stale) return { state: 'stale', last_min: Math.round((Date.now() - pos.asOf) / 60000), top_long: pos.top_long_pct, top_short: pos.top_short_pct };
+  var topLong = pos.top_long_pct, topShort = pos.top_short_pct;
+  var retLong = pos.retail_long_pct, retShort = pos.retail_short_pct;
+  if (topLong == null || topShort == null) return { state: 'unavailable' };
+  // Direction-conditional skew
+  var tops_with    = (signalDir === 'LONG') ? topLong  > 60 : topShort > 60;
+  var tops_against = (signalDir === 'LONG') ? topShort > 60 : topLong  > 60;
+  var have_retail = (retLong != null && retShort != null);
+  var retail_with   = have_retail && ((signalDir === 'LONG') ? retLong  > 60 : retShort > 60);
+  var retail_against= have_retail && ((signalDir === 'LONG') ? retShort > 60 : retLong  > 60);
+  var state;
+  if (tops_with && retail_against) state = 'DIVERGENT_RETAIL';   // smart money with us, crowd against us
+  else if (tops_against && retail_with) state = 'DIVERGENT_RISK'; // crowd with us, smart money against us
+  else if (tops_with)                   state = 'ALIGNED_WITH_TOPS';
+  else if (tops_against)                state = 'AGAINST_TOPS';
+  else                                   state = 'BALANCED';
+  return {
+    state: state,
+    top_long: topLong, top_short: topShort,
+    retail_long: retLong, retail_short: retShort,
+    top_source: pos.top_source,
+    have_retail: have_retail,
+  };
+}
+
+/* L_POSITIONING_CARD_V1 — shared HTML renderer. Reuses vel-line / vel-{green,
+   amber,red,gray} CSS classes for visual pairing with Velocity and Efficiency. */
+function buildPositioningHtml(pos, signalDir, opts){
+  opts = opts || {};
+  var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
+  var c = classifyPositioning(pos, signalDir);
+  if (c.state === 'gathering')    return '<div class="vel-line vel-gray"' + style + '>Positioning: gathering data</div>';
+  if (c.state === 'unavailable')  return '<div class="vel-line vel-gray"' + style + '>Positioning: data unavailable</div>';
+  if (c.state === 'stale')        return '<div class="vel-line vel-gray"' + style + '>Positioning: data stale (last update ' + c.last_min + ' min ago)</div>';
+  var tlong  = Math.round(c.top_long);
+  var tshort = Math.round(c.top_short);
+  var rlong  = c.have_retail ? Math.round(c.retail_long) : null;
+  var topSide = tlong > tshort ? 'long' : 'short';
+  var topMax  = Math.max(tlong, tshort);
+  var html, cls;
+  if (c.state === 'DIVERGENT_RETAIL') {
+    cls = 'vel-green';
+    html = '🟢 Top traders: <b>' + topMax + '% ' + topSide + '</b> · retail: <b>' + rlong + '% long</b> ✨ smart money divergent from retail (strong signal)';
+  } else if (c.state === 'ALIGNED_WITH_TOPS') {
+    cls = 'vel-green';
+    html = '🟢 Top traders: <b>' + topMax + '% ' + topSide + '</b> · positioning aligned with signal';
+  } else if (c.state === 'AGAINST_TOPS') {
+    cls = 'vel-red';
+    html = '🔴 Top traders: <b>' + topMax + '% ' + topSide + '</b> · betting against smart money ⚠️';
+  } else if (c.state === 'DIVERGENT_RISK') {
+    cls = 'vel-red';
+    html = '🔴 Retail: <b>' + rlong + '% long</b> · top traders: <b>' + topMax + '% ' + topSide + '</b> — you\'d be exit liquidity ⚠️';
+  } else { // BALANCED
+    cls = 'vel-amber';
+    html = '🟡 Top traders: <b>' + topMax + '% ' + topSide + '</b> · no clear positioning edge';
+  }
+  return '<div class="vel-line ' + cls + '"' + style + '>' + html + '</div>';
+}
+
 var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
@@ -5460,6 +5623,9 @@ async function analyzeCoin(symObj){
     var _vel = computeLiveVelocity(k1, k5, _spr);
     /* L_DISPLACEMENT_EFFICIENCY_V1 — efficiency uses k5 + oi already in hand. */
     var _eff = computeDisplacementEfficiency(k5, oi, base);
+    /* L_AGGREGATE_POSITIONING_V1 — non-blocking cache lookup; fires fetch in
+       background on miss/stale and returns null (= "gathering") this scan. */
+    var _pos = getPositioning(base);
     return{
       sym:sym,base:base,price:price,chg24:chg24,
       /* L_RANGE_FILTER_REMOVED_V1 */
@@ -5485,6 +5651,8 @@ async function analyzeCoin(symObj){
       velocity: _vel,
       /* L_DISPLACEMENT_EFFICIENCY_V1 */
       efficiency: _eff,
+      /* L_AGGREGATE_POSITIONING_V1 — cached positioning snapshot or null */
+      positioning: _pos,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -5815,6 +5983,8 @@ async function analyzeCoinDiag(symObj,diag){
       /* L_DISPLACEMENT_EFFICIENCY_V1 — diag/emit path. oiResult shape is
          {oi:Array|null, aggregated, …}; helper normalises either form. */
       efficiency: computeDisplacementEfficiency(k5, oiResult, base),
+      /* L_AGGREGATE_POSITIONING_V1 — diag/emit path; non-blocking cache lookup. */
+      positioning: getPositioning(base),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -6848,6 +7018,7 @@ function buildCard(s, moodKey){
     +verdictHtml  /* L_SCHEMA_POPULATE_V3 */
     +velocityHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
     +buildEfficiencyHtml(s.efficiency) /* L_DISPLACEMENT_EFFICIENCY_CARD_V1 */
+    +buildPositioningHtml(s.positioning, s.dir) /* L_POSITIONING_CARD_V1 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
@@ -7214,6 +7385,22 @@ function logToTracker(s){
       n:               s.efficiency.n,
       logged_at:       Date.now(),
     } : null,
+    /* L_POSITIONING_TRACKER_V1 — freeze the positioning classification at
+       log time so the tracker can later compare entry-vs-now and flag
+       degradation (green-tier at entry → red/amber-tier now). */
+    positioning: s.positioning ? (function(){
+      var c = classifyPositioning(s.positioning, s.dir);
+      return {
+        state:           c.state,
+        top_long:        c.top_long,
+        top_short:       c.top_short,
+        retail_long:     c.retail_long,
+        retail_short:    c.retail_short,
+        top_source:      c.top_source,
+        have_retail:     c.have_retail,
+        logged_at:       Date.now(),
+      };
+    })() : null,
     entryPrice:s.entryPrice,originalEntry:s.entryPrice,
     loggedAt:Date.now(),
     positionSize:trackerCfg.position,
@@ -8109,6 +8296,52 @@ function renderTracker(){
         }
         tkEffHtml = '<div class="vel-line '+cls2+'" style="margin:6px 12px 0;">Efficiency at entry: <b>'+entryPctTxt+'</b> · now: <b>'+nowPctTxt+'</b>'+warn+'</div>';
       }
+      /* L_POSITIONING_TRACKER_V1 — entry-vs-now positioning. Entry frozen at
+         logToTracker; live "now" looked up via signals[].find by sym. If
+         "now" has degraded from a green-tier state (ALIGNED_WITH_TOPS or
+         DIVERGENT_RETAIL) to any non-green state, flag ⚠️ degraded. */
+      var tkPosHtml = '';
+      if (t.positioning) {
+        var posEntry = t.positioning;
+        var posLiveSig = (typeof signals !== 'undefined') ? signals.find(function(x){ return x.sym === t.sym && x.validUntil > Date.now(); }) : null;
+        var posLive = posLiveSig ? classifyPositioning(posLiveSig.positioning, t.dir) : null;
+        var stateLabel = function(st){
+          if (st === 'ALIGNED_WITH_TOPS') return 'aligned with top traders';
+          if (st === 'DIVERGENT_RETAIL')  return 'divergent retail (strong)';
+          if (st === 'AGAINST_TOPS')      return 'against top traders';
+          if (st === 'DIVERGENT_RISK')    return 'aligned with crowded retail';
+          if (st === 'BALANCED')          return 'balanced';
+          if (st === 'gathering')         return 'gathering data';
+          if (st === 'unavailable')       return 'data unavailable';
+          if (st === 'stale')             return 'data stale';
+          return st || '—';
+        };
+        var posEntryTxt = stateLabel(posEntry.state);
+        var posNowTxt;
+        var posWarn = '';
+        var posCls;
+        if (!posLive) {
+          posNowTxt = 'not currently tracked';
+          posCls = 'vel-gray';
+        } else {
+          posNowTxt = stateLabel(posLive.state);
+          var entryGreen = (posEntry.state === 'ALIGNED_WITH_TOPS' || posEntry.state === 'DIVERGENT_RETAIL');
+          var nowGreen   = (posLive.state === 'ALIGNED_WITH_TOPS' || posLive.state === 'DIVERGENT_RETAIL');
+          if (entryGreen && !nowGreen) {
+            posWarn = ' ⚠️ degraded';
+            posCls = 'vel-red';
+          } else if (posLive.state === 'ALIGNED_WITH_TOPS' || posLive.state === 'DIVERGENT_RETAIL') {
+            posCls = 'vel-green';
+          } else if (posLive.state === 'AGAINST_TOPS' || posLive.state === 'DIVERGENT_RISK') {
+            posCls = 'vel-red';
+          } else if (posLive.state === 'BALANCED') {
+            posCls = 'vel-amber';
+          } else {
+            posCls = 'vel-gray';
+          }
+        }
+        tkPosHtml = '<div class="vel-line '+posCls+'" style="margin:6px 12px 0;">Positioning at entry: <b>'+posEntryTxt+'</b> · now: <b>'+posNowTxt+'</b>'+posWarn+'</div>';
+      }
       html+='<div class="'+rowCls+'">'
         // Header bar
         +'<div class="tk-r-header">'
@@ -8124,6 +8357,7 @@ function renderTracker(){
         +provHtml
         +tkVelHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
         +tkEffHtml /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 */
+        +tkPosHtml /* L_POSITIONING_TRACKER_V1 */
         +buildPulseWidget(t.mech||'Unknown',t.dir||'LONG')
         // Body: 3 columns
         +'<div class="tk-r-body">'
