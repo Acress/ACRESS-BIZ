@@ -6416,13 +6416,25 @@ async function analyzeCoinDiag(symObj,diag){
       positioning: getPositioning(base),
       /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path.
          L_FFC_P1_WIRING_V1 — liquidation bundle from bridge push-back. */
-      forcedFlow: computeForcedFlowConvexity({
-        oiGate:      gates.oi,
-        premium:     prem,
-        positioning: getPositioning(base),
-        signalDir:   result.dir,
-        liquidation: (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null,
-      }),
+      forcedFlow: (function(){
+        var _liq = (typeof window !== 'undefined' && window.__acressLiqStats) ? window.__acressLiqStats[sym] : null;
+        // DEBUG-LIQ-READ: log once per scan for active symbols
+        if (_liq) {
+          console.log('[DEBUG-LIQ-READ] sym=' + sym + ' base=' + base + ' bundle=' + JSON.stringify(_liq));
+        } else if (typeof window !== 'undefined' && window.__acressLiqStats) {
+          var _keys = Object.keys(window.__acressLiqStats);
+          if (_keys.length > 0 && (sym === 'BTCUSDT' || sym === 'ETHUSDT' || sym === 'SOLUSDT')) {
+            console.log('[DEBUG-LIQ-READ-MISS] sym=' + sym + ' (not in liqMap of size ' + _keys.length + ', sample keys=' + _keys.slice(0,3).join(',') + ')');
+          }
+        }
+        return computeForcedFlowConvexity({
+          oiGate:      gates.oi,
+          premium:     prem,
+          positioning: getPositioning(base),
+          signalDir:   result.dir,
+          liquidation: _liq,
+        });
+      })(),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
