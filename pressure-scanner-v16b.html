@@ -1480,6 +1480,199 @@ function buildPositioningHtml(pos, signalDir, opts){
   return '<div class="vel-line ' + cls + '"' + style + '>' + html + '</div>';
 }
 
+/* L_FORCED_FLOW_CONVEXITY_V1 — Upgrade 22.0 V1 (Phase 10 debut).
+   Computes per-symbol per-scan a signed score in [-100, +100] representing
+   directional bias and magnitude of forced-flow cascade potential under
+   current market conditions. Negative = downside cascade setup. Positive =
+   upside squeeze setup. Magnitude = how loaded the convexity is.
+
+   The framework rests on a structural microstructure model: price moves
+   toward regions where the imbalance between forced liquidity demand and
+   available resting liquidity creates convex cascade dynamics. Outputs
+   describe mechanical state — never participant intent (see CLAUDE.md
+   "Structural Modeling Over Participant Intent").
+
+   V1 INPUT STATE (current as of ship):
+     P1 (liquidation density gradient) — DEGRADED  (8.6 not shipped; sparse data)
+     P2 (resting liquidity depletion)  — MISSING   (21.1 not shipped)
+     M1 (OI direction)                  — FUNCTIONAL
+     M2 (funding extremity)             — PARTIAL  (current rate only; 8h
+                                                    persistence deferred to V1.5)
+     M3 (spot vs perp basis)            — DEGRADED (futures mark-vs-index as
+                                                    proxy; spot data needs 21.6)
+     M4 (aggregate positioning)         — FUNCTIONAL
+     C1 (efficiency, corroboration)     — FUNCTIONAL (display-only, not in
+                                                       magnitude composite)
+
+   V1 redistribution (both primaries out): M1=22%, M2=22%, M3=22%, M4=34%.
+   V1 magnitude cap: abs(score) ≤ 25 (modifier-only ceiling). Always LOW
+   reliability. The cap mechanism + reliability badge ensure V1 never
+   oversells its strength. V2 lifts the cap and weights when primaries
+   come online. */
+function computeForcedFlowConvexity(input){
+  var oiGate    = input.oiGate;        // gates.oi from scoreCoin
+  var premium   = input.premium;       // fetchPremium result (markPrice, indexPrice, lastFundingRate)
+  var positioning = input.positioning; // cached positioning bundle (raw pcts)
+  var signalDir = input.signalDir;     // 'LONG' | 'SHORT' | null
+
+  /* V1 input availability — these are STRUCTURAL (always degraded/missing
+     until 8.6/21.1/21.6 ship) plus availability checks for the current
+     premium / positioning bundles which may legitimately be null for a
+     given symbol on a given scan. */
+  var inputs = {
+    P1: 'degraded',   // V1 always
+    P2: 'missing',    // V1 always
+    M1: 'unavailable',
+    M2: 'unavailable',
+    M3: 'unavailable',
+    M4: 'unavailable',
+  };
+
+  /* M1 — OI direction from gateOI state machine.
+       new_longs (price↑+OI↑)        → fresh longs loaded → negative (cascade down setup)
+       new_shorts (price↓+OI↑)       → fresh shorts loaded → positive (squeeze up setup)
+       short_squeeze (price↑+OI↓)    → squeeze in progress, fuel partially spent → mild negative
+       long_capitulation (price↓+OI↓)→ capitulation in progress → mild positive
+       neutral                        → 0 */
+  var m1 = 0;
+  if (oiGate && oiGate.passes && oiGate.state) {
+    inputs.M1 = 'functional';
+    var s = oiGate.state;
+    if      (s === 'new_longs')          m1 = -0.8;
+    else if (s === 'new_shorts')         m1 = +0.8;
+    else if (s === 'short_squeeze')      m1 = -0.3;
+    else if (s === 'long_capitulation')  m1 = +0.3;
+    else                                  m1 = 0;
+  }
+
+  /* M2 — Funding extremity (V1: current value only; persistence deferred to V1.5).
+       Extreme positive funding (longs paying heavily) = crowded long positioning
+       which when unwound flows DOWN → negative directional value.
+       Extreme negative funding = positive directional value.
+       Normalised: 0.05% funding rate → magnitude 1.0; capped at ±0.6. */
+  var m2 = 0;
+  var fr = null;
+  if (premium && premium.lastFundingRate != null) {
+    fr = parseFloat(premium.lastFundingRate) * 100; // to percent
+    if (isFinite(fr)) {
+      inputs.M2 = 'partial';
+      m2 = Math.max(-0.6, Math.min(0.6, -fr / 0.05));
+    }
+  }
+
+  /* M3 — Spot vs perp basis (DEGRADED proxy: using futures mark-vs-index
+     until 21.6 ships true spot data). Perp premium (mark > index) implies
+     perp expected to compress DOWN toward index → negative directional
+     value. Capped at ±0.5 because this is a weak proxy. */
+  var m3 = 0;
+  if (premium && premium.markPrice != null && premium.indexPrice != null) {
+    var idx = parseFloat(premium.indexPrice);
+    var mark = parseFloat(premium.markPrice);
+    if (isFinite(idx) && idx > 0 && isFinite(mark)) {
+      inputs.M3 = 'degraded';
+      var basis = (mark - idx) / idx * 100;
+      m3 = Math.max(-0.5, Math.min(0.5, -basis / 0.1));
+    }
+  }
+
+  /* M4 — Aggregate positioning. Generic directional value not tied to signal:
+     pull direction = direction of top-trader bias, magnitude scaled by skew
+     strength and retail divergence.
+       top_skew = (top_long_pct - top_short_pct) / 100  ∈ [-1, +1]
+       retail divergent from tops (opposite sign, ≥5% magnitude) → ×1.4
+       retail aligned with tops (same sign, ≥5% magnitude)        → ×0.7
+       retail balanced or unavailable                              → ×1.0 */
+  var m4 = 0;
+  if (positioning && positioning.top_long_pct != null && positioning.top_short_pct != null) {
+    inputs.M4 = 'functional';
+    var topSkew = (positioning.top_long_pct - positioning.top_short_pct) / 100;
+    var retailFactor = 1.0;
+    if (positioning.retail_long_pct != null && positioning.retail_short_pct != null) {
+      var retailSkew = (positioning.retail_long_pct - positioning.retail_short_pct) / 100;
+      if (Math.abs(retailSkew) >= 0.05) {
+        if (Math.sign(retailSkew) === Math.sign(topSkew)) retailFactor = 0.7;
+        else                                              retailFactor = 1.4;
+      }
+    }
+    m4 = Math.max(-1, Math.min(1, topSkew * retailFactor));
+  }
+
+  /* V1 weights (both primaries out, per spec table) */
+  var w_M1 = 0.22, w_M2 = 0.22, w_M3 = 0.22, w_M4 = 0.34;
+  var raw = (m1 * w_M1 + m2 * w_M2 + m3 * w_M3 + m4 * w_M4) * 100;
+
+  /* V1 magnitude cap: 25 (both primaries out). LOW reliability. */
+  var cap = 25;
+  var score = Math.round(Math.max(-cap, Math.min(cap, raw)));
+  var reliability = 'LOW';
+
+  /* Alignment classifier. Threshold ±30: in V1 the cap of 25 means
+     alignment is ALWAYS NEUTRAL — by design. ALIGNED/AGAINST will start
+     firing in V2 when the cap lifts. The framework is in place; the data
+     pipeline accumulates from day one. */
+  var alignment;
+  if (signalDir !== 'LONG' && signalDir !== 'SHORT')   alignment = 'NEUTRAL';
+  else if (Math.abs(score) < 30)                       alignment = 'NEUTRAL';
+  else if ((signalDir === 'LONG'  && score > 0) ||
+           (signalDir === 'SHORT' && score < 0))       alignment = 'ALIGNED';
+  else                                                  alignment = 'AGAINST';
+
+  var inputs_status = ['P1:'+inputs.P1, 'P2:'+inputs.P2, 'M1:'+inputs.M1,
+                       'M2:'+inputs.M2, 'M3:'+inputs.M3, 'M4:'+inputs.M4].join(',');
+
+  /* Status — if zero modifiers contributed (degenerate scan with no
+     premium AND no positioning AND no OI gate), report unavailable. */
+  var anyContrib = (inputs.M1 === 'functional' || inputs.M2 !== 'unavailable' ||
+                    inputs.M3 !== 'unavailable' || inputs.M4 === 'functional');
+  if (!anyContrib) {
+    return { status: 'unavailable', score: null, alignment: null,
+             reliability: null, inputs_status: inputs_status };
+  }
+
+  return {
+    status: 'ok',
+    score: score,
+    alignment: alignment,
+    reliability: reliability,
+    components: { m1: m1, m2: m2, m3: m3, m4: m4 },
+    funding_pct: fr,
+    inputs_status: inputs_status,
+  };
+}
+
+/* L_FFC_CARD_V1 — shared HTML renderer for result card and tracker card.
+   Reuses .vel-line CSS classes. Reliability badge SUFFIX format for cards
+   (always shown). "(primary inputs offline)" parenthetical appended when
+   reliability is LOW. Anthropomorphic-language audited: all copy uses
+   mechanical state descriptors. */
+function buildForcedFlowHtml(ffc, opts){
+  opts = opts || {};
+  var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
+  if (!ffc || ffc.status === 'unavailable') {
+    return '<div class="vel-line vel-gray"' + style + '>Forced exit pressure: cannot compute (insufficient data)</div>';
+  }
+  if (ffc.score == null) return '';
+  var s = ffc.score;
+  var absS = Math.abs(s);
+  var rel = ffc.reliability;
+  var relSuffix = ' · ' + rel + ' reliability';
+  /* V1 honesty badging: append "(primary inputs offline)" on LOW so the
+     user reads exactly why the magnitude is capped. */
+  if (rel === 'LOW') relSuffix += ' (primary inputs offline)';
+  var emoji, cls, descriptor;
+  if (s <= -60)      { emoji = '🔻'; cls = 'vel-red';   descriptor = 'heavy downside cascade setup'; }
+  else if (s <= -30) { emoji = '🔻'; cls = 'vel-red';   descriptor = 'downside cascade forming'; }
+  else if (s <= -10) { emoji = '🟡'; cls = 'vel-amber'; descriptor = 'weak downside bias'; }
+  else if (s >=  60) { emoji = '🔺'; cls = 'vel-green'; descriptor = 'heavy upside cascade setup'; }
+  else if (s >=  30) { emoji = '🔺'; cls = 'vel-green'; descriptor = 'upside squeeze setup'; }
+  else if (s >=  10) { emoji = '🟡'; cls = 'vel-amber'; descriptor = 'weak upside bias'; }
+  else               { emoji = '⟷'; cls = 'vel-gray';  descriptor = 'no loaded cascade setup'; }
+  var sign = s >= 0 ? '+' : '';
+  return '<div class="vel-line ' + cls + '"' + style + '>' +
+    emoji + ' Forced exit pressure: <b>' + sign + s + '</b> · ' + descriptor + relSuffix +
+    '</div>';
+}
+
 var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
@@ -5626,6 +5819,14 @@ async function analyzeCoin(symObj){
     /* L_AGGREGATE_POSITIONING_V1 — non-blocking cache lookup; fires fetch in
        background on miss/stale and returns null (= "gathering") this scan. */
     var _pos = getPositioning(base);
+    /* L_FORCED_FLOW_CONVEXITY_V1 — composite from gates.oi (M1), premium (M2 + M3),
+       cached positioning (M4). P1 + P2 left as DEGRADED/MISSING per V1 spec. */
+    var _ffc = computeForcedFlowConvexity({
+      oiGate:      gates.oi,
+      premium:     prem,
+      positioning: _pos,
+      signalDir:   result.dir,
+    });
     return{
       sym:sym,base:base,price:price,chg24:chg24,
       /* L_RANGE_FILTER_REMOVED_V1 */
@@ -5653,6 +5854,8 @@ async function analyzeCoin(symObj){
       efficiency: _eff,
       /* L_AGGREGATE_POSITIONING_V1 — cached positioning snapshot or null */
       positioning: _pos,
+      /* L_FORCED_FLOW_CONVEXITY_V1 — composite bundle (signed -25..+25 in V1) */
+      forcedFlow: _ffc,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
       entryPrice:price // for outcome tracking
@@ -5985,6 +6188,13 @@ async function analyzeCoinDiag(symObj,diag){
       efficiency: computeDisplacementEfficiency(k5, oiResult, base),
       /* L_AGGREGATE_POSITIONING_V1 — diag/emit path; non-blocking cache lookup. */
       positioning: getPositioning(base),
+      /* L_FORCED_FLOW_CONVEXITY_V1 — diag/emit path. */
+      forcedFlow: computeForcedFlowConvexity({
+        oiGate:      gates.oi,
+        premium:     prem,
+        positioning: getPositioning(base),
+        signalDir:   result.dir,
+      }),
       oiAggregated:oiResult.aggregated,
       validUntil:Date.now()+SIGNAL_TTL_MS,
       loggedAt:Date.now(),
@@ -7019,6 +7229,7 @@ function buildCard(s, moodKey){
     +velocityHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
     +buildEfficiencyHtml(s.efficiency) /* L_DISPLACEMENT_EFFICIENCY_CARD_V1 */
     +buildPositioningHtml(s.positioning, s.dir) /* L_POSITIONING_CARD_V1 */
+    +buildForcedFlowHtml(s.forcedFlow) /* L_FFC_CARD_V1 */
     +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
     +'<div class="pc-foot">'
       +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
@@ -7401,6 +7612,17 @@ function logToTracker(s){
         logged_at:       Date.now(),
       };
     })() : null,
+    /* L_FFC_TRACKER_V1 — freeze forced-flow convexity at log time for the
+       entry-vs-now comparison. ⚠ structure inverted flag fires when entry
+       was aligned with signal direction and now opposes. */
+    forcedFlow: s.forcedFlow ? {
+      status:      s.forcedFlow.status,
+      score:       s.forcedFlow.score,
+      alignment:   s.forcedFlow.alignment,
+      reliability: s.forcedFlow.reliability,
+      inputs_status: s.forcedFlow.inputs_status,
+      logged_at:   Date.now(),
+    } : null,
     entryPrice:s.entryPrice,originalEntry:s.entryPrice,
     loggedAt:Date.now(),
     positionSize:trackerCfg.position,
@@ -8342,6 +8564,39 @@ function renderTracker(){
         }
         tkPosHtml = '<div class="vel-line '+posCls+'" style="margin:6px 12px 0;">Positioning at entry: <b>'+posEntryTxt+'</b> · now: <b>'+posNowTxt+'</b>'+posWarn+'</div>';
       }
+      /* L_FFC_TRACKER_V1 — forced-flow convexity entry-vs-now. Reads frozen
+         snapshot (t.forcedFlow); looks up live via signals[].find by sym.
+         Verdict copy: cascade strengthening (further from zero in same
+         direction), dissipating (closer to zero same direction), or
+         structure inverted (sign flipped). */
+      var tkFfcHtml = '';
+      if (t.forcedFlow && t.forcedFlow.status === 'ok' && t.forcedFlow.score != null) {
+        var ffEntry = t.forcedFlow;
+        var ffLiveSig = (typeof signals !== 'undefined') ? signals.find(function(x){ return x.sym === t.sym && x.validUntil > Date.now(); }) : null;
+        var ffLive = (ffLiveSig && ffLiveSig.forcedFlow && ffLiveSig.forcedFlow.status === 'ok') ? ffLiveSig.forcedFlow : null;
+        var sign = function(n){ return n >= 0 ? '+' : ''; };
+        var entryTxt = sign(ffEntry.score) + ffEntry.score;
+        var nowTxt, verdict = '', tkFfcCls = 'vel-gray';
+        if (!ffLive || ffLive.score == null) {
+          nowTxt = 'not currently tracked';
+        } else {
+          nowTxt = sign(ffLive.score) + ffLive.score;
+          var ent = ffEntry.score, now = ffLive.score;
+          if (Math.sign(ent) !== 0 && Math.sign(now) !== 0 && Math.sign(ent) !== Math.sign(now)) {
+            verdict = ' (structure inverted — exit consideration) ⚠️';
+            tkFfcCls = 'vel-red';
+          } else if (Math.abs(now) > Math.abs(ent) + 5) {
+            verdict = ' (cascade strengthening)';
+            tkFfcCls = (now < 0) ? 'vel-red' : 'vel-green';
+          } else if (Math.abs(now) < Math.abs(ent) - 5) {
+            verdict = ' (cascade dissipating)';
+            tkFfcCls = 'vel-amber';
+          } else {
+            tkFfcCls = (Math.abs(now) >= 10) ? ((now < 0) ? 'vel-red' : 'vel-green') : 'vel-gray';
+          }
+        }
+        tkFfcHtml = '<div class="vel-line ' + tkFfcCls + '" style="margin:6px 12px 0;">Forced exit pressure at entry: <b>' + entryTxt + '</b> · now: <b>' + nowTxt + '</b>' + verdict + '</div>';
+      }
       html+='<div class="'+rowCls+'">'
         // Header bar
         +'<div class="tk-r-header">'
@@ -8358,6 +8613,7 @@ function renderTracker(){
         +tkVelHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
         +tkEffHtml /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 */
         +tkPosHtml /* L_POSITIONING_TRACKER_V1 */
+        +tkFfcHtml /* L_FFC_TRACKER_V1 */
         +buildPulseWidget(t.mech||'Unknown',t.dir||'LONG')
         // Body: 3 columns
         +'<div class="tk-r-body">'
