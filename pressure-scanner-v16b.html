@@ -6377,11 +6377,13 @@ function operatorDirection(btn, action, direction, signalId) {
      signal_id + payload + executed_direction. Without payload (older clients
      or edge cases), bridge falls back to the pendingOperatorDirections queue. */
   var signalPayload = null;
+  var sigObj = null;
   try {
     if (Array.isArray(window.signals)) {
       for (var i = 0; i < window.signals.length; i++) {
         var s = window.signals[i];
         if (s && s.id === signalId) {
+          sigObj = s;
           signalPayload = {
             base:       s.base,
             sym:        s.sym,
@@ -6400,6 +6402,31 @@ function operatorDirection(btn, action, direction, signalId) {
       }
     }
   } catch (_) {}
+  /* L_OPERATOR_TRACKER_PUSH_V1 — Upgrade 26.B Fix Pass 1.6. The Performance
+     Tracker page reads from localStorage.acress_pressure_log_v16b (the local
+     `tracker` array), not from bridge's analysis_log. The original +Log
+     button pushed signals there; the new Track / Execute buttons must do the
+     same or the operator's clicks vanish from the Performance Tracker view.
+     We push BEFORE the fetch so visibility is immediate regardless of bridge
+     response. Direction in the local entry is the operator's chosen direction,
+     not the legacy mechanism direction — matches what they intend to trade.
+     For 'BOTH', push two entries (one per direction). */
+  try {
+    if (sigObj && typeof logToTracker === 'function') {
+      var pushOne = function(opDir) {
+        var clonedS = Object.assign({}, sigObj, { dir: opDir });
+        logToTracker(clonedS, { allowSameSymDifferentDir: true });
+      };
+      if (direction === 'BOTH') {
+        pushOne('LONG');
+        pushOne('SHORT');
+      } else {
+        pushOne(direction);
+      }
+    }
+  } catch (e) {
+    try { console.warn('[Acress] operatorDirection: local tracker push failed:', e.message); } catch (_) {}
+  }
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -10086,9 +10113,18 @@ function recomputeStop(t){
   t.expiresAt=t.loggedAt+effectiveHold*60*60*1000;
 }
 
-function logToTracker(s){
-  // Prevent duplicates within a 30-min window
-  var existing=tracker.find(function(t){return t.sym===s.sym&&t.status==='open';});
+function logToTracker(s, opts){
+  /* L_OPERATOR_TRACKER_PUSH_V1 — Upgrade 26.B Fix Pass 1.6.
+     Original behavior: prevent any duplicate by sym while another entry is open.
+     Operator-directed paths (Track / Execute / Log Both) need to be able to add
+     a SHORT entry while a LONG is already open (or vice versa), so they pass
+     { allowSameSymDifferentDir: true } and the dup check becomes per-direction.
+     The legacy +Log button path is no longer rendered (replaced by Track row),
+     but the default behavior is preserved for any other caller. */
+  opts = opts || {};
+  var existing = opts.allowSameSymDifferentDir
+    ? tracker.find(function(t){ return t.sym===s.sym && t.dir===s.dir && t.status==='open'; })
+    : tracker.find(function(t){ return t.sym===s.sym && t.status==='open'; });
   if(existing)return;
   // v16+ — capture the FULL signal provenance so the tracker can show why
   // this trade was logged: score, tier, mechanism, every gate's outcome
