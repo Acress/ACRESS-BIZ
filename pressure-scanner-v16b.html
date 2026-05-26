@@ -7150,13 +7150,28 @@ function determineDirectionAndConviction(event_type, st) {
                    '), displacement clean, FFC structural pull aligned upward (' + st.ffc_composite + ').'
       };
     }
-    if (st.p1_intensity < 0.5 &&
+    /* L_P1_AVAILABILITY_CALIBRATION_V1 — Upgrade 26.0a (2026-05-27). The EXHAUSTION_FADE
+       HIGH branch must require p1_intensity to be a real positive measurement, not
+       just any value below 0.5. Pre-fix bug: p1=0 (default when no liquidation data
+       in window) satisfied < 0.5 and fired HIGH conviction direction-flips
+       indistinguishable from genuinely-exhausted cascades. Post-fix: HIGH requires
+       p1 > 0.1; absent-P1 cases downgrade to MEDIUM (EXHAUSTION_FADE_UNCONFIRMED). */
+    if (st.p1_intensity > 0.1 && st.p1_intensity < 0.5 &&
         st.displacement_efficiency === 'absorption' &&
         (st.ffc_composite < 10 || st.ffc_alignment === 'AGAINST')) {
       return {
         direction: 'SHORT', conviction: 'HIGH', classification: 'EXHAUSTION_FADE',
         reasoning: 'Short cascade exhausted (P1 ' + _fmt(st.p1_intensity) +
                    '), absorption rising, FFC structural pull no longer supports continuation.'
+      };
+    }
+    if (st.p1_intensity === 0 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite < 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'EXHAUSTION_FADE_UNCONFIRMED',
+        reasoning: 'Short cascade pattern matches but P1 liquidation data unavailable; downgraded from HIGH (efficiency ' +
+                   st.displacement_efficiency + ', FFC ' + st.ffc_composite + ').'
       };
     }
     return {
@@ -7179,13 +7194,24 @@ function determineDirectionAndConviction(event_type, st) {
                    '), displacement clean, FFC structural pull aligned downward (' + st.ffc_composite + ').'
       };
     }
-    if (st.p1_intensity < 0.5 &&
+    /* L_P1_AVAILABILITY_CALIBRATION_V1 — Upgrade 26.0a — symmetric fix for the
+       LONG-side cascade (mirror of the SHORT-covering branch above). */
+    if (st.p1_intensity > 0.1 && st.p1_intensity < 0.5 &&
         st.displacement_efficiency === 'absorption' &&
         (st.ffc_composite > 10 || st.ffc_alignment === 'AGAINST')) {
       return {
         direction: 'LONG', conviction: 'HIGH', classification: 'EXHAUSTION_FADE',
         reasoning: 'Long cascade exhausted (P1 ' + _fmt(st.p1_intensity) +
                    '), absorption rising, FFC structural pull no longer supports continuation.'
+      };
+    }
+    if (st.p1_intensity === 0 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite > 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'EXHAUSTION_FADE_UNCONFIRMED',
+        reasoning: 'Long cascade pattern matches but P1 liquidation data unavailable; downgraded from HIGH (efficiency ' +
+                   st.displacement_efficiency + ', FFC ' + st.ffc_composite + ').'
       };
     }
     return {
