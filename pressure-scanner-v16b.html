@@ -197,6 +197,19 @@ input{font-family:var(--font-ui);}
 .pc-disc-toggle{color:var(--faint); font-size:11px; margin-left:6px; width:10px; text-align:center;}
 .pc-discipline-body{display:none; padding:8px 11px 10px;}
 .pc-discipline.expanded .pc-discipline-body{display:block;}
+/* L_SHADOW_VISIBILITY_CARD_V1 — Upgrade 26.0 Part 3.5 — side-by-side display of
+   legacy vs shadow direction. Slot sits between pc-head and pc-discipline.
+   Vestigial display; planned removal in Upgrade 26.2 post-cutover. */
+.pc-shadow-cmp{padding:5px 11px;font-family:var(--font-mono);font-size:10px;line-height:1.4;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.pc-shadow-cmp .lbl{color:var(--muted);font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;}
+.pc-shadow-cmp .chip{padding:1.5px 7px;border-radius:8px;font-weight:700;letter-spacing:.3px;border:1px solid;font-size:9.5px;}
+.pc-shadow-cmp.agree .chip{background:rgba(46,232,160,.10);color:var(--green);border-color:rgba(46,232,160,.35);}
+.pc-shadow-cmp.disagree .chip{background:rgba(240,179,65,.13);color:#f0b341;border-color:rgba(240,179,65,.45);}
+.pc-shadow-cmp.neutral .chip{background:rgba(140,150,170,.10);color:var(--muted);border-color:rgba(140,150,170,.30);}
+.pc-shadow-cmp.unavail{opacity:.55;}
+.pc-shadow-cmp.unavail .chip{background:transparent;color:var(--muted);border-color:rgba(140,150,170,.25);}
+.pc-shadow-cmp .arrow{color:var(--muted);font-size:10px;}
+.pc-shadow-cmp .tail{color:var(--muted);font-size:9.5px;}
 .pc-disc-block{margin-top:8px;}
 .pc-disc-block:first-child{margin-top:0;}
 .pc-disc-block-title{font-size:9.5px; font-weight:800; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; margin-bottom:3px;}
@@ -5947,6 +5960,50 @@ function buildDisciplineHtml(s){
   return '<div class="' + sectClass + '">' + head + body + '</div>';
 }
 
+/* L_SHADOW_VISIBILITY_CARD_V1 — Upgrade 26.0 Part 3.5 — side-by-side legacy vs
+   shadow direction comparison on the card. Default ON (acress_show_shadow_comparison).
+   Returns empty string when the toggle is OFF or when shadow data is unavailable
+   in a way that the operator already understands (e.g. unmapped mechanism on a
+   card they're inspecting elsewhere). Vestigial display — planned removal in 26.2. */
+var SHADOW_COMPARISON_KEY = 'acress_show_shadow_comparison';
+function shadowComparisonEnabled() {
+  try {
+    var v = localStorage.getItem(SHADOW_COMPARISON_KEY);
+    return v === null ? true : v === '1';   // default ON
+  } catch (e) { return true; }
+}
+function buildShadowComparisonHtml(s) {
+  if (!shadowComparisonEnabled()) return '';
+  var sh = s && s.shadow;
+  if (!sh) {
+    return '<div class="pc-shadow-cmp unavail">'
+         +   '<span class="lbl">Shadow</span>'
+         +   '<span class="chip">legacy ' + (s && s.dir ? s.dir : '?') + '</span>'
+         +   '<span class="arrow">↔</span>'
+         +   '<span class="chip">unavailable</span>'
+         + '</div>';
+  }
+  var legacyDir = sh.legacy_direction || (s && s.dir) || '?';
+  var emDir     = sh.emergent_direction || 'NEUTRAL';
+  var conv      = sh.state_conviction   || 'ZERO';
+  var cls       = sh.structural_state_class || '—';
+  var rowClass  = 'agree';
+  var tail      = '✓';
+  if (emDir === 'NEUTRAL') { rowClass = 'neutral'; tail = ''; }
+  else if (sh.direction_disagreement) { rowClass = 'disagree'; tail = '⚠'; }
+  return '<div class="pc-shadow-cmp ' + rowClass + '">'
+       +   '<span class="lbl">Shadow</span>'
+       +   '<span class="chip">legacy ' + legacyDir + '</span>'
+       +   '<span class="arrow">↔</span>'
+       +   '<span class="chip">shadow ' + emDir + ' · ' + conv + ' · ' + cls + '</span>'
+       +   (tail ? '<span class="tail">' + tail + '</span>' : '')
+       + '</div>';
+}
+function toggleShadowComparisonSetting(checked) {
+  try { localStorage.setItem(SHADOW_COMPARISON_KEY, checked ? '1' : '0'); } catch (e) {}
+  try { if (typeof renderResults === 'function') renderResults(); } catch (e) {}
+}
+
 /* L_DISCIPLINE_CARD_V1 — click handler on the header toggles expand state and
    persists to localStorage so the operator's preference survives reloads. */
 function toggleDisciplineSection(headEl){
@@ -6965,6 +7022,457 @@ function scoreCoin(gates,context){
    The cohort-level Telegram filter (L_TG_FILTER_V1) already suppresses
    Long Cap alerts regardless. Re-evaluate the flip after 8.6 lands. */
 var LONG_CAP_LIQ_GATE_ACTIVE = false;
+
+/* L_AGNOSTIC_EVENT_TAXONOMY_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
+   12 agnostic event-type constants that decouple event detection from direction
+   determination. The legacy classifyMechanism still emits directionalized labels;
+   legacyToAgnostic remaps them to direction-free event descriptors. Pure data
+   and pure lookup — no side effects. */
+var AGNOSTIC_EVENT_TYPES = {
+  AGGRESSIVE_LONG_OI_EXPANSION:         'aggressive_long_oi_expansion',
+  AGGRESSIVE_SHORT_OI_EXPANSION:        'aggressive_short_oi_expansion',
+  FORCED_SHORT_COVERING_CASCADE:        'forced_short_covering_cascade',
+  FORCED_LONG_LIQUIDATION_CASCADE:      'forced_long_liquidation_cascade',
+  UPPER_LIQUIDITY_BOUNDARY_PENETRATION: 'upper_liquidity_boundary_penetration',
+  LOWER_LIQUIDITY_BOUNDARY_PENETRATION: 'lower_liquidity_boundary_penetration',
+  BUY_SIDE_CVD_DIVERGENCE:              'buy_side_cvd_divergence',
+  SELL_SIDE_CVD_DIVERGENCE:             'sell_side_cvd_divergence',
+  LONG_SIDE_OI_SATURATION_STALLED:      'long_side_oi_saturation_stalled',
+  SHORT_SIDE_OI_SATURATION_STALLED:     'short_side_oi_saturation_stalled',
+  UNCLASSIFIED_LONG_TAKER_SURGE:        'unclassified_long_taker_surge',
+  UNCLASSIFIED_SHORT_TAKER_SURGE:       'unclassified_short_taker_surge'
+};
+
+var LEGACY_TO_AGNOSTIC = {
+  'Initiative Demand · Fresh Longs':   AGNOSTIC_EVENT_TYPES.AGGRESSIVE_LONG_OI_EXPANSION,
+  'Initiative Supply · Fresh Shorts':  AGNOSTIC_EVENT_TYPES.AGGRESSIVE_SHORT_OI_EXPANSION,
+  'Short Squeeze in Progress':         AGNOSTIC_EVENT_TYPES.FORCED_SHORT_COVERING_CASCADE,
+  'Long Capitulation in Progress':     AGNOSTIC_EVENT_TYPES.FORCED_LONG_LIQUIDATION_CASCADE,
+  'Exhaustion Reversal · High Swept':  AGNOSTIC_EVENT_TYPES.UPPER_LIQUIDITY_BOUNDARY_PENETRATION,
+  'Exhaustion Reversal · Low Swept':   AGNOSTIC_EVENT_TYPES.LOWER_LIQUIDITY_BOUNDARY_PENETRATION,
+  'Flow Divergence · Hidden Demand':   AGNOSTIC_EVENT_TYPES.BUY_SIDE_CVD_DIVERGENCE,
+  'Flow Divergence · Hidden Supply':   AGNOSTIC_EVENT_TYPES.SELL_SIDE_CVD_DIVERGENCE,
+  'OI Build Exhaustion · Long side':   AGNOSTIC_EVENT_TYPES.LONG_SIDE_OI_SATURATION_STALLED,
+  'OI Build Exhaustion · Short side':  AGNOSTIC_EVENT_TYPES.SHORT_SIDE_OI_SATURATION_STALLED,
+  'Aggressive Buying Pressure':        AGNOSTIC_EVENT_TYPES.UNCLASSIFIED_LONG_TAKER_SURGE,
+  'Aggressive Selling Pressure':       AGNOSTIC_EVENT_TYPES.UNCLASSIFIED_SHORT_TAKER_SURGE
+};
+
+function legacyToAgnostic(mechanism_name) {
+  return LEGACY_TO_AGNOSTIC[mechanism_name] || null;
+}
+
+/* L_DETERMINE_DIRECTION_AND_CONVICTION_V1 — Upgrade 26.0 (Event-State Separation)
+   Per-event deterministic state matrix. Strict conditional logic against structural
+   context — NOT weighted scoring, NOT additive points. Contradictory or ambiguous
+   structural state emits NEUTRAL / ZERO / NO_TRADE_ZONE — conservatism over false
+   positives during shadow validation.
+
+   Input shape (structural_state, hereafter `st`):
+     ffc_composite           signed number, roughly [-100, +100]
+     ffc_alignment           'ALIGNED' | 'NEUTRAL' | 'AGAINST'
+     ffc_reliability         'LOW' | 'MEDIUM' | 'HIGH'
+     positioning_state       'ALIGNED_WITH_TOPS' | 'DIVERGENT_RETAIL' | 'BALANCED' |
+                             'AGAINST_TOPS' | 'DIVERGENT_RISK' | 'BAL_GATHERING' | 'UNAVAILABLE'
+     displacement_efficiency 'clean' | 'mid' | 'absorption'  (normalized by buildStructuralState)
+     spot_perp_drive         'SPOT_LED' | 'PERP_LED' | 'BALANCED' | 'SPOT_UNAVAILABLE'
+     p1_intensity            numeric, 0+
+     p2_depletion_tier       'fresh' | 'tested' | 'wearing_thin' | 'near_breakthrough' | null
+     funding_state           'overheated' | 'neutral' | 'contrarian'
+     oi_trajectory           'expanding' | 'stable' | 'contracting'
+
+   Output shape:
+     { direction: 'LONG'|'SHORT'|'NEUTRAL',
+       conviction: 'HIGH'|'MEDIUM'|'LOW'|'ZERO',
+       classification: string,
+       reasoning: string } */
+function determineDirectionAndConviction(event_type, st) {
+  var T = AGNOSTIC_EVENT_TYPES;
+  function _fmt(n) { return (typeof n === 'number' && isFinite(n)) ? n.toFixed(2) : String(n); }
+
+  // ── 1. AGGRESSIVE_LONG_OI_EXPANSION ─────────────────────────────────────
+  if (event_type === T.AGGRESSIVE_LONG_OI_EXPANSION) {
+    if (st.ffc_composite > 30 &&
+        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL')) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'OI expansion (LONG side) into supportive structural pull (FFC ' + st.ffc_composite +
+                   '); positioning ' + st.positioning_state + ' confirms.'
+      };
+    }
+    if (st.ffc_composite < -30) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'CROWDING_FADE',
+        reasoning: 'OI expansion (LONG side) into contrary structural pull (FFC ' + st.ffc_composite +
+                   '); crowding-against-structure fade.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'LONG OI expansion observed but structural state ambiguous (FFC ' + st.ffc_composite +
+                 ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 2. AGGRESSIVE_SHORT_OI_EXPANSION ────────────────────────────────────
+  if (event_type === T.AGGRESSIVE_SHORT_OI_EXPANSION) {
+    if (st.ffc_composite > 30) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'SQUEEZE_SETUP',
+        reasoning: 'OI expansion (SHORT side) into contrary structural pull (FFC ' + st.ffc_composite +
+                   '); short-side crowding against upward structure.'
+      };
+    }
+    if (st.ffc_composite < -30 &&
+        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL')) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'OI expansion (SHORT side) into supportive structural pull (FFC ' + st.ffc_composite +
+                   '); positioning ' + st.positioning_state + ' confirms.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'SHORT OI expansion observed but structural state ambiguous (FFC ' + st.ffc_composite +
+                 ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 3. FORCED_SHORT_COVERING_CASCADE ────────────────────────────────────
+  if (event_type === T.FORCED_SHORT_COVERING_CASCADE) {
+    if (st.p1_intensity >= 2.0 &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite > 30 &&
+        st.ffc_alignment !== 'AGAINST') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'Short fuel abundant (P1 intensity ' + _fmt(st.p1_intensity) +
+                   '), displacement clean, FFC structural pull aligned upward (' + st.ffc_composite + ').'
+      };
+    }
+    if (st.p1_intensity < 0.5 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite < 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'EXHAUSTION_FADE',
+        reasoning: 'Short cascade exhausted (P1 ' + _fmt(st.p1_intensity) +
+                   '), absorption rising, FFC structural pull no longer supports continuation.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Forced short-covering event detected but structural state ambiguous (P1 ' +
+                 _fmt(st.p1_intensity) + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 4. FORCED_LONG_LIQUIDATION_CASCADE ──────────────────────────────────
+  if (event_type === T.FORCED_LONG_LIQUIDATION_CASCADE) {
+    if (st.p1_intensity >= 2.0 &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite < -30 &&
+        st.ffc_alignment !== 'AGAINST') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'Long fuel abundant (P1 intensity ' + _fmt(st.p1_intensity) +
+                   '), displacement clean, FFC structural pull aligned downward (' + st.ffc_composite + ').'
+      };
+    }
+    if (st.p1_intensity < 0.5 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite > 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'EXHAUSTION_FADE',
+        reasoning: 'Long cascade exhausted (P1 ' + _fmt(st.p1_intensity) +
+                   '), absorption rising, FFC structural pull no longer supports continuation.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Forced long-liquidation event detected but structural state ambiguous (P1 ' +
+                 _fmt(st.p1_intensity) + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 5. UPPER_LIQUIDITY_BOUNDARY_PENETRATION (high swept + reclaim) ──────
+  if (event_type === T.UPPER_LIQUIDITY_BOUNDARY_PENETRATION) {
+    if ((st.p2_depletion_tier === 'wearing_thin' || st.p2_depletion_tier === 'near_breakthrough') &&
+        st.ffc_composite < -20) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'REVERSAL',
+        reasoning: 'Upper boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity thin), FFC structural pull downward (' + st.ffc_composite + ').'
+      };
+    }
+    if ((st.p2_depletion_tier === 'fresh' || st.p2_depletion_tier === 'tested') &&
+        st.ffc_composite > 20 &&
+        st.displacement_efficiency === 'clean') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'CONTINUATION',
+        reasoning: 'Upper boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity intact), FFC structural pull upward (' + st.ffc_composite +
+                   '), displacement clean.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Upper boundary penetration observed but structural state ambiguous (depletion ' +
+                 st.p2_depletion_tier + ', FFC ' + st.ffc_composite +
+                 ', efficiency ' + st.displacement_efficiency + ').'
+    };
+  }
+
+  // ── 6. LOWER_LIQUIDITY_BOUNDARY_PENETRATION (low swept + reclaim) ───────
+  if (event_type === T.LOWER_LIQUIDITY_BOUNDARY_PENETRATION) {
+    if ((st.p2_depletion_tier === 'wearing_thin' || st.p2_depletion_tier === 'near_breakthrough') &&
+        st.ffc_composite > 20) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'REVERSAL',
+        reasoning: 'Lower boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity thin), FFC structural pull upward (' + st.ffc_composite + ').'
+      };
+    }
+    if ((st.p2_depletion_tier === 'fresh' || st.p2_depletion_tier === 'tested') &&
+        st.ffc_composite < -20 &&
+        st.displacement_efficiency === 'clean') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'CONTINUATION',
+        reasoning: 'Lower boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity intact), FFC structural pull downward (' + st.ffc_composite +
+                   '), displacement clean.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Lower boundary penetration observed but structural state ambiguous (depletion ' +
+                 st.p2_depletion_tier + ', FFC ' + st.ffc_composite +
+                 ', efficiency ' + st.displacement_efficiency + ').'
+    };
+  }
+
+  // ── 7. BUY_SIDE_CVD_DIVERGENCE ──────────────────────────────────────────
+  if (event_type === T.BUY_SIDE_CVD_DIVERGENCE) {
+    if (st.ffc_composite > 20 && st.positioning_state !== 'AGAINST_TOPS') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'HIDDEN_ACCUMULATION',
+        reasoning: 'Buy-side CVD divergence, FFC structural pull upward (' + st.ffc_composite +
+                   '), positioning ' + st.positioning_state + ' not against.'
+      };
+    }
+    if (st.ffc_composite < -20) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'FALSE_DIVERGENCE',
+        reasoning: 'Buy-side CVD divergence against downward FFC structural pull (' + st.ffc_composite +
+                   '); divergence likely fails.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Buy-side CVD divergence observed but structural state ambiguous (FFC ' +
+                 st.ffc_composite + ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 8. SELL_SIDE_CVD_DIVERGENCE ─────────────────────────────────────────
+  if (event_type === T.SELL_SIDE_CVD_DIVERGENCE) {
+    if (st.ffc_composite < -20 && st.positioning_state !== 'AGAINST_TOPS') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'HIDDEN_DISTRIBUTION',
+        reasoning: 'Sell-side CVD divergence, FFC structural pull downward (' + st.ffc_composite +
+                   '), positioning ' + st.positioning_state + ' not against.'
+      };
+    }
+    if (st.ffc_composite > 20) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'FALSE_DIVERGENCE',
+        reasoning: 'Sell-side CVD divergence against upward FFC structural pull (' + st.ffc_composite +
+                   '); divergence likely fails.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Sell-side CVD divergence observed but structural state ambiguous (FFC ' +
+                 st.ffc_composite + ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 9. LONG_SIDE_OI_SATURATION_STALLED ──────────────────────────────────
+  if (event_type === T.LONG_SIDE_OI_SATURATION_STALLED) {
+    if (st.funding_state === 'overheated' &&
+        st.displacement_efficiency === 'absorption' &&
+        st.ffc_composite < -10) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'SATURATION_FLUSH',
+        reasoning: 'LONG side OI saturated, funding overheated, displacement absorbing, FFC pull downward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.funding_state === 'neutral' &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite > 20) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'CONTINUATION_THROUGH_SATURATION',
+        reasoning: 'LONG OI stalled but funding neutral and displacement clean; structural pull upward (' +
+                   st.ffc_composite + ') supports continuation.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'LONG OI saturation observed but structural state ambiguous (funding ' +
+                 st.funding_state + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 10. SHORT_SIDE_OI_SATURATION_STALLED ────────────────────────────────
+  if (event_type === T.SHORT_SIDE_OI_SATURATION_STALLED) {
+    if (st.funding_state === 'overheated' &&
+        st.displacement_efficiency === 'absorption' &&
+        st.ffc_composite > 10) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'SATURATION_SQUEEZE',
+        reasoning: 'SHORT side OI saturated, funding overheated, displacement absorbing, FFC pull upward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.funding_state === 'neutral' &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite < -20) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'CONTINUATION_THROUGH_SATURATION',
+        reasoning: 'SHORT OI stalled but funding neutral and displacement clean; structural pull downward (' +
+                   st.ffc_composite + ') supports continuation.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'SHORT OI saturation observed but structural state ambiguous (funding ' +
+                 st.funding_state + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 11. UNCLASSIFIED_LONG_TAKER_SURGE (fallback) ────────────────────────
+  // Most fallback signals should resolve NEUTRAL — unclassified surges only
+  // earn a direction when FFC very strongly confirms structural pull.
+  if (event_type === T.UNCLASSIFIED_LONG_TAKER_SURGE) {
+    if (st.ffc_composite > 75) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'STRUCTURAL_CONFIRMATION',
+        reasoning: 'Unclassified LONG taker surge, FFC structural pull strongly upward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.ffc_composite < -75) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'STRUCTURAL_OVERRIDE',
+        reasoning: 'Unclassified LONG taker surge against strongly downward FFC pull (' +
+                   st.ffc_composite + '); structure overrides direction of taker flow.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Unclassified LONG taker surge without strong FFC confirmation (' +
+                 st.ffc_composite + '); below ±75 threshold.'
+    };
+  }
+
+  // ── 12. UNCLASSIFIED_SHORT_TAKER_SURGE (fallback) ───────────────────────
+  if (event_type === T.UNCLASSIFIED_SHORT_TAKER_SURGE) {
+    if (st.ffc_composite < -75) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'STRUCTURAL_CONFIRMATION',
+        reasoning: 'Unclassified SHORT taker surge, FFC structural pull strongly downward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.ffc_composite > 75) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'STRUCTURAL_OVERRIDE',
+        reasoning: 'Unclassified SHORT taker surge against strongly upward FFC pull (' +
+                   st.ffc_composite + '); structure overrides direction of taker flow.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Unclassified SHORT taker surge without strong FFC confirmation (' +
+                 st.ffc_composite + '); below ±75 threshold.'
+    };
+  }
+
+  // Unknown event type — return NEUTRAL/ZERO defensively. Should not happen
+  // since legacyToAgnostic returns null for unmapped names and the shadow
+  // execution path skips when event_type is null.
+  return {
+    direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+    reasoning: 'Unknown event type: ' + event_type
+  };
+}
+
+/* L_BUILD_STRUCTURAL_STATE_V1 — Upgrade 26.0 (Event-State Separation)
+   Maps a fully-enriched signal object to the structural_state input shape
+   that determineDirectionAndConviction expects. Defensive — every field has
+   a default so missing inputs degrade to NEUTRAL/ZERO rather than throwing.
+
+   Field provenance:
+     ffc_*             ← signal.forcedFlow (FFC composite, scanner-side)
+     positioning_state ← classifyPositioning(signal.positioning, signal.dir).state
+     displacement_efficiency ← signal.efficiency.pct, normalized to tier string
+                              (>=70 clean, >=40 mid, else absorption; pending → mid)
+     spot_perp_drive   ← signal.spotDrive.state  (L_SPOT_PERP_DRIVE_V1)
+     p1_intensity      ← signal.liquidation.intensityTotal  OR
+                         window.__acressLiqStats[sym].intensityTotal  (L_FFC_P1_WIRING_V1)
+     p2_depletion_tier ← signal.sweepState.nearest_level_tier  (L_PER_LEVEL_RETEST_V1)
+     funding_state, oi_trajectory ← default 'neutral' / 'stable' for V1
+                                    (room to derive later; shadow tolerates defaults) */
+function buildStructuralState(signal) {
+  var ff   = signal && signal.forcedFlow   ? signal.forcedFlow   : null;
+  var eff  = signal && signal.efficiency   ? signal.efficiency   : null;
+  var sd   = signal && signal.spotDrive    ? signal.spotDrive    : null;
+  var sw   = signal && signal.sweepState   ? signal.sweepState   : null;
+  var liq  = (signal && signal.liquidation) ||
+             (typeof window !== 'undefined' && window.__acressLiqStats && signal && signal.sym
+              ? window.__acressLiqStats[signal.sym] : null);
+
+  // Normalize displacement_efficiency to tier string.
+  var eff_tier = 'mid';
+  if (eff && typeof eff.pct === 'number' && isFinite(eff.pct)) {
+    if (eff.pct >= 70) eff_tier = 'clean';
+    else if (eff.pct >= 40) eff_tier = 'mid';
+    else eff_tier = 'absorption';
+  }
+
+  // Positioning — classify from raw cache + signal.dir.
+  var pos_state = 'UNAVAILABLE';
+  try {
+    if (signal && signal.positioning && typeof classifyPositioning === 'function') {
+      var pc = classifyPositioning(signal.positioning, signal.dir);
+      if (pc && typeof pc.state === 'string') pos_state = pc.state;
+    }
+  } catch (_) { /* leave default */ }
+
+  // p1_intensity — total intensity magnitude (direction-agnostic).
+  var p1 = 0;
+  if (liq && typeof liq.intensityTotal === 'number' && isFinite(liq.intensityTotal)) {
+    p1 = liq.intensityTotal;
+  }
+
+  return {
+    ffc_composite:           (ff && typeof ff.score === 'number') ? ff.score : 0,
+    ffc_alignment:           (ff && typeof ff.alignment === 'string') ? ff.alignment : 'NEUTRAL',
+    ffc_reliability:         (ff && typeof ff.reliability === 'string') ? ff.reliability : 'LOW',
+    positioning_state:       pos_state,
+    displacement_efficiency: eff_tier,
+    spot_perp_drive:         (sd && typeof sd.state === 'string') ? sd.state : 'SPOT_UNAVAILABLE',
+    p1_intensity:            p1,
+    p2_depletion_tier:       (sw && typeof sw.nearest_level_tier === 'string') ? sw.nearest_level_tier : null,
+    funding_state:           'neutral',
+    oi_trajectory:           'stable'
+  };
+}
+
 function classifyMechanism(dir,gates){
   // Reversal vs continuation, then named mechanism
   var hasSweepReclaim=gates.sweep&&gates.sweep.dir===dir&&(gates.sweep.type==='high_sweep_reclaim'||gates.sweep.type==='low_sweep_reclaim');
@@ -7198,6 +7706,36 @@ async function analyzeCoin(symObj){
     /* L_FITNESS_VERDICT_V1 — discipline bundle computed once at signal birth,
        reused in card render + bridge Telegram template. */
     _signal.discipline = computeDisciplineBundle(_signal);
+    /* L_SHADOW_ENGINE_EXECUTION_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
+       Compute agnostic event + state-derived direction in parallel with legacy.
+       Try/catch ensures any failure inside the shadow path leaves the legacy
+       pipeline untouched: signal.shadow = null on error, legacy continues. */
+    try {
+      var _mechName = (_signal.mechanism && _signal.mechanism.name) || null;
+      var _agnosticEvent = _mechName ? legacyToAgnostic(_mechName) : null;
+      if (_agnosticEvent) {
+        var _structState = buildStructuralState(_signal);
+        var _shadowResult = determineDirectionAndConviction(_agnosticEvent, _structState);
+        _signal.shadow = {
+          agnostic_event_type:    _agnosticEvent,
+          structural_state_class: _shadowResult.classification,
+          emergent_direction:     _shadowResult.direction,
+          state_conviction:       _shadowResult.conviction,
+          state_reasoning:        _shadowResult.reasoning,
+          legacy_direction:       _signal.dir,
+          /* direction_disagreement excludes NEUTRAL — that's "shadow suppresses", not
+             "shadow says opposite". Validation Metric 1 filters on emergent != NEUTRAL,
+             so the column should align with that. Stored as 0/1 INTEGER for DB. */
+          direction_disagreement: (_signal.dir !== _shadowResult.direction && _shadowResult.direction !== 'NEUTRAL') ? 1 : 0,
+          structural_state_snapshot: _structState
+        };
+      } else {
+        _signal.shadow = null;
+      }
+    } catch (_shadowErr) {
+      try { console.log('[Acress · L_SHADOW_ENGINE_EXECUTION_V1 ERR]', _signal && _signal.base, _mechName, _shadowErr && _shadowErr.message); } catch (_) {}
+      _signal.shadow = null;
+    }
     return _signal;
   }catch(e){
     return null;
@@ -7605,6 +8143,36 @@ async function analyzeCoinDiag(symObj,diag){
     attachPrimeFields(_signal);
     /* L_FITNESS_VERDICT_V1 — discipline bundle for card + Telegram + DB. */
     _signal.discipline = computeDisciplineBundle(_signal);
+    /* L_SHADOW_ENGINE_EXECUTION_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
+       Compute agnostic event + state-derived direction in parallel with legacy.
+       Try/catch ensures any failure inside the shadow path leaves the legacy
+       pipeline untouched: signal.shadow = null on error, legacy continues. */
+    try {
+      var _mechName = (_signal.mechanism && _signal.mechanism.name) || null;
+      var _agnosticEvent = _mechName ? legacyToAgnostic(_mechName) : null;
+      if (_agnosticEvent) {
+        var _structState = buildStructuralState(_signal);
+        var _shadowResult = determineDirectionAndConviction(_agnosticEvent, _structState);
+        _signal.shadow = {
+          agnostic_event_type:    _agnosticEvent,
+          structural_state_class: _shadowResult.classification,
+          emergent_direction:     _shadowResult.direction,
+          state_conviction:       _shadowResult.conviction,
+          state_reasoning:        _shadowResult.reasoning,
+          legacy_direction:       _signal.dir,
+          /* direction_disagreement excludes NEUTRAL — that's "shadow suppresses", not
+             "shadow says opposite". Validation Metric 1 filters on emergent != NEUTRAL,
+             so the column should align with that. Stored as 0/1 INTEGER for DB. */
+          direction_disagreement: (_signal.dir !== _shadowResult.direction && _shadowResult.direction !== 'NEUTRAL') ? 1 : 0,
+          structural_state_snapshot: _structState
+        };
+      } else {
+        _signal.shadow = null;
+      }
+    } catch (_shadowErr) {
+      try { console.log('[Acress · L_SHADOW_ENGINE_EXECUTION_V1 ERR]', _signal && _signal.base, _mechName, _shadowErr && _shadowErr.message); } catch (_) {}
+      _signal.shadow = null;
+    }
     return _signal;
   }catch(e){
     throw e;
@@ -8670,6 +9238,7 @@ function buildCard(s, moodKey){
         +'<span class="pc-score-lbl">'+tierLbl+'</span>'
       +'</div>'
     +'</div>'
+    +buildShadowComparisonHtml(s) /* L_SHADOW_VISIBILITY_CARD_V1 */
     +buildDisciplineHtml(s) /* L_DISCIPLINE_CARD_V1 */
     +'<div class="pc-mech">'
       +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+oiStageBadge(s)+'</div>'
@@ -11790,6 +12359,27 @@ function openDrilldownByHourFromVPS(hour){
           <button class="pc-act" onclick="clearAllAnalysisEntries();renderSettingsModal();" title="Wipe the ENTIRE analysis log (trading tracker unaffected)" style="color:var(--red);border-color:rgba(255,82,119,.5);">💣 Clear ALL analysis</button>
           <button class="pc-act" onclick="clearZBuffers();renderSettingsModal();" title="Clear Z-score baselines (regenerates from next scan — safe)">♻ Clear z-buffers</button>
         </div>
+      </div>
+      <!-- L_SHADOW_VISIBILITY_CARD_V1 — toggle is default ON; operator can hide if distracting -->
+      <div class="settings-section">
+        <h4>🪞 Shadow comparison display</h4>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px;">
+          During the Upgrade 26.0 shadow validation window, every card shows the legacy direction next to the shadow engine's emergent direction.
+          The line is vestigial — planned removal in Upgrade 26.2 after the post-cutover comparison becomes redundant.
+          Uncheck to hide if visually noisy.
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--hi);cursor:pointer;">
+          <input type="checkbox" id="set-shadow-cmp" onchange="toggleShadowComparisonSetting(this.checked)">
+          Show shadow comparison row on each card
+        </label>
+        <script>
+          (function(){
+            try {
+              var box = document.getElementById('set-shadow-cmp');
+              if (box) box.checked = shadowComparisonEnabled();
+            } catch (e) {}
+          })();
+        </script>
       </div>
       <div class="settings-section">
         <h4>⏱️ Time display</h4>
