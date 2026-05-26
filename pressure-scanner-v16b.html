@@ -6351,15 +6351,57 @@ function getOperatorOutcomeClass(signalId, direction, action) {
 function operatorDirection(btn, action, direction, signalId) {
   if (!signalId) return;
   if (direction !== 'LONG' && direction !== 'SHORT' && direction !== 'BOTH') return;
-  // Resolve VPS URL the same way pulse/filter fetches do.
+  /* L_OPERATOR_TRACKER_PUSH_V1 + L_OPERATOR_LOCAL_FIRST_V1 — Upgrade 26.B Fix
+     Pass 1.7. Local-first ordering: the operator's intent gets pushed to the
+     Performance Tracker BEFORE any network / VPS / bridge concern. Any
+     downstream issue (VPS URL misconfigured, bridge unreachable, CORS, etc.)
+     leaves the local tracker entry intact, preserving operator agency.
+     This is the local-first / network-second pattern: operator clicked Track →
+     entry appears in Performance Tracker, no matter what happens to the
+     bridge round-trip. */
+  var sigObj = null;
+  try {
+    if (Array.isArray(window.signals)) {
+      for (var i = 0; i < window.signals.length; i++) {
+        var s = window.signals[i];
+        if (s && s.id === signalId) { sigObj = s; break; }
+      }
+    }
+  } catch (_) {}
+  try {
+    if (sigObj && typeof logToTracker === 'function') {
+      var pushOne = function(opDir) {
+        var clonedS = Object.assign({}, sigObj, { dir: opDir });
+        logToTracker(clonedS, { allowSameSymDifferentDir: true });
+      };
+      if (direction === 'BOTH') { pushOne('LONG'); pushOne('SHORT'); }
+      else                       { pushOne(direction); }
+    }
+  } catch (e) {
+    try { console.warn('[Acress] operatorDirection: local tracker push failed:', e.message); } catch (_) {}
+  }
+  /* L_OPERATOR_VPS_URL_FIX_V1 — Upgrade 26.B Fix Pass 1.7. The previous code
+     did JSON.parse on the VPS URL value, but window.VPS.setConfig stores the
+     URL as a plain string (not JSON-wrapped). JSON.parse threw on every real
+     value like 'https://89-167-43-202.sslip.io', the catch swallowed the
+     error, and the function early-returned with "VPS URL not configured" even
+     when the URL was clearly set and working for other GETs. Fix: read via
+     the canonical window.VPS.getConfig() the same way pulse and filter_options
+     do (lines 2141, 2196). Do NOT gate on state.connected — the operator
+     should be able to Track/Execute without first running the Settings test
+     connection flow; the actual fetch fail-fasts naturally on bad URL. */
   var vpsUrl = '';
   try {
-    var cfg = JSON.parse(localStorage.getItem('acress_vps_url') || '{}');
-    if (cfg && cfg.url) vpsUrl = cfg.url.replace(/\/$/, '');
+    if (window.VPS && typeof window.VPS.getConfig === 'function') {
+      var vpsCfg = window.VPS.getConfig();
+      if (vpsCfg && vpsCfg.url) vpsUrl = String(vpsCfg.url).replace(/\/$/, '');
+    }
   } catch (_) {}
   if (!vpsUrl) {
-    try { console.warn('[Acress] operatorDirection: VPS URL not configured'); } catch(_){}
-    try { setOperatorFeedback(btn, 'err'); } catch(_){}
+    try { console.warn('[Acress] operatorDirection: VPS URL not configured — local tracker push succeeded; bridge write skipped'); } catch(_){}
+    try { setOperatorFeedback(btn, 'queued'); } catch(_){}
+    // Local push already done above; this is a soft failure on the bridge
+    // side. Operator sees amber "queued" indicating local-only persistence.
     return;
   }
   // Clear any previous feedback state so retry can be visualized.
@@ -6368,64 +6410,24 @@ function operatorDirection(btn, action, direction, signalId) {
   var exch = 'binance';
   try { exch = (localStorage.getItem('acress_execute_exchange') || 'binance').toLowerCase(); } catch (_) {}
   var url = vpsUrl + '/api/operator/direction' + (action === 'execute' ? '?exchange=' + encodeURIComponent(exch) : '');
-  /* L_OPERATOR_SIGNAL_PAYLOAD_V1 — Upgrade 26.B Fix Pass 1.5 — the operator's
-     browser and the bridge's headless browser generate independent random
-     signal_ids, so the operator's signal_id never exists in the bridge's
-     analysis_log. To make Track/Execute clicks actually persist, the scanner
-     POSTs the minimal signal payload alongside the click. The bridge tries
-     UPDATE first; on 0 rows, INSERTs a new analysis_log row with the operator's
-     signal_id + payload + executed_direction. Without payload (older clients
-     or edge cases), bridge falls back to the pendingOperatorDirections queue. */
+  /* L_OPERATOR_SIGNAL_PAYLOAD_V1 — Upgrade 26.B Fix Pass 1.5 — operator and
+     bridge browsers generate independent signal_ids. Scanner POSTs payload so
+     bridge can INSERT-on-miss into analysis_log. */
   var signalPayload = null;
-  var sigObj = null;
-  try {
-    if (Array.isArray(window.signals)) {
-      for (var i = 0; i < window.signals.length; i++) {
-        var s = window.signals[i];
-        if (s && s.id === signalId) {
-          sigObj = s;
-          signalPayload = {
-            base:       s.base,
-            sym:        s.sym,
-            dir:        s.dir,
-            score:      s.score,
-            mech:       (s.mechanism && s.mechanism.name) || null,
-            mech_type:  (s.mechanism && s.mechanism.type) || null,
-            entry_price: s.entryPrice,
-            logged_at:  s.loggedAt,
-            valid_until: s.validUntil,
-            chg24:      s.chg24,
-            regime:     s.regimeKind
-          };
-          break;
-        }
-      }
-    }
-  } catch (_) {}
-  /* L_OPERATOR_TRACKER_PUSH_V1 — Upgrade 26.B Fix Pass 1.6. The Performance
-     Tracker page reads from localStorage.acress_pressure_log_v16b (the local
-     `tracker` array), not from bridge's analysis_log. The original +Log
-     button pushed signals there; the new Track / Execute buttons must do the
-     same or the operator's clicks vanish from the Performance Tracker view.
-     We push BEFORE the fetch so visibility is immediate regardless of bridge
-     response. Direction in the local entry is the operator's chosen direction,
-     not the legacy mechanism direction — matches what they intend to trade.
-     For 'BOTH', push two entries (one per direction). */
-  try {
-    if (sigObj && typeof logToTracker === 'function') {
-      var pushOne = function(opDir) {
-        var clonedS = Object.assign({}, sigObj, { dir: opDir });
-        logToTracker(clonedS, { allowSameSymDifferentDir: true });
-      };
-      if (direction === 'BOTH') {
-        pushOne('LONG');
-        pushOne('SHORT');
-      } else {
-        pushOne(direction);
-      }
-    }
-  } catch (e) {
-    try { console.warn('[Acress] operatorDirection: local tracker push failed:', e.message); } catch (_) {}
+  if (sigObj) {
+    signalPayload = {
+      base:        sigObj.base,
+      sym:         sigObj.sym,
+      dir:         sigObj.dir,
+      score:       sigObj.score,
+      mech:        (sigObj.mechanism && sigObj.mechanism.name) || null,
+      mech_type:   (sigObj.mechanism && sigObj.mechanism.type) || null,
+      entry_price: sigObj.entryPrice,
+      logged_at:   sigObj.loggedAt,
+      valid_until: sigObj.validUntil,
+      chg24:       sigObj.chg24,
+      regime:      sigObj.regimeKind
+    };
   }
   fetch(url, {
     method: 'POST',
