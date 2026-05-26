@@ -6279,33 +6279,66 @@ function buildTrackExecuteRows(s) {
   var showBoth = !!(s.shadow && s.shadow.emergent_direction
                     && s.shadow.emergent_direction !== 'NEUTRAL'
                     && s.dir && s.shadow.emergent_direction !== s.dir);
+  /* L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — re-apply persisted click outcome
+     so visual feedback survives renderResults re-renders. */
+  var fbL = getOperatorOutcomeClass(s.id, 'LONG', 'track');
+  var fbS = getOperatorOutcomeClass(s.id, 'SHORT', 'track');
+  var fbB = getOperatorOutcomeClass(s.id, 'BOTH', 'track');
+  var fbExL = getOperatorOutcomeClass(s.id, 'LONG', 'execute');
+  var fbExS = getOperatorOutcomeClass(s.id, 'SHORT', 'execute');
   var trackRow;
   if (showBoth) {
     trackRow = '<div class="pc-action-row' + rowCls + ' three-col">'
-      + '<button class="pc-track-btn' + conL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
-      + '<button class="pc-track-btn pc-track-both" onclick="operatorDirection(this,\'track\',\'BOTH\',\'' + s.id + '\')" title="Engines disagree — log interest in both directions">📝 BOTH</button>'
-      + '<button class="pc-track-btn' + conS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
+      + '<button class="pc-track-btn' + conL + fbL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
+      + '<button class="pc-track-btn pc-track-both' + fbB + '" onclick="operatorDirection(this,\'track\',\'BOTH\',\'' + s.id + '\')" title="Engines disagree — log interest in both directions">📝 BOTH</button>'
+      + '<button class="pc-track-btn' + conS + fbS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
       + '</div>';
   } else {
     trackRow = '<div class="pc-action-row' + rowCls + '">'
-      + '<button class="pc-track-btn' + conL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
-      + '<button class="pc-track-btn' + conS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
+      + '<button class="pc-track-btn' + conL + fbL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
+      + '<button class="pc-track-btn' + conS + fbS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
       + '</div>';
   }
   var execLongHtml = execDisabledL
     ? '<button class="pc-exec-btn long" disabled>—</button>'
-    : '<button class="pc-exec-btn long' + conL + '" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
+    : '<button class="pc-exec-btn long' + conL + fbExL + '" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
       +   '<span class="ex-head">🟢 LONG ' + l.notional + '</span>'
       +   '<span class="ex-detail">SL ' + l.sl + ' · TP ' + l.tp + '</span>'
       + '</button>';
   var execShortHtml = execDisabledS
     ? '<button class="pc-exec-btn short" disabled>—</button>'
-    : '<button class="pc-exec-btn short' + conS + '" onclick="operatorDirection(this,\'execute\',\'SHORT\',\'' + s.id + '\')">'
+    : '<button class="pc-exec-btn short' + conS + fbExS + '" onclick="operatorDirection(this,\'execute\',\'SHORT\',\'' + s.id + '\')">'
       +   '<span class="ex-head">🔴 SHORT ' + sh.notional + '</span>'
       +   '<span class="ex-detail">SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
       + '</button>';
   var execRow = '<div class="pc-action-row' + rowCls + '">' + execLongHtml + execShortHtml + '</div>';
   return hint + trackRow + execRow;
+}
+
+/* L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — Persistent click-outcome map.
+   The scanner re-renders all cards on every scan tick (~5min in production,
+   ~3s during active development). Visual feedback applied via classList.add
+   on the clicked button is wiped by the next renderResults(). To keep the
+   operator's feedback visible across re-renders, we record (signal_id +
+   direction + action) → outcome in this module-level map. buildTrackExecuteRows
+   reads the map at render time and pre-applies the matching class on each
+   button so the green/amber/red state survives any subsequent re-render. */
+var operatorClickOutcomes = new Map();
+function recordOperatorOutcome(signalId, direction, action, outcome) {
+  var key = signalId + '|' + direction + '|' + action;
+  operatorClickOutcomes.set(key, { outcome: outcome, ts: Date.now() });
+  // Simple bound: clear stale entries (>30 min). Most signal lifetimes are
+  // 25-30 min so anything older is no longer rendering.
+  var cutoff = Date.now() - 30 * 60 * 1000;
+  for (var k of Array.from(operatorClickOutcomes.keys())) {
+    var v = operatorClickOutcomes.get(k);
+    if (v && v.ts < cutoff) operatorClickOutcomes.delete(k);
+  }
+}
+function getOperatorOutcomeClass(signalId, direction, action) {
+  var key = signalId + '|' + direction + '|' + action;
+  var v = operatorClickOutcomes.get(key);
+  return v ? ' tracked-' + v.outcome : '';
 }
 
 /* L_OPERATOR_DIRECTION_HANDLER_V1 — Upgrade 26.B — single click handler for
@@ -6348,20 +6381,21 @@ function operatorDirection(btn, action, direction, signalId) {
       try { console.warn('[Acress] operatorDirection response not ok:', JSON.stringify(j).slice(0,200)); } catch(_){}
       return;
     }
-    if (j.changed === 1) {
-      setOperatorFeedback(btn, 'ok');
-    } else if (j.queued) {
-      setOperatorFeedback(btn, 'queued');
-    } else {
-      // changed=0 AND not queued — unexpected; treat as soft error so operator notices.
-      setOperatorFeedback(btn, 'err');
+    var outcome;
+    if (j.changed === 1)      outcome = 'ok';
+    else if (j.queued)        outcome = 'queued';
+    else {
+      outcome = 'err';
       try { console.warn('[Acress] operatorDirection unexpected changed=0/queued=false:', JSON.stringify(j).slice(0,200)); } catch(_){}
     }
+    setOperatorFeedback(btn, outcome);
+    recordOperatorOutcome(signalId, direction, action, outcome);
     if (action === 'execute' && j.exchange_url) {
       try { window.open(j.exchange_url, '_blank', 'noopener,noreferrer'); } catch(_){}
     }
   }).catch(function(e){
     setOperatorFeedback(btn, 'err');
+    recordOperatorOutcome(signalId, direction, action, 'err');
     try { console.error('[Acress] operatorDirection POST failed:', e.message); } catch(_){}
     // For Execute, do NOT open the exchange URL on network failure — would
     // mislead the operator into thinking the position is being tracked.
@@ -8884,7 +8918,7 @@ function renderResults(){invalidateMechanismStats();
      .conf-{green|red|mixed}. */
   var sortKey = currentScannerSort();
   var html;
-  if (sortKey === 'shadow_section_v1' && dirFilter === 'all') {
+  if (sortKey === 'shadow_section_v1' && dirFilter === 'both') {
     var isActive = function(s){ return s.shadow && s.shadow.emergent_direction && s.shadow.emergent_direction !== 'NEUTRAL'; };
     var activeRows  = filtered.filter(isActive).sort(shadowSectionSort);
     var neutralRows = filtered.filter(function(s){ return !isActive(s); }).sort(shadowSectionSort);
@@ -8901,7 +8935,7 @@ function renderResults(){invalidateMechanismStats();
       return '<div class="shadow-section">' + hdr + body + '</div>';
     }
     html = renderSection('Shadow Active', 'active', activeRows) + renderSection('Shadow Neutral', 'neutral', neutralRows);
-  } else if (sortKey === 'confluence_quality_desc' && dirFilter === 'all') {
+  } else if (sortKey === 'confluence_quality_desc' && dirFilter === 'both') {
     var allSorted = sortSignalsBy(filtered, sortKey);
     html  = '<div class="col-grid col-grid-merged">';
     html += '<div class="col"><div class="col-hdr"><span class="col-title">Confluence quality (LONG / SHORT interleaved)</span><span class="col-count">'+allSorted.length+' signal'+(allSorted.length!==1?'s':'')+'</span></div>';
