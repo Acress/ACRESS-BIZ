@@ -210,6 +210,42 @@ input{font-family:var(--font-ui);}
 .pc-shadow-cmp.unavail .chip{background:transparent;color:var(--muted);border-color:rgba(140,150,170,.25);}
 .pc-shadow-cmp .arrow{color:var(--muted);font-size:10px;}
 .pc-shadow-cmp .tail{color:var(--muted);font-size:9.5px;}
+/* L_FITNESS_MINICARDS_V1 — Upgrade 26.B — five compact mini-cards side-by-side. */
+.pc-fitness-row{display:grid;grid-template-columns:1.15fr 1.15fr 1fr 1fr 1fr;gap:5px;padding:7px 11px;background:var(--s2);border-bottom:1px solid var(--border);}
+.pc-fit-mini{padding:5px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--s1);font-family:var(--font-mono);font-size:9px;line-height:1.3;cursor:help;display:flex;flex-direction:column;gap:2px;min-width:0;}
+.pc-fit-mini.green{border-color:rgba(46,232,160,.55);}
+.pc-fit-mini.yellow{border-color:rgba(240,179,65,.55);}
+.pc-fit-mini.red{border-color:rgba(255,90,107,.55);}
+.pc-fit-mini.critical{border-width:2px;}
+.pc-fit-mini .lbl{font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
+.pc-fit-mini .val{font-size:10px;color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pc-fit-mini.green .val{color:var(--green);}
+.pc-fit-mini.yellow .val{color:#f0b341;}
+.pc-fit-mini.red .val{color:var(--red);}
+/* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Track + Execute paired rows with optional emphasis. */
+.pc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 11px;background:var(--s1);border-bottom:1px solid var(--border);}
+.pc-action-row:last-of-type{border-bottom:none;}
+.pc-track-btn,.pc-exec-btn{font-family:var(--font-mono);font-weight:800;border-radius:5px;border:1px solid var(--border2);cursor:pointer;letter-spacing:.3px;transition:all .15s;text-align:center;}
+.pc-track-btn{padding:5px 6px;font-size:10.5px;background:transparent;color:var(--muted);}
+.pc-track-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+.pc-track-btn.tracked{border-color:rgba(46,232,160,.5);color:var(--green);}
+.pc-exec-btn{padding:8px 8px;font-size:10.5px;line-height:1.25;background:rgba(120,150,200,.06);color:var(--body);display:flex;flex-direction:column;gap:1px;align-items:center;}
+.pc-exec-btn .ex-head{font-size:11px;font-weight:900;}
+.pc-exec-btn .ex-detail{font-size:9.5px;color:var(--muted);font-weight:600;}
+.pc-exec-btn.long{border-color:rgba(46,232,160,.4);color:var(--green);}
+.pc-exec-btn.long:hover{background:rgba(46,232,160,.10);}
+.pc-exec-btn.short{border-color:rgba(255,90,107,.4);color:var(--red);}
+.pc-exec-btn.short:hover{background:rgba(255,90,107,.10);}
+/* Consensus emphasis — applied to the agreed-direction column when engines align */
+.pc-track-btn.consensus,.pc-exec-btn.consensus{border-width:2px;}
+.pc-action-row.consensus-hint{background:linear-gradient(90deg,rgba(120,150,200,0) 0%,rgba(120,150,200,0.04) 50%,rgba(120,150,200,0) 100%);}
+.pc-consensus-chip{font-family:var(--font-mono);font-size:8.5px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:rgba(120,150,200,.10);border:1px solid var(--border2);display:inline-block;margin:0 11px 4px;}
+/* L_DAILY_BUDGET_HEADER_V1 — single header element near the top of scanner */
+.acress-budget-header{font-family:var(--font-mono);font-size:11px;color:var(--body);padding:6px 12px;background:var(--s2);border:1px solid var(--border);border-radius:5px;margin:6px 0;display:inline-flex;align-items:center;gap:10px;letter-spacing:.3px;}
+.acress-budget-header.danger{border-color:rgba(255,90,107,.5);background:rgba(255,90,107,.05);}
+.acress-budget-header.warn{border-color:rgba(240,179,65,.5);background:rgba(240,179,65,.05);}
+.acress-budget-header .lbl{color:var(--muted);font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
+.acress-budget-header .val{color:var(--hi);font-weight:800;}
 .pc-disc-block{margin-top:8px;}
 .pc-disc-block:first-child{margin-top:0;}
 .pc-disc-block-title{font-size:9.5px; font-weight:800; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; margin-bottom:3px;}
@@ -934,6 +970,9 @@ input{font-family:var(--font-ui);}
     </div>
   </div>
 </div>
+
+<!-- L_DAILY_BUDGET_HEADER_V1 — Upgrade 26.B — moved off cards onto a single scanner-page header element. Renders on demand from computeDailyBudget(). Toggle via Settings. -->
+<div id="acress-daily-budget-header" style="display:none;"></div>
 
 <div class="results" id="results">
   <div class="empty">
@@ -2780,11 +2819,15 @@ function computeDailyBudget(){
    Per Q5 2026-05-26: sweep-reclaim mechs derive SL from gates.sweep.ref
    ± 0.1% buffer; OI-based + fallback use static 1.5% LONG / 1.0% SHORT.
    Empirical per-mech calibration deferred to Upgrade 19.0c. */
-function computeSlDistancePct(signal){
+/* L_PER_DIRECTION_SIZING_V1 — Upgrade 26.B (Bidirectional Operator-Agency).
+   computeSlDistancePct / computePositionSize / computePricing accept an
+   explicit `direction` parameter that defaults to signal.dir for back-compat.
+   This lets computeDisciplineBundle call them twice (LONG + SHORT) on each
+   signal so the operator can see per-direction sizing/SL/TP on both Execute
+   buttons simultaneously. */
+function computeSlDistancePct(signal, direction){
   if (!signal) return 1.5;
-  var dir = signal.dir;
-  var mechType = signal.mechanism && signal.mechanism.type || '';
-  var mechName = signal.mechanism && signal.mechanism.name || '';
+  var dir = direction || signal.dir;
   // Sweep-reclaim mechanisms — derive from swept level
   if (signal._gateSweep && signal._gateSweep.ref && signal.entryPrice) {
     var swept = signal._gateSweep.ref;
@@ -2801,12 +2844,13 @@ function computeSlDistancePct(signal){
   return (dir === 'LONG') ? 1.5 : 1.0;
 }
 
-function computePositionSize(signal){
+function computePositionSize(signal, direction){
+  var dir = direction || signal.dir;
   var acct = getAcctBalance();
   var riskPct = getMaxRiskPct();
   var leverage = getLeverageCap();
   var liqPct = getLiqParticipationPct();
-  var slPct = computeSlDistancePct(signal);
+  var slPct = computeSlDistancePct(signal, dir);
   var maxLossUsd = acct * (riskPct / 100);
   var notionalRisk = (slPct > 0) ? (maxLossUsd / (slPct / 100)) : 0;
   // Liquidity participation cap: position notional capped at liqPct of 5-min quote volume
@@ -2820,9 +2864,10 @@ function computePositionSize(signal){
   // SL price
   var entry = signal.entryPrice || signal.price || 0;
   var sl_price = 0;
-  if (signal.dir === 'LONG')      sl_price = entry * (1 - slPct/100);
-  else if (signal.dir === 'SHORT') sl_price = entry * (1 + slPct/100);
+  if (dir === 'LONG')       sl_price = entry * (1 - slPct/100);
+  else if (dir === 'SHORT') sl_price = entry * (1 + slPct/100);
   return {
+    direction:       dir,
     sl_distance_pct: slPct,
     sl_price:        sl_price,
     max_loss_usd:    maxLossUsd,
@@ -2847,9 +2892,9 @@ function computeRoundTripCostPct(){
   // The brief's formula: -0.01 + 0.055 + 0.05 = 0.095% — uses ONE leg of each + slippage. We follow the brief verbatim.
   return Math.abs(DISCIPLINE_MAKER_REBATE_PCT) * -1 + DISCIPLINE_TAKER_FEE_PCT + DISCIPLINE_SLIPPAGE_PCT;
 }
-function computePricing(signal){
+function computePricing(signal, direction){
   var entry = signal.entryPrice || signal.price || 0;
-  var dir   = signal.dir;
+  var dir   = direction || signal.dir;
   var tpPct = getTpTargetPct();
   var rtCost = computeRoundTripCostPct();
   if (!entry || entry <= 0) {
@@ -2872,7 +2917,13 @@ function computePricing(signal){
    Each dimension grades GREEN / YELLOW / RED. Composite verdict computed per
    Q3 2026-05-26: critical-RED on sophisticated_flow OR structural_pull forces
    SKIP regardless of others. Otherwise counts reds + yellows. */
-function gradeExecution(signal, sizing){
+/* L_PER_DIRECTION_SIZING_V1 — grade functions accept explicit `direction`
+   parameter so they can be evaluated for either LONG or SHORT regardless of
+   the signal's legacy `dir`. Each grade function defaults to signal.dir when
+   direction is omitted (back-compat). Trap-risk is intentionally direction-
+   agnostic in V1 — its input state (P1, efficiency, drive) is symmetric in
+   the data; per-direction trap semantics warrants its own follow-up. */
+function gradeExecution(signal, sizing, direction){
   // Dimension 1 — liquidity capacity + volatility regime
   if (!signal || !sizing) return { grade: 'YELLOW', detail: 'incomplete data' };
   var medVol = signal._medianVol5m;
@@ -2899,11 +2950,11 @@ function gradeExecution(signal, sizing){
   return { grade: grade, detail: detail };
 }
 
-function gradeSophisticatedFlow(signal){
+function gradeSophisticatedFlow(signal, direction){
   // Dimension 2 — top-trader alignment + taker flow direction
   if (!signal) return { grade: 'YELLOW', detail: 'incomplete data' };
   var pos = signal.positioning;
-  var dir = signal.dir;
+  var dir = direction || signal.dir;
   var posState = null;
   if (pos && typeof classifyPositioning === 'function') {
     var c = classifyPositioning(pos, dir);
@@ -2931,41 +2982,71 @@ function gradeSophisticatedFlow(signal){
   return { grade: 'YELLOW', detail: 'positioning ' + (posState || 'unknown') + ' · taker ' + (takerAligned == null ? 'mixed' : (takerAligned ? 'aligned' : 'opposed')) };
 }
 
-function gradeBoundary(signal, sizing){
-  // Dimension 3 — nearest weakening level vs SL distance
+function gradeBoundary(signal, sizing, direction){
+  // Dimension 3 — nearest weakening level vs SL distance (per-direction).
+  // L_PER_DIRECTION_SIZING_V1 — read directly from sweepState.nearest_above
+  // (the level that threatens a LONG position) and .nearest_below (threatens
+  // a SHORT), rather than the legacy for_signal which was pre-filtered for
+  // the legacy direction only.
   if (!signal || !sizing) return { grade: 'YELLOW', detail: 'incomplete data' };
+  var dir = direction || signal.dir;
   var slPct = sizing.sl_distance_pct;
-  // Use sweepState.for_signal if present (already filtered by dir), else neither side qualifies
   var ss = signal.sweepState;
-  if (!ss || !ss.for_signal || ss.for_signal.nearest_depletion_score == null) {
+  var threatening = null;
+  if (ss) {
+    if (dir === 'LONG')  threatening = ss.nearest_above;
+    else if (dir === 'SHORT') threatening = ss.nearest_below;
+  }
+  if (!threatening || threatening.depletion_score == null) {
     return { grade: 'GREEN', detail: 'no weakening levels nearby (clean boundary)' };
   }
-  var distPct = Math.abs(ss.for_signal.nearest_level_distance * 100);
+  var distPct = Math.abs(threatening.distance_pct * 100);
   var ratio = (slPct > 0) ? (distPct / slPct) : Infinity;
-  var tier = ss.for_signal.nearest_level_tier || 'unknown';
+  var tier = threatening.tier || 'unknown';
   if (ratio > 2.0) return { grade: 'GREEN',  detail: tier + ' level ' + distPct.toFixed(2) + '% away (SL is ' + slPct.toFixed(2) + '%)' };
   if (ratio > 1.0) return { grade: 'YELLOW', detail: tier + ' level ' + distPct.toFixed(2) + '% away · ratio ' + ratio.toFixed(2) + '× SL' };
   return { grade: 'RED', detail: tier + ' level ' + distPct.toFixed(2) + '% away (within SL ' + slPct.toFixed(2) + '%) — high stop-hunt risk' };
 }
 
-function gradeStructuralPull(signal){
-  // Dimension 4 — FFC composite + alignment + reliability (direct read).
+function gradeStructuralPull(signal, direction){
+  // Dimension 4 — FFC composite + alignment + reliability.
+  // L_PER_DIRECTION_SIZING_V1 — recompute alignment for the explicit direction
+  // rather than reading signal.forcedFlow.alignment (which was computed once
+  // for the legacy signal.dir). The composite score is direction-agnostic;
+  // the alignment label flips meaning based on which direction we're grading.
   // Critical-RED dimension per Q3.
   if (!signal || !signal.forcedFlow) return { grade: 'YELLOW', detail: 'FFC unavailable', critical_red: false };
   var ff = signal.forcedFlow;
-  var sign = (typeof ff.score === 'number') ? (ff.score >= 0 ? '+' : '') + ff.score : '?';
-  if (ff.alignment === 'AGAINST') {
+  var dir = direction || signal.dir;
+  var score = (typeof ff.score === 'number') ? ff.score : null;
+  var sign = (score == null) ? '?' : (score >= 0 ? '+' : '') + score;
+  // Recompute alignment for this direction (mirrors classifyAlignment at L_FFC_V2):
+  //   |score| < 30 → NEUTRAL
+  //   LONG + score > 0  OR  SHORT + score < 0  → ALIGNED
+  //   otherwise → AGAINST
+  var alignment;
+  if (score == null) alignment = 'NEUTRAL';
+  else if (dir !== 'LONG' && dir !== 'SHORT') alignment = 'NEUTRAL';
+  else if (Math.abs(score) < 30) alignment = 'NEUTRAL';
+  else if ((dir === 'LONG' && score > 0) || (dir === 'SHORT' && score < 0)) alignment = 'ALIGNED';
+  else alignment = 'AGAINST';
+  if (alignment === 'AGAINST') {
     return { grade: 'RED', detail: 'FFC ' + sign + ' AGAINST · ' + (ff.reliability || '?') + ' reliability', critical_red: true };
   }
-  if (ff.alignment === 'ALIGNED' && (ff.reliability === 'MEDIUM' || ff.reliability === 'HIGH')) {
+  if (alignment === 'ALIGNED' && (ff.reliability === 'MEDIUM' || ff.reliability === 'HIGH')) {
     return { grade: 'GREEN', detail: 'FFC ' + sign + ' ALIGNED · ' + ff.reliability + ' reliability', critical_red: false };
   }
-  // NEUTRAL or LOW with concurring sign — yellow
-  return { grade: 'YELLOW', detail: 'FFC ' + sign + ' ' + (ff.alignment || 'NEUTRAL') + ' · ' + (ff.reliability || 'LOW') + ' reliability', critical_red: false };
+  // NEUTRAL or LOW reliability — yellow
+  return { grade: 'YELLOW', detail: 'FFC ' + sign + ' ' + alignment + ' · ' + (ff.reliability || 'LOW') + ' reliability', critical_red: false };
 }
 
-function gradeTrapRisk(signal){
-  // Dimension 5 — cascade-position + absorption + drive
+function gradeTrapRisk(signal, direction){
+  // Dimension 5 — cascade-position + absorption + drive.
+  // L_PER_DIRECTION_SIZING_V1: direction parameter accepted for API symmetry
+  // but inputs (P1 intensity, efficiency tier, drive state) are direction-
+  // symmetric in V1; trap-risk grade is the same for both directions until
+  // a follow-up adds direction-aware semantics (e.g. PERP_LED into uptrend
+  // is a different trap signature than PERP_LED into downtrend).
   if (!signal) return { grade: 'YELLOW', detail: 'incomplete data' };
   var liq = signal.liquidation || (typeof window !== 'undefined' && window.__acressLiqStats ? window.__acressLiqStats[signal.sym] : null);
   var eff = signal.efficiency;
@@ -3013,29 +3094,47 @@ function takerRatioFromLastBar(k5){
   return bv / qv;
 }
 
-/* L_FITNESS_VERDICT_V1 — assemble the complete discipline bundle for a signal.
-   Called from analyzeCoin / analyzeCoinDiag right before signal emission so the
-   bundle rides on the signal object through poll + render. */
+/* L_PER_DIRECTION_SIZING_V1 — Upgrade 26.B (Bidirectional Operator-Agency).
+   computeDisciplineBundle now returns per-direction nested shape:
+     { long:  { sizing, pricing, fitness },
+       short: { sizing, pricing, fitness },
+       suggested_direction: 'LONG' | 'SHORT' | null }
+   suggested_direction is the consensus pick when legacy === emergent AND
+   emergent is non-NEUTRAL; null otherwise. Drives the subtle visual
+   emphasis on Track/Execute buttons (L_BUTTON_CONSENSUS_EMPHASIS_V1).
+   Schema-breaking on raw_json: analytics querying the old flat shape
+   (raw_json.discipline.sizing.*) must update to .long.sizing.* or
+   .short.sizing.* depending on the direction of interest. */
 function computeDisciplineBundle(signal){
   if (!signal) return null;
-  var sizing  = computePositionSize(signal);
-  var pricing = computePricing(signal);
-  var fitness = computeFitnessVerdict(signal, sizing);
+  function bundleFor(dir) {
+    var sizing  = computePositionSize(signal, dir);
+    var pricing = computePricing(signal, dir);
+    var fitness = computeFitnessVerdict(signal, sizing, dir);
+    return { sizing: sizing, pricing: pricing, fitness: fitness };
+  }
+  // Suggested direction: only when legacy + shadow agree on non-NEUTRAL.
+  // signal.shadow may not be set yet at compute time on early call paths;
+  // suggested defaults to null when shadow is unknown.
+  var suggested = null;
+  var sh = signal.shadow;
+  if (sh && sh.emergent_direction && sh.emergent_direction !== 'NEUTRAL') {
+    if (sh.emergent_direction === signal.dir) suggested = sh.emergent_direction;
+  }
   return {
-    sizing:  sizing,
-    pricing: pricing,
-    fitness: fitness,
-    // budget snapshot is read at render time (depends on global tracker, which
-    // is updated continuously) — not bundled at scan time
+    long:  bundleFor('LONG'),
+    short: bundleFor('SHORT'),
+    suggested_direction: suggested,
   };
 }
 
-function computeFitnessVerdict(signal, sizing){
-  var d1 = gradeExecution(signal, sizing);
-  var d2 = gradeSophisticatedFlow(signal);
-  var d3 = gradeBoundary(signal, sizing);
-  var d4 = gradeStructuralPull(signal);
-  var d5 = gradeTrapRisk(signal);
+function computeFitnessVerdict(signal, sizing, direction){
+  var dir = direction || signal.dir;
+  var d1 = gradeExecution(signal, sizing, dir);
+  var d2 = gradeSophisticatedFlow(signal, dir);
+  var d3 = gradeBoundary(signal, sizing, dir);
+  var d4 = gradeStructuralPull(signal, dir);
+  var d5 = gradeTrapRisk(signal, dir);
   var dims = [
     { key: 'execution',           label: 'Execution',         emoji: '⚙', result: d1 },
     { key: 'sophisticated_flow',  label: 'Smart money',       emoji: '🎯', result: d2 },
@@ -6004,6 +6103,147 @@ function toggleShadowComparisonSetting(checked) {
   try { if (typeof renderResults === 'function') renderResults(); } catch (e) {}
 }
 
+/* L_DAILY_BUDGET_HEADER_V1 — Upgrade 26.B — render the daily-budget header.
+   Toggled by Settings (acress_show_daily_budget_header, default '1'/true).
+   Computes from existing computeDailyBudget(). Color tier: danger when
+   remaining_pct < 20, warn when < 50, neutral otherwise. */
+function renderDailyBudgetHeader() {
+  var el = document.getElementById('acress-daily-budget-header');
+  if (!el) return;
+  var enabled = true;
+  try {
+    var v = localStorage.getItem('acress_show_daily_budget_header');
+    enabled = (v === null) ? true : (v === '1');
+  } catch (_) {}
+  if (!enabled) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  if (typeof computeDailyBudget !== 'function') { el.style.display = 'none'; return; }
+  var b;
+  try { b = computeDailyBudget(); } catch (e) { el.style.display = 'none'; return; }
+  if (!b) { el.style.display = 'none'; return; }
+  var pct = b.remaining_pct;
+  var tier = (pct < 20) ? 'danger' : (pct < 50) ? 'warn' : '';
+  var rem = Math.round(b.remaining_usd);
+  var lim = Math.round(b.limit_usd);
+  el.className = 'acress-budget-header' + (tier ? ' ' + tier : '');
+  el.style.display = 'inline-flex';
+  el.innerHTML = '<span class="lbl">Daily budget</span>'
+               + '<span class="val">$' + rem.toLocaleString() + '</span>'
+               + '<span class="lbl">of</span>'
+               + '<span class="val">$' + lim.toLocaleString() + '</span>'
+               + '<span class="lbl">remaining (' + pct + '%)</span>'
+               + (b.today_trades != null ? '<span class="lbl">·</span><span class="val">' + b.today_trades + '</span><span class="lbl">trades today</span>' : '')
+               + (b.today_wins != null   ? '<span class="lbl">·</span><span class="val">' + b.today_wins   + '</span><span class="lbl">wins</span>' : '');
+}
+
+/* L_FITNESS_MINICARDS_V1 — Upgrade 26.B — render the five fitness mini-cards
+   in fixed order: Smart Money → Structural Pull → Boundary → Trap Risk → Execution.
+   Smart Money + Structural Pull are critical-RED dimensions and render with
+   thicker borders. Each mini-card carries the full reasoning string as the
+   title attribute (tooltip on hover). Reads from the consensus-direction
+   bundle when present, otherwise from the legacy-direction bundle. */
+function buildFitnessMiniCards(s) {
+  if (!s || !s.discipline) return '';
+  var consensusDir = s.discipline.suggested_direction;
+  var dirToShow = consensusDir || s.dir || 'LONG';
+  var bundle = (dirToShow === 'SHORT') ? s.discipline.short : s.discipline.long;
+  if (!bundle || !bundle.fitness || !bundle.fitness.dimensions) return '';
+  var dims = bundle.fitness.dimensions;
+  var keyToShort = { sophisticated_flow:'Smart', structural_pull:'Struct', boundary:'Bound', trap_risk:'Trap', execution:'Exec' };
+  var order = ['sophisticated_flow','structural_pull','boundary','trap_risk','execution'];
+  function findDim(k){ for (var i=0;i<dims.length;i++) if (dims[i].key===k) return dims[i]; return null; }
+  var html = '<div class="pc-fitness-row">';
+  for (var i = 0; i < order.length; i++) {
+    var dim = findDim(order[i]);
+    if (!dim) continue;
+    var grade = (dim.result.grade || 'YELLOW').toLowerCase();
+    var critical = (order[i] === 'sophisticated_flow' || order[i] === 'structural_pull') ? ' critical' : '';
+    var detail = (dim.result.detail || '').replace(/"/g, '&quot;');
+    html += '<div class="pc-fit-mini ' + grade + critical + '" title="' + detail + '">'
+         +    '<div class="lbl">' + keyToShort[order[i]] + '</div>'
+         +    '<div class="val">' + detail + '</div>'
+         +  '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+/* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Upgrade 26.B — Track + Execute pairs.
+   Both LONG and SHORT buttons always visible regardless of legacy/shadow.
+   When engines agree on a non-NEUTRAL direction (s.discipline.suggested_direction),
+   that direction's column gets subtle border emphasis + a small "engines agree"
+   chip above the rows. When they disagree, all four buttons render neutral. */
+function buildTrackExecuteRows(s) {
+  if (!s || !s.discipline) return '';
+  var consensus = s.discipline.suggested_direction;  // 'LONG' | 'SHORT' | null
+  var longBundle  = s.discipline.long;
+  var shortBundle = s.discipline.short;
+  function btnTxt(bundle) {
+    if (!bundle || !bundle.sizing || !bundle.pricing) return '—';
+    var n = Math.round(bundle.sizing.notional_usd);
+    var sl = (typeof fP === 'function') ? fP(bundle.sizing.sl_price) : bundle.sizing.sl_price.toFixed(4);
+    var tp = (typeof fP === 'function') ? fP(bundle.pricing.tp_price) : bundle.pricing.tp_price.toFixed(4);
+    return { notional: '$' + n.toLocaleString(), sl: '$' + sl, tp: '$' + tp };
+  }
+  var l = btnTxt(longBundle);
+  var sh = btnTxt(shortBundle);
+  var execDisabledL = (typeof l !== 'object');
+  var execDisabledS = (typeof sh !== 'object');
+  var conL = (consensus === 'LONG')  ? ' consensus' : '';
+  var conS = (consensus === 'SHORT') ? ' consensus' : '';
+  var hint = consensus ? '<div class="pc-consensus-chip">⟷ engines agree on ' + consensus + '</div>' : '';
+  var rowCls = consensus ? ' consensus-hint' : '';
+  var trackRow = '<div class="pc-action-row' + rowCls + '">'
+    + '<button class="pc-track-btn' + conL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
+    + '<button class="pc-track-btn' + conS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
+    + '</div>';
+  var execLongHtml = execDisabledL
+    ? '<button class="pc-exec-btn long" disabled>—</button>'
+    : '<button class="pc-exec-btn long' + conL + '" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
+      +   '<span class="ex-head">🟢 LONG ' + l.notional + '</span>'
+      +   '<span class="ex-detail">SL ' + l.sl + ' · TP ' + l.tp + '</span>'
+      + '</button>';
+  var execShortHtml = execDisabledS
+    ? '<button class="pc-exec-btn short" disabled>—</button>'
+    : '<button class="pc-exec-btn short' + conS + '" onclick="operatorDirection(this,\'execute\',\'SHORT\',\'' + s.id + '\')">'
+      +   '<span class="ex-head">🔴 SHORT ' + sh.notional + '</span>'
+      +   '<span class="ex-detail">SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
+      + '</button>';
+  var execRow = '<div class="pc-action-row' + rowCls + '">' + execLongHtml + execShortHtml + '</div>';
+  return hint + trackRow + execRow;
+}
+
+/* L_OPERATOR_DIRECTION_HANDLER_V1 — Upgrade 26.B — single click handler for
+   all four Track/Execute buttons. POSTs to bridge /api/operator/direction
+   with {signal_id, direction, action}. Track action only logs to DB.
+   Execute action logs AND opens the exchange URL returned by the bridge. */
+function operatorDirection(btn, action, direction, signalId) {
+  if (!signalId || (direction !== 'LONG' && direction !== 'SHORT')) return;
+  // Resolve VPS URL the same way pulse/filter fetches do.
+  var vpsUrl = '';
+  try {
+    var cfg = JSON.parse(localStorage.getItem('acress_vps_url') || '{}');
+    if (cfg && cfg.url) vpsUrl = cfg.url.replace(/\/$/, '');
+  } catch (_) {}
+  if (!vpsUrl) {
+    try { console.warn('[Acress] operatorDirection: VPS URL not configured'); } catch(_){}
+    return;
+  }
+  // Visual feedback — brief highlight
+  try { btn.classList.add('tracked'); } catch (_) {}
+  var url = vpsUrl + '/api/operator/direction';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ signal_id: signalId, direction: direction, action: action })
+  }).then(function(r){ return r.json(); }).then(function(j){
+    if (action === 'execute' && j && j.exchange_url) {
+      try { window.open(j.exchange_url, '_blank', 'noopener,noreferrer'); } catch(_){}
+    }
+  }).catch(function(e){
+    try { console.warn('[Acress] operatorDirection POST failed:', e.message); } catch(_){}
+  });
+}
+
 /* L_DISCIPLINE_CARD_V1 — click handler on the header toggles expand state and
    persists to localStorage so the operator's preference survives reloads. */
 function toggleDisciplineSection(headEl){
@@ -7729,13 +7969,12 @@ async function analyzeCoin(symObj){
     /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
        confluence_quality_score so the bridge can poll and gate alerts. */
     attachPrimeFields(_signal);
-    /* L_FITNESS_VERDICT_V1 — discipline bundle computed once at signal birth,
-       reused in card render + bridge Telegram template. */
-    _signal.discipline = computeDisciplineBundle(_signal);
     /* L_SHADOW_ENGINE_EXECUTION_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
        Compute agnostic event + state-derived direction in parallel with legacy.
-       Try/catch ensures any failure inside the shadow path leaves the legacy
-       pipeline untouched: signal.shadow = null on error, legacy continues. */
+       Order swapped under L_PER_DIRECTION_SIZING_V1 so signal.shadow is set
+       BEFORE computeDisciplineBundle, letting the bundle's suggested_direction
+       reflect engine consensus. Try/catch ensures any failure inside the
+       shadow path leaves the legacy pipeline untouched. */
     try {
       var _mechName = (_signal.mechanism && _signal.mechanism.name) || null;
       var _agnosticEvent = _mechName ? legacyToAgnostic(_mechName) : null;
@@ -7762,6 +8001,9 @@ async function analyzeCoin(symObj){
       try { console.log('[Acress · L_SHADOW_ENGINE_EXECUTION_V1 ERR]', _signal && _signal.base, _mechName, _shadowErr && _shadowErr.message); } catch (_) {}
       _signal.shadow = null;
     }
+    /* L_PER_DIRECTION_SIZING_V1 — discipline bundle now computes per-direction
+       (long + short) and reads signal.shadow for the consensus suggestion. */
+    _signal.discipline = computeDisciplineBundle(_signal);
     return _signal;
   }catch(e){
     return null;
@@ -9186,14 +9428,10 @@ function buildCard(s, moodKey){
     var icon=r.lvl==='ok'?'✓':r.lvl==='partial'?'·':r.lvl==='weak'?'✗':'·';
     return '<div class="psig"><span class="psig-icon '+r.lvl+'">'+icon+'</span><span class="psig-tag">'+r.tag+'</span><span class="psig-text">'+r.text+'</span></div>';
   }).join('');
-  var bybit='https://www.bybit.com/trade/usdt/'+s.base+'USDT';
-  var bn='https://www.binance.com/en/futures/'+s.base+'USDT';
-  var tracked=isSymTracked(s.sym);
-  var logBtn=tracked
-    ?'<button class="pc-act log tracked" disabled title="Already tracked">✓ Tracked</button>'
-    :ez.extended
-      ?'<button class="pc-act log" disabled title="Chase risk: price extended beyond entry zone">⚠ Chase Risk</button>'
-      :'<button class="pc-act log" data-log-sig="'+s.id+'" title="Log to performance tracker">＋ Log</button>';
+  /* L_CARD_RESTRUCTURE_V1 — Upgrade 26.B — bybit/bn URLs, logBtn, and tracked
+     flag formerly built here for the now-removed pc-actions row are obsolete.
+     Track + Execute buttons in buildTrackExecuteRows() handle direction-aware
+     exchange routing via the bridge handler. */
   // v16 — entry zone visualization
   var ezExtendedPct=Math.abs(ez.current-ez.entry)/ez.entry*100;
   var ezDir=s.dir==='LONG'?(ez.current>=ez.entry?'+':'-'):(ez.current<=ez.entry?'+':'-');
@@ -9264,47 +9502,29 @@ function buildCard(s, moodKey){
         +'<span class="pc-score-lbl">'+tierLbl+'</span>'
       +'</div>'
     +'</div>'
-    +buildShadowComparisonHtml(s) /* L_SHADOW_VISIBILITY_CARD_V1 */
-    +buildDisciplineHtml(s) /* L_DISCIPLINE_CARD_V1 */
+    +buildShadowComparisonHtml(s) /* L_SHADOW_VISIBILITY_CARD_V1 — permanent post-26.B */
+    /* L_CARD_RESTRUCTURE_V1 — Upgrade 26.B body layout:
+         pc-mech (compact one-line label) → fitness mini-cards → entry zone →
+         BE verdict → Track row → Execute row → countdown.
+       Removed: pc-signals breakdown, velocity/efficiency/positioning/drive/ffc/
+       level-proximity inline sections (folded into mini-card tooltips), pulse
+       widget, +Log / Bybit / Binance buttons (replaced by Track/Execute), the
+       trade-actions EXECUTE/REVERSE pair (also replaced). */
     +'<div class="pc-mech">'
       +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+oiStageBadge(s)+'</div>'
       +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+'</div>'
       +'<div class="pc-mech-stats-row">'+mechStatsBadge(s.mechanism.name)+'</div>'
     +'</div>'
-    +'<div class="pc-signals">'+signalHtml+'</div>'
+    +buildFitnessMiniCards(s) /* L_FITNESS_MINICARDS_V1 */
     +ezHtml
     +verdictHtml  /* L_SCHEMA_POPULATE_V3 */
-    +velocityHtml /* L_VELOCITY_CARD_DISPLAY_V1 */
-    +buildEfficiencyHtml(s.efficiency) /* L_DISPLACEMENT_EFFICIENCY_CARD_V1 */
-    +buildPositioningHtml(s.positioning, s.dir) /* L_POSITIONING_CARD_V1 */
-    +buildSpotPerpDriveHtml(s.spotDrive) /* L_SPOT_PERP_DRIVE_CARD_V1 */
-    +buildForcedFlowHtml(s.forcedFlow) /* L_FFC_CARD_V1 */
-    +buildLevelProximityHtml(s.sweepState) /* L_LEVEL_PROXIMITY_DISPLAY_V1 */
-    +buildPulseWidget(s.mechanism&&s.mechanism.name?s.mechanism.name:'Unknown',s.dir)
+    +buildTrackExecuteRows(s) /* L_BUTTON_CONSENSUS_EMPHASIS_V1 */
     +'<div class="pc-foot">'
-      +'<div class="pc-foot-row"><span class="pc-timer tm-ok" data-expires="'+s.validUntil+'">⏱ 30m</span></div>'
-      +'<div class="pc-actions">'
-        +logBtn
-        /* L_TRADE_LINK_NEW_TAB_V1 — both anchors open in a new tab (already had
-           target="_blank"); rel upgraded from "noopener" to "noopener noreferrer"
-           so the exchange tab can't read window.opener AND doesn't receive the
-           Referer header. User retains the scanner tab; can open multiple
-           exchange tabs in parallel. */
-        +'<a class="pc-act '+dc+'" href="'+bybit+'" target="_blank" rel="noopener noreferrer">Bybit</a>'
-        +'<a class="pc-act '+dc+'" href="'+bn+'" target="_blank" rel="noopener noreferrer">Binance</a>'
-      +'</div>'
-    +'</div>'
-    /* L_BUTTON_STABILITY_V1 — EXECUTE / REVERSE buttons now rendered inline
-       in buildCard so they are part of the card's first render and persist
-       across renderResults rebuilds. Previously addTradeButtonsToCard() ran
-       in the 500ms global decorator loop, AFTER each renderResults() wiped
-       innerHTML — leaving up to ~500ms gaps every 3 s when the buttons were
-       absent. That gap was the visible flicker. The decorator's idempotency
-       guard (querySelector('.trade-actions') early-return) still fires, so
-       it now no-ops on every tick — safe redundancy. */
-    +'<div class="trade-actions">'
-      +'<button class="trade-btn" data-trade-sig data-sym="'+s.base+'" data-dir="'+s.dir+'" title="Execute as recommended">⚡ EXECUTE</button>'
-      +'<button class="rev-trade-btn" data-rev-trade-sig data-sym="'+s.base+'" data-dir="'+s.dir+'" title="Execute the OPPOSITE direction">↻ REVERSE</button>'
+      /* L_COUNTDOWN_FLICKER_FIX_V1 — compute the real m:ss text inline from
+         validUntil at render time instead of hard-coding "⏱ 30m" placeholder.
+         setInterval at startCardTimers() still updates every 1s, but the
+         initial render now matches the real value exactly — no 30 flash. */
+      +'<div class="pc-foot-row"><span class="pc-timer '+(function(){var rem=s.validUntil-Date.now();return rem<300000?'tm-exp':rem<600000?'tm-warn':'tm-ok';})()+'" data-expires="'+s.validUntil+'">'+(function(){var rem=s.validUntil-Date.now();if(rem<=0)return 'Window Closed';var sec=Math.floor((rem%60000)/1000),m=Math.floor(rem/60000);return '⏱ '+(m>0?m+'m ':'')+String(sec).padStart(2,'0')+'s';})()+'</span></div>'
     +'</div>'
   +'</div>';
 }
@@ -9326,6 +9546,9 @@ function startCardTimers(){
         el.className='pc-timer '+(rem<300000?'tm-exp':rem<600000?'tm-warn':'tm-ok');
       }
     });
+    /* L_DAILY_BUDGET_HEADER_V1 — refresh the budget header at the same cadence
+       as the countdown so it updates as trades close throughout the day. */
+    try { if (typeof renderDailyBudgetHeader === 'function') renderDailyBudgetHeader(); } catch (e) {}
   },1000);
 }
 
@@ -12385,6 +12608,34 @@ function openDrilldownByHourFromVPS(hour){
           <button class="pc-act" onclick="clearAllAnalysisEntries();renderSettingsModal();" title="Wipe the ENTIRE analysis log (trading tracker unaffected)" style="color:var(--red);border-color:rgba(255,82,119,.5);">💣 Clear ALL analysis</button>
           <button class="pc-act" onclick="clearZBuffers();renderSettingsModal();" title="Clear Z-score baselines (regenerates from next scan — safe)">♻ Clear z-buffers</button>
         </div>
+      </div>
+      <!-- L_EXECUTION_SETTINGS_V1 — Upgrade 26.B Execution section: exchange routing, header budget toggle, shadow comparison toggle -->
+      <div class="settings-section">
+        <h4>⚙️ Execution</h4>
+        <div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:8px;">
+          Controls the exchange routing for the Execute buttons and visibility of the daily-budget header.
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--hi);margin-bottom:8px;">
+          Exchange:
+          <select id="set-execute-exchange" onchange="(function(v){try{localStorage.setItem('acress_execute_exchange',v);}catch(e){}})(this.value)" style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:var(--font-mono);font-size:11px;">
+            <option value="binance">Binance (default)</option>
+            <option value="bybit">Bybit</option>
+          </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--hi);cursor:pointer;margin-bottom:4px;">
+          <input type="checkbox" id="set-show-budget-header" onchange="(function(c){try{localStorage.setItem('acress_show_daily_budget_header',c?'1':'0');}catch(e){};if(typeof renderDailyBudgetHeader==='function')renderDailyBudgetHeader();})(this.checked)">
+          Show daily-budget header on scanner page
+        </label>
+        <script>
+          (function(){
+            try {
+              var sel = document.getElementById('set-execute-exchange');
+              if (sel) sel.value = (localStorage.getItem('acress_execute_exchange') || 'binance');
+              var bx = document.getElementById('set-show-budget-header');
+              if (bx) bx.checked = (localStorage.getItem('acress_show_daily_budget_header') !== '0');  // default true
+            } catch (e) {}
+          })();
+        </script>
       </div>
       <!-- L_SHADOW_VISIBILITY_CARD_V1 — toggle is default ON; operator can hide if distracting -->
       <div class="settings-section">
