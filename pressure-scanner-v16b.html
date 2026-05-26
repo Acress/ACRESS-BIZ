@@ -6368,10 +6368,42 @@ function operatorDirection(btn, action, direction, signalId) {
   var exch = 'binance';
   try { exch = (localStorage.getItem('acress_execute_exchange') || 'binance').toLowerCase(); } catch (_) {}
   var url = vpsUrl + '/api/operator/direction' + (action === 'execute' ? '?exchange=' + encodeURIComponent(exch) : '');
+  /* L_OPERATOR_SIGNAL_PAYLOAD_V1 — Upgrade 26.B Fix Pass 1.5 — the operator's
+     browser and the bridge's headless browser generate independent random
+     signal_ids, so the operator's signal_id never exists in the bridge's
+     analysis_log. To make Track/Execute clicks actually persist, the scanner
+     POSTs the minimal signal payload alongside the click. The bridge tries
+     UPDATE first; on 0 rows, INSERTs a new analysis_log row with the operator's
+     signal_id + payload + executed_direction. Without payload (older clients
+     or edge cases), bridge falls back to the pendingOperatorDirections queue. */
+  var signalPayload = null;
+  try {
+    if (Array.isArray(window.signals)) {
+      for (var i = 0; i < window.signals.length; i++) {
+        var s = window.signals[i];
+        if (s && s.id === signalId) {
+          signalPayload = {
+            base:       s.base,
+            sym:        s.sym,
+            dir:        s.dir,
+            score:      s.score,
+            mech:       (s.mechanism && s.mechanism.name) || null,
+            mech_type:  (s.mechanism && s.mechanism.type) || null,
+            entry_price: s.entryPrice,
+            logged_at:  s.loggedAt,
+            valid_until: s.validUntil,
+            chg24:      s.chg24,
+            regime:     s.regimeKind
+          };
+          break;
+        }
+      }
+    }
+  } catch (_) {}
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ signal_id: signalId, direction: direction, action: action })
+    body: JSON.stringify({ signal_id: signalId, direction: direction, action: action, signal_payload: signalPayload })
   }).then(function(r){
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
