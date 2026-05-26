@@ -224,7 +224,36 @@ input{font-family:var(--font-ui);}
 .pc-fit-mini.red .val{color:var(--red);}
 /* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Track + Execute paired rows with optional emphasis. */
 .pc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 11px;background:var(--s1);border-bottom:1px solid var(--border);}
+.pc-action-row.three-col{grid-template-columns:1fr 1fr 1fr;}  /* L_LOG_BOTH_BUTTON_V1 */
 .pc-action-row:last-of-type{border-bottom:none;}
+.pc-track-btn.pc-track-both{border-color:rgba(180,140,255,.4);color:#b48cff;}
+.pc-track-btn.pc-track-both:hover{border-color:#b48cff;background:rgba(180,140,255,.10);}
+/* L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — distinct visual states for the
+   four post-click outcomes (success / queued / error / network-fail). */
+.pc-track-btn.tracked-ok,.pc-exec-btn.tracked-ok{border-color:var(--green) !important;color:var(--green) !important;background:rgba(46,232,160,.10);}
+.pc-track-btn.tracked-queued,.pc-exec-btn.tracked-queued{border-color:#f0b341 !important;color:#f0b341 !important;background:rgba(240,179,65,.10);}
+.pc-track-btn.tracked-err,.pc-exec-btn.tracked-err{border-color:var(--red) !important;color:var(--red) !important;background:rgba(255,82,119,.10);}
+/* L_CARD_EXPANDED_DETAILS_V2 — collapsed-by-default details section housing
+   the original entry zone, BE verdict, velocity, efficiency, positioning,
+   drive, FFC, level proximity, and pulse widget. Toggle affects all cards
+   simultaneously (global preference via localStorage). */
+.pc-details{border-bottom:1px solid var(--border);background:var(--s2);}
+.pc-details-head{padding:5px 11px;font-size:10px;color:var(--muted);font-family:var(--font-mono);cursor:pointer;display:flex;align-items:center;gap:6px;letter-spacing:.4px;text-transform:uppercase;}
+.pc-details-head:hover{background:rgba(255,255,255,0.04);color:var(--hi);}
+.pc-details-body{display:none;}
+.pc-details.expanded .pc-details-body{display:block;}
+.pc-details-toggle{font-size:11px;color:var(--muted);width:10px;text-align:center;}
+/* L_TWO_SECTION_SORT_V1 — Shadow Active / Shadow Neutral stacked sections. */
+.shadow-section{margin-bottom:18px;}
+.shadow-section-hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px;font-family:var(--font-mono);font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--hi);background:var(--s2);border:1px solid var(--border);border-radius:6px;}
+.shadow-section-hdr.active{border-color:rgba(46,232,160,.4);color:var(--green);}
+.shadow-section-hdr.neutral{border-color:rgba(140,150,170,.3);color:var(--muted);}
+.shadow-section-hdr .count{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:none;}
+.shadow-section-hdr .rule-line{flex:1;height:1px;background:var(--border);}
+/* Confluence tier border accent on cards inside a section, applied via .pcard.conf-{tier} */
+.pcard.conf-green{border-left:3px solid var(--green);}
+.pcard.conf-red{border-left:3px solid var(--red);}
+.pcard.conf-mixed{border-left:3px solid var(--border2);}
 .pc-track-btn,.pc-exec-btn{font-family:var(--font-mono);font-weight:800;border-radius:5px;border:1px solid var(--border2);cursor:pointer;letter-spacing:.3px;transition:all .15s;text-align:center;}
 .pc-track-btn{padding:5px 6px;font-size:10.5px;background:transparent;color:var(--muted);}
 .pc-track-btn:hover{border-color:var(--cyan);color:var(--cyan);}
@@ -881,11 +910,14 @@ input{font-family:var(--font-ui);}
       <span>Sort</span>
       <!-- L_VELOCITY_SORT_V1 — default switched to velocity_desc per spec
            (fastest movers first). All prior options preserved as alternatives. -->
-      <select id="scanner-sort" onchange="renderResults()" title="Default sort: confluence quality (highest potential first)">
-        <!-- L_CONFLUENCE_SORT_V1 — new default that ranks cards by the
-             scanner-computed confluence_quality_score plus the bridge-supplied
-             HIGH CONFIDENCE bonus. LONG / SHORT cards interleave by quality. -->
-        <option value="confluence_quality_desc" selected>Confluence quality (highest first) ★</option>
+      <select id="scanner-sort" onchange="renderResults()" title="Default: Shadow Active / Shadow Neutral two-section layout, each section sorted by Smart Money + Structural Pull confluence">
+        <!-- L_TWO_SECTION_SORT_V1 — new default: signals split into "Shadow Active"
+             (emergent_direction != NEUTRAL) and "Shadow Neutral" sections; each
+             section sorted by Smart Money + Structural Pull confluence (both
+             GREEN or both RED across either direction). Score is tertiary tiebreaker. -->
+        <option value="shadow_section_v1" selected>Shadow sections (default) ★</option>
+        <!-- L_CONFLUENCE_SORT_V1 — older default; kept as toggle option. -->
+        <option value="confluence_quality_desc">Confluence quality (highest first)</option>
         <option value="velocity_desc">Velocity (fast → slow)</option>
         <option value="velocity_asc">Velocity (slow → fast)</option>
         <option value="score_desc">Score (high → low)</option>
@@ -5183,8 +5215,12 @@ function ensureTopbar(){
 
 /* v16ab — Score range filter state. scoreThreshold kept as legacy alias
    = scoreRange.min so any older code that reads it stays valid. */
-var scoreRange={min:60,max:100};
-var scoreThreshold=60;
+/* L_UNIVERSE_FILTER_CLEANUP_V1 — Upgrade 26.B Fix Pass 1 — default score range
+   broadened from min=60 to min=1 per operator decision. Any signal that survives
+   the scanner's storage floor (25+) and other gates is shown by default; the
+   slider remains functional for operators who want to narrow. */
+var scoreRange={min:1,max:100};
+var scoreThreshold=1;
 try{var __sr=localStorage.getItem('acress_score_range');if(__sr){var __p=JSON.parse(__sr);if(__p&&typeof __p.min==='number'&&typeof __p.max==='number'){scoreRange=__p;scoreThreshold=__p.min;}}}catch(e){}
 var tracker=JSON.parse(localStorage.getItem('acress_pressure_log_v16b')||'[]');
 var watchlist=JSON.parse(localStorage.getItem('acress_watchlist')||'[]');
@@ -6103,6 +6139,47 @@ function toggleShadowComparisonSetting(checked) {
   try { if (typeof renderResults === 'function') renderResults(); } catch (e) {}
 }
 
+/* L_CARD_EXPANDED_DETAILS_V2 — Upgrade 26.B Fix Pass 1 — collapsible details
+   section housing the original entry zone, BE verdict, velocity, efficiency,
+   positioning, drive, FFC, level proximity, and pulse widget. Default collapsed;
+   toggle is global (all cards expand/collapse together) via localStorage. */
+var EXPANDED_DETAILS_KEY = 'acress_card_details_expanded';
+function getDetailsExpanded() {
+  try { return localStorage.getItem(EXPANDED_DETAILS_KEY) === '1'; } catch (e) { return false; }
+}
+function toggleCardDetails(headEl) {
+  var sect = headEl.closest('.pc-details');
+  if (!sect) return;
+  var nowExpanded = !sect.classList.contains('expanded');
+  document.querySelectorAll('.pc-details').forEach(function(s) {
+    s.classList.toggle('expanded', nowExpanded);
+    var tog = s.querySelector('.pc-details-toggle');
+    if (tog) tog.textContent = nowExpanded ? '▾' : '▸';
+    var lbl = s.querySelector('.pc-details-label');
+    if (lbl) lbl.textContent = nowExpanded ? 'Hide structural details' : 'Show structural details';
+  });
+  try { localStorage.setItem(EXPANDED_DETAILS_KEY, nowExpanded ? '1' : '0'); } catch (e) {}
+}
+function buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml) {
+  var expanded = getDetailsExpanded();
+  var sectClass = 'pc-details' + (expanded ? ' expanded' : '');
+  var head = '<div class="pc-details-head" onclick="toggleCardDetails(this)">'
+    + '<span class="pc-details-toggle">' + (expanded ? '▾' : '▸') + '</span>'
+    + '<span class="pc-details-label">' + (expanded ? 'Hide structural details' : 'Show structural details') + '</span>'
+    + '</div>';
+  var bodyContent = (ezHtml || '')
+    + (verdictHtml || '')
+    + (velocityHtml || '')
+    + (typeof buildEfficiencyHtml === 'function' ? buildEfficiencyHtml(s.efficiency) : '')
+    + (typeof buildPositioningHtml === 'function' ? buildPositioningHtml(s.positioning, s.dir) : '')
+    + (typeof buildSpotPerpDriveHtml === 'function' ? buildSpotPerpDriveHtml(s.spotDrive) : '')
+    + (typeof buildForcedFlowHtml === 'function' ? buildForcedFlowHtml(s.forcedFlow) : '')
+    + (typeof buildLevelProximityHtml === 'function' ? buildLevelProximityHtml(s.sweepState) : '')
+    + (typeof buildPulseWidget === 'function' ? buildPulseWidget(s.mechanism && s.mechanism.name ? s.mechanism.name : 'Unknown', s.dir) : '');
+  var body = '<div class="pc-details-body">' + bodyContent + '</div>';
+  return '<div class="' + sectClass + '">' + head + body + '</div>';
+}
+
 /* L_DAILY_BUDGET_HEADER_V1 — Upgrade 26.B — render the daily-budget header.
    Toggled by Settings (acress_show_daily_budget_header, default '1'/true).
    Computes from existing computeDailyBudget(). Color tier: danger when
@@ -6171,7 +6248,12 @@ function buildFitnessMiniCards(s) {
    Both LONG and SHORT buttons always visible regardless of legacy/shadow.
    When engines agree on a non-NEUTRAL direction (s.discipline.suggested_direction),
    that direction's column gets subtle border emphasis + a small "engines agree"
-   chip above the rows. When they disagree, all four buttons render neutral. */
+   chip above the rows. When they disagree, all four buttons render neutral.
+   L_LOG_BOTH_BUTTON_V1 — Upgrade 26.B Fix Pass 1 — when engines disagree on a
+   non-NEUTRAL emergent direction (legacy != emergent, emergent != NEUTRAL),
+   render a third Track button [📝 BOTH] in between LONG and SHORT. Clicking
+   logs executed_direction='BOTH', useful for retrospective analysis of cases
+   where the operator decides to record interest in both directions. */
 function buildTrackExecuteRows(s) {
   if (!s || !s.discipline) return '';
   var consensus = s.discipline.suggested_direction;  // 'LONG' | 'SHORT' | null
@@ -6192,10 +6274,24 @@ function buildTrackExecuteRows(s) {
   var conS = (consensus === 'SHORT') ? ' consensus' : '';
   var hint = consensus ? '<div class="pc-consensus-chip">⟷ engines agree on ' + consensus + '</div>' : '';
   var rowCls = consensus ? ' consensus-hint' : '';
-  var trackRow = '<div class="pc-action-row' + rowCls + '">'
-    + '<button class="pc-track-btn' + conL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
-    + '<button class="pc-track-btn' + conS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
-    + '</div>';
+  // L_LOG_BOTH_BUTTON_V1 — show the BOTH button only when engines disagree on
+  // a non-NEUTRAL direction (legacy != emergent != NEUTRAL).
+  var showBoth = !!(s.shadow && s.shadow.emergent_direction
+                    && s.shadow.emergent_direction !== 'NEUTRAL'
+                    && s.dir && s.shadow.emergent_direction !== s.dir);
+  var trackRow;
+  if (showBoth) {
+    trackRow = '<div class="pc-action-row' + rowCls + ' three-col">'
+      + '<button class="pc-track-btn' + conL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
+      + '<button class="pc-track-btn pc-track-both" onclick="operatorDirection(this,\'track\',\'BOTH\',\'' + s.id + '\')" title="Engines disagree — log interest in both directions">📝 BOTH</button>'
+      + '<button class="pc-track-btn' + conS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
+      + '</div>';
+  } else {
+    trackRow = '<div class="pc-action-row' + rowCls + '">'
+      + '<button class="pc-track-btn' + conL + '" onclick="operatorDirection(this,\'track\',\'LONG\',\'' + s.id + '\')">📝 LONG</button>'
+      + '<button class="pc-track-btn' + conS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
+      + '</div>';
+  }
   var execLongHtml = execDisabledL
     ? '<button class="pc-exec-btn long" disabled>—</button>'
     : '<button class="pc-exec-btn long' + conL + '" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
@@ -6213,11 +6309,15 @@ function buildTrackExecuteRows(s) {
 }
 
 /* L_OPERATOR_DIRECTION_HANDLER_V1 — Upgrade 26.B — single click handler for
-   all four Track/Execute buttons. POSTs to bridge /api/operator/direction
-   with {signal_id, direction, action}. Track action only logs to DB.
-   Execute action logs AND opens the exchange URL returned by the bridge. */
+   all four Track/Execute buttons (+ Log Both in 26.B fix pass 1).
+   L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — Upgrade 26.B Fix Pass 1 — visual
+   feedback now fires AFTER the response is parsed, with distinct classes per
+   outcome (tracked-ok / tracked-queued / tracked-err). Execute path opens the
+   exchange URL only on successful response (not on network failure — don't
+   pretend to execute if the bridge is unreachable). */
 function operatorDirection(btn, action, direction, signalId) {
-  if (!signalId || (direction !== 'LONG' && direction !== 'SHORT')) return;
+  if (!signalId) return;
+  if (direction !== 'LONG' && direction !== 'SHORT' && direction !== 'BOTH') return;
   // Resolve VPS URL the same way pulse/filter fetches do.
   var vpsUrl = '';
   try {
@@ -6226,22 +6326,55 @@ function operatorDirection(btn, action, direction, signalId) {
   } catch (_) {}
   if (!vpsUrl) {
     try { console.warn('[Acress] operatorDirection: VPS URL not configured'); } catch(_){}
+    try { setOperatorFeedback(btn, 'err'); } catch(_){}
     return;
   }
-  // Visual feedback — brief highlight
-  try { btn.classList.add('tracked'); } catch (_) {}
-  var url = vpsUrl + '/api/operator/direction';
+  // Clear any previous feedback state so retry can be visualized.
+  try { btn.classList.remove('tracked-ok','tracked-queued','tracked-err'); } catch (_) {}
+  // Append exchange preference as query param so bridge knows where to point.
+  var exch = 'binance';
+  try { exch = (localStorage.getItem('acress_execute_exchange') || 'binance').toLowerCase(); } catch (_) {}
+  var url = vpsUrl + '/api/operator/direction' + (action === 'execute' ? '?exchange=' + encodeURIComponent(exch) : '');
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ signal_id: signalId, direction: direction, action: action })
-  }).then(function(r){ return r.json(); }).then(function(j){
-    if (action === 'execute' && j && j.exchange_url) {
+  }).then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(j){
+    if (!j || j.ok !== true) {
+      setOperatorFeedback(btn, 'err');
+      try { console.warn('[Acress] operatorDirection response not ok:', JSON.stringify(j).slice(0,200)); } catch(_){}
+      return;
+    }
+    if (j.changed === 1) {
+      setOperatorFeedback(btn, 'ok');
+    } else if (j.queued) {
+      setOperatorFeedback(btn, 'queued');
+    } else {
+      // changed=0 AND not queued — unexpected; treat as soft error so operator notices.
+      setOperatorFeedback(btn, 'err');
+      try { console.warn('[Acress] operatorDirection unexpected changed=0/queued=false:', JSON.stringify(j).slice(0,200)); } catch(_){}
+    }
+    if (action === 'execute' && j.exchange_url) {
       try { window.open(j.exchange_url, '_blank', 'noopener,noreferrer'); } catch(_){}
     }
   }).catch(function(e){
-    try { console.warn('[Acress] operatorDirection POST failed:', e.message); } catch(_){}
+    setOperatorFeedback(btn, 'err');
+    try { console.error('[Acress] operatorDirection POST failed:', e.message); } catch(_){}
+    // For Execute, do NOT open the exchange URL on network failure — would
+    // mislead the operator into thinking the position is being tracked.
   });
+}
+/* L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — apply one of three mutually
+   exclusive states to the clicked button. */
+function setOperatorFeedback(btn, kind) {
+  if (!btn || !btn.classList) return;
+  btn.classList.remove('tracked-ok','tracked-queued','tracked-err');
+  if (kind === 'ok')     btn.classList.add('tracked-ok');
+  else if (kind === 'queued') btn.classList.add('tracked-queued');
+  else if (kind === 'err')    btn.classList.add('tracked-err');
 }
 
 /* L_DISCIPLINE_CARD_V1 — click handler on the header toggles expand state and
@@ -8571,7 +8704,58 @@ function sortTrackerBy(arr,key){
     default:return a.sort(function(x,y){return (y.loggedAt||0)-(x.loggedAt||0);});
   }
 }
-function currentScannerSort(){var el=document.getElementById('scanner-sort');return el?el.value:'score_desc';}
+function currentScannerSort(){var el=document.getElementById('scanner-sort');return el?el.value:'shadow_section_v1';}
+
+/* L_CONFLUENCE_SORT_HELPER_V1 — Upgrade 26.B Fix Pass 1.
+   Evaluate Smart Money + Structural Pull confluence across BOTH directions.
+   Returns the highest-priority tier found:
+     - 'green' if either LONG or SHORT direction has BOTH Smart Money AND
+       Structural Pull GREEN (the qualifying direction is returned in .dir)
+     - 'red' if (after green-check fails) either direction has BOTH RED
+     - 'mixed' otherwise
+   The .dir field tells callers which direction the confluence emerged in,
+   useful for visual hinting (not used in V1 sort but available for follow-up). */
+function computeConfluenceTier(s) {
+  if (!s || !s.discipline) return { tier: 'mixed', dir: null };
+  var bundles = [
+    { name: 'LONG',  data: s.discipline.long },
+    { name: 'SHORT', data: s.discipline.short }
+  ];
+  function pull(dims) {
+    if (!Array.isArray(dims)) return { sm: null, sp: null };
+    var sm = null, sp = null;
+    for (var i = 0; i < dims.length; i++) {
+      var k = dims[i].key, g = dims[i].result && dims[i].result.grade;
+      if (k === 'sophisticated_flow') sm = g;
+      else if (k === 'structural_pull') sp = g;
+    }
+    return { sm: sm, sp: sp };
+  }
+  // Pass 1: any direction with both GREEN.
+  for (var i = 0; i < bundles.length; i++) {
+    var b = bundles[i];
+    if (!b.data || !b.data.fitness) continue;
+    var p = pull(b.data.fitness.dimensions);
+    if (p.sm === 'GREEN' && p.sp === 'GREEN') return { tier: 'green', dir: b.name };
+  }
+  // Pass 2: any direction with both RED.
+  for (var j = 0; j < bundles.length; j++) {
+    var b2 = bundles[j];
+    if (!b2.data || !b2.data.fitness) continue;
+    var p2 = pull(b2.data.fitness.dimensions);
+    if (p2.sm === 'RED' && p2.sp === 'RED') return { tier: 'red', dir: b2.name };
+  }
+  return { tier: 'mixed', dir: null };
+}
+/* Sort comparator for shadow_section_v1 — confluence tier (green→red→mixed),
+   then score desc as tiebreaker. */
+function shadowSectionSort(a, b) {
+  var ta = computeConfluenceTier(a).tier;
+  var tb = computeConfluenceTier(b).tier;
+  var rank = { green: 0, red: 1, mixed: 2 };
+  if (rank[ta] !== rank[tb]) return rank[ta] - rank[tb];
+  return (b.score || 0) - (a.score || 0);
+}
 function currentTrackerSort(){var el=document.getElementById('tk-sort');return el?el.value:'logged_desc';}
 
 /* L_CONFLUENCE_SORT_V1 — replaces L_CARD_SORT_BY_MOOD_V1 grouping. Mood tier
@@ -8692,14 +8876,32 @@ function renderResults(){invalidateMechanismStats();
     document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">⚪</div><div class="empty-title">'+msgTitle+'</div><div class="empty-body">'+msgBody+'</div></div>';
     return;
   }
-  /* L_CONFLUENCE_SORT_V1 — when the default confluence_quality_desc sort is
-     active AND no direction filter is applied, render a SINGLE merged column
-     with LONG / SHORT interleaved by quality. Other sort keys (or an explicit
-     direction filter) preserve the two-column layout, with each column still
-     ordered by the user's chosen sort key but without the mood-tier grouping. */
+  /* L_TWO_SECTION_SORT_V1 — Upgrade 26.B Fix Pass 1 — default sort splits the
+     dashboard into "Shadow Active" (emergent != NEUTRAL) and "Shadow Neutral"
+     stacked sections. Each section sorted by computeConfluenceTier (Smart Money
+     + Structural Pull color match across either direction), with score as
+     tiebreaker. Confluence tier sets a colored left-border on the card via
+     .conf-{green|red|mixed}. */
   var sortKey = currentScannerSort();
   var html;
-  if (sortKey === 'confluence_quality_desc' && dirFilter === 'all') {
+  if (sortKey === 'shadow_section_v1' && dirFilter === 'all') {
+    var isActive = function(s){ return s.shadow && s.shadow.emergent_direction && s.shadow.emergent_direction !== 'NEUTRAL'; };
+    var activeRows  = filtered.filter(isActive).sort(shadowSectionSort);
+    var neutralRows = filtered.filter(function(s){ return !isActive(s); }).sort(shadowSectionSort);
+    function renderSection(label, cls, rows) {
+      var hdr = '<div class="shadow-section-hdr ' + cls + '">'
+        + '<span class="rule-line"></span>'
+        + '<span>' + label + '</span>'
+        + '<span class="count">' + rows.length + ' signal' + (rows.length !== 1 ? 's' : '') + '</span>'
+        + '<span class="rule-line"></span>'
+        + '</div>';
+      var body = rows.length
+        ? '<div class="col-grid col-grid-merged"><div class="col"><div class="col-cards">' + renderSortedColumn(rows) + '</div></div></div>'
+        : '<div style="padding:20px;text-align:center;color:var(--faint);font-size:11px;background:var(--s1);border:1px solid var(--border);border-radius:6px;">No signals in this section</div>';
+      return '<div class="shadow-section">' + hdr + body + '</div>';
+    }
+    html = renderSection('Shadow Active', 'active', activeRows) + renderSection('Shadow Neutral', 'neutral', neutralRows);
+  } else if (sortKey === 'confluence_quality_desc' && dirFilter === 'all') {
     var allSorted = sortSignalsBy(filtered, sortKey);
     html  = '<div class="col-grid col-grid-merged">';
     html += '<div class="col"><div class="col-hdr"><span class="col-title">Confluence quality (LONG / SHORT interleaved)</span><span class="col-count">'+allSorted.length+' signal'+(allSorted.length!==1?'s':'')+'</span></div>';
@@ -9416,7 +9618,11 @@ function buildCard(s, moodKey){
      visual reinforcement; chip is the canonical display tag. */
   var isHc = (typeof isHighConfidence === 'function') ? isHighConfidence(s) : false;
   var hcCls=(s.highConfidence===true || isHc)?' card-high-confidence':'';
-  var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls+moodCls+hcCls;
+  /* L_TWO_SECTION_SORT_V1 / L_CONFLUENCE_SORT_HELPER_V1 — apply confluence-tier
+     class so the card's left-border colour matches its tier within the section. */
+  var confTier = (typeof computeConfluenceTier === 'function') ? computeConfluenceTier(s).tier : 'mixed';
+  var confCls = ' conf-' + confTier;
+  var cardCls='pcard '+dc+(s.score>=SURGICAL_THR?' surgical':'')+chaseCls+moodCls+hcCls+confCls;
   /* L_PRIME_CARD_TAG_V1 + L_HIGH_CONFIDENCE_CARD_CHIP_V1 — dual chips in the
      card head. PRIME (💎) is computed scanner-side at signal creation;
      HIGH CONFIDENCE (🎯) is computed bridge-side and pushed back. Both can
@@ -9516,9 +9722,11 @@ function buildCard(s, moodKey){
       +'<div class="pc-mech-stats-row">'+mechStatsBadge(s.mechanism.name)+'</div>'
     +'</div>'
     +buildFitnessMiniCards(s) /* L_FITNESS_MINICARDS_V1 */
-    +ezHtml
-    +verdictHtml  /* L_SCHEMA_POPULATE_V3 */
     +buildTrackExecuteRows(s) /* L_BUTTON_CONSENSUS_EMPHASIS_V1 */
+    /* L_CARD_EXPANDED_DETAILS_V2 — restored detail sections live here, collapsed
+       by default. Entry zone + BE verdict + velocity + efficiency + positioning +
+       drive + FFC + level proximity + pulse all live inside the toggle. */
+    +buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml)
     +'<div class="pc-foot">'
       /* L_COUNTDOWN_FLICKER_FIX_V1 — compute the real m:ss text inline from
          validUntil at render time instead of hard-coding "⏱ 30m" placeholder.
