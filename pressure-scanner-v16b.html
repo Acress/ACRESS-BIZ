@@ -217,35 +217,21 @@ input{font-family:var(--font-ui);}
 .pc-shadow-cmp.unavail .chip{background:transparent;color:var(--muted);border-color:rgba(140,150,170,.25);}
 .pc-shadow-cmp .arrow{color:var(--muted);font-size:10px;}
 .pc-shadow-cmp .tail{color:var(--muted);font-size:9.5px;}
-/* L_FITNESS_MINICARDS_V1 — Upgrade 26.B — five compact mini-cards side-by-side. */
-.pc-fitness-row{display:grid;grid-template-columns:1.15fr 1.15fr 1fr 1fr 1fr;gap:5px;padding:7px 11px;background:var(--s2);border-bottom:1px solid var(--border);}
-/* L_UNIFIED_MINICARDS_V1 — unified mini-card array (fitness + structure + bias)
-   uses auto-fit grid so the larger entry count flows over multiple rows
-   instead of squeezing five columns into 10+ tiles. */
-.pc-fitness-row.pc-unified-minicards{grid-template-columns:repeat(auto-fit, minmax(95px, 1fr));}
-.pc-fit-mini{padding:5px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--s1);font-family:var(--font-mono);font-size:9px;line-height:1.3;cursor:help;display:flex;flex-direction:column;gap:2px;min-width:0;border-left-width:3px;}
-.pc-fit-mini.green{border-color:rgba(46,232,160,.55);}
-.pc-fit-mini.yellow{border-color:rgba(240,179,65,.55);}
-.pc-fit-mini.red{border-color:rgba(255,90,107,.55);}
-.pc-fit-mini.critical{border-width:2px;border-left-width:3px;}
-.pc-fit-mini .lbl{font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
-.pc-fit-mini .val{font-size:10px;color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.pc-fit-mini.green .val{color:var(--green);}
-.pc-fit-mini.yellow .val{color:#f0b341;}
-.pc-fit-mini.red .val{color:var(--red);}
-/* L_MINICARDS_ORIGIN_ACCENT_V1 — left-border accent identifies origin group.
-   Cyan = fitness (signal-discipline-derived). Violet = structure (FFC, drive,
-   positioning, efficiency, sweep). Amber = bias (funding, spread, OI/MTF/CVD
-   reasons, shadow agreement, liq stats). */
-.pc-fit-mini.origin-fitness{border-left-color:rgba(65,209,255,.85);}
-.pc-fit-mini.origin-structure{border-left-color:rgba(190,140,255,.85);}
-.pc-fit-mini.origin-bias{border-left-color:rgba(240,179,65,.85);}
-/* L_STRUCTURE_MINICARDS_COLLAPSE_V1 — collapse hides structure-origin tiles
-   without rebuilding HTML. */
-.pc-fitness-row.struct-hidden .pc-fit-mini.origin-structure{display:none;}
-.pc-mini-tools{padding:4px 11px 7px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;}
-.pc-mini-struct-toggle{font-family:var(--font-mono);font-size:9px;letter-spacing:.4px;text-transform:uppercase;font-weight:700;padding:3px 8px;border:1px solid var(--border2);background:var(--s1);color:var(--muted);border-radius:4px;cursor:pointer;}
-.pc-mini-struct-toggle:hover{color:var(--hi);border-color:rgba(190,140,255,.55);}
+/* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
+   Replaces L_FITNESS_MINICARDS_V1 / L_UNIFIED_MINICARDS_V1 /
+   L_MINICARDS_ORIGIN_ACCENT_V1 / L_STRUCTURE_MINICARDS_COLLAPSE_V1.
+   All deprecated CSS (.pc-fitness-row / .pc-fit-mini / .pc-unified-minicards
+   / origin-* accents / struct-hidden / .pc-mini-tools / .pc-mini-struct-toggle)
+   removed alongside their dead helpers. Prose lines reuse the pre-existing
+   .vel-line + vel-{green|amber|red|gray} pattern that the structural
+   helpers already emit, so no new color classes were needed. */
+.pc-prose-body{padding:9px 11px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}
+.pc-prose-body .vel-line{margin:0;}
+/* L_DEMARCATION_BREAK_V1 — subtle visual breath between fitness verdicts
+   (Smart money / Structural pull / Forced exit pressure / Trap risk) and
+   the detail cluster below. No label, no section header — just a 1px
+   semi-transparent rule with vertical margin. */
+.pc-prose-demarc{height:1px;background:var(--border);opacity:.55;margin:6px 0;}
 /* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Track + Execute paired rows with optional emphasis. */
 .pc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 11px;background:var(--s1);border-bottom:1px solid var(--border);}
 .pc-action-row.three-col{grid-template-columns:1fr 1fr 1fr;}  /* L_LOG_BOTH_BUTTON_V1 */
@@ -291,16 +277,9 @@ input{font-family:var(--font-ui);}
    pattern for mood banner / top movers / risk / pulse filters. */
 .acress-inline-chevron{margin-left:auto;font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);padding:0 4px;transition:transform .15s,color .15s;flex-shrink:0;user-select:none;}
 [data-acress-expanded="1"] .acress-inline-chevron{color:rgba(255,255,255,0.85);}
-/* L_CARD_EXPANDED_DETAILS_V2 — collapsed-by-default details section housing
-   the original entry zone, BE verdict, velocity, efficiency, positioning,
-   drive, FFC, level proximity, and pulse widget. Toggle affects all cards
-   simultaneously (global preference via localStorage). */
-.pc-details{border-bottom:1px solid var(--border);background:var(--s2);}
-.pc-details-head{padding:5px 11px;font-size:10px;color:var(--muted);font-family:var(--font-mono);cursor:pointer;display:flex;align-items:center;gap:6px;letter-spacing:.4px;text-transform:uppercase;}
-.pc-details-head:hover{background:rgba(255,255,255,0.04);color:var(--hi);}
-.pc-details-body{display:none;}
-.pc-details.expanded .pc-details-body{display:block;}
-.pc-details-toggle{font-size:11px;color:var(--muted);width:10px;text-align:center;}
+/* L_PROSE_LAYOUT_RESTORE_V1 — Pass 3 removed the .pc-details / .pc-details-*
+   collapsible-details CSS alongside its helpers. Entry zone + BE verdict
+   now render inline inside .pc-prose-body, no toggle. */
 /* L_TWO_SECTION_SORT_V1 — Shadow Active / Shadow Neutral stacked sections. */
 .shadow-section{margin-bottom:18px;}
 .shadow-section-hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px;font-family:var(--font-mono);font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--hi);background:var(--s2);border:1px solid var(--border);border-radius:6px;}
@@ -6190,47 +6169,14 @@ function toggleShadowComparisonSetting(checked) {
   try { if (typeof renderResults === 'function') renderResults(); } catch (e) {}
 }
 
-/* L_CARD_EXPANDED_DETAILS_V2 — Upgrade 26.B Fix Pass 1 — collapsible details
-   section housing the original entry zone, BE verdict, velocity, efficiency,
-   positioning, drive, FFC, level proximity, and pulse widget. Default collapsed;
-   toggle is global (all cards expand/collapse together) via localStorage. */
-var EXPANDED_DETAILS_KEY = 'acress_card_details_expanded';
-function getDetailsExpanded() {
-  try { return localStorage.getItem(EXPANDED_DETAILS_KEY) === '1'; } catch (e) { return false; }
-}
-function toggleCardDetails(headEl) {
-  var sect = headEl.closest('.pc-details');
-  if (!sect) return;
-  var nowExpanded = !sect.classList.contains('expanded');
-  document.querySelectorAll('.pc-details').forEach(function(s) {
-    s.classList.toggle('expanded', nowExpanded);
-    var tog = s.querySelector('.pc-details-toggle');
-    if (tog) tog.textContent = nowExpanded ? '▾' : '▸';
-    var lbl = s.querySelector('.pc-details-label');
-    if (lbl) lbl.textContent = nowExpanded ? 'Hide structural details' : 'Show structural details';
-  });
-  try { localStorage.setItem(EXPANDED_DETAILS_KEY, nowExpanded ? '1' : '0'); } catch (e) {}
-}
-function buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml) {
-  /* L_CARD_RESTRUCTURE_V2 — Card Restructure Pass 2 (2026-05-28).
-     Expandable details body trimmed to ENTRY ZONE + BE VERDICT only —
-     two pieces of information not surfaced by the unified mini-card
-     array. Velocity / efficiency / positioning / drive / FFC / sweep
-     have all moved to mini-card form to satisfy the no-duplication
-     rule. Pulse widget removed too — cohort verdict now lives in the
-     header chip via L_VERDICT_CHIP_HEADER_V1. */
-  var expanded = getDetailsExpanded();
-  var sectClass = 'pc-details' + (expanded ? ' expanded' : '');
-  var head = '<div class="pc-details-head" onclick="toggleCardDetails(this)">'
-    + '<span class="pc-details-toggle">' + (expanded ? '▾' : '▸') + '</span>'
-    + '<span class="pc-details-label">' + (expanded ? 'Hide entry detail' : 'Show entry detail') + '</span>'
-    + '</div>';
-  var bodyContent = (ezHtml || '')
-    + (verdictHtml || '');
-  if (!bodyContent) return '';
-  var body = '<div class="pc-details-body">' + bodyContent + '</div>';
-  return '<div class="' + sectClass + '">' + head + body + '</div>';
-}
+/* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
+   Deprecated by Pass 3:
+     - L_CARD_EXPANDED_DETAILS_V2 (expandable details section)
+     - getDetailsExpanded / toggleCardDetails / buildExpandableDetails
+     - EXPANDED_DETAILS_KEY localStorage key
+   Entry zone + BE verdict now render inline in the main card body
+   alongside every other dimension. The "Show structural details" toggle
+   is gone — everything is always visible per operator preference. */
 
 /* L_MOOD_BANNER_PERSISTENT_V1 — Upgrade 26.B Fix Pass 1.7 UI Restructure
    (corrected). Operator confirmed the previous "wrap whole widget" pattern
@@ -6404,336 +6350,88 @@ function renderDailyBudgetHeader() {
                + (b.today_wins != null   ? '<span class="lbl">·</span><span class="val">' + b.today_wins   + '</span><span class="lbl">wins</span>' : '');
 }
 
-/* L_FITNESS_MINICARDS_V1 — Upgrade 26.B — render the five fitness mini-cards
-   in fixed order: Smart Money → Structural Pull → Boundary → Trap Risk → Execution.
-   Smart Money + Structural Pull are critical-RED dimensions and render with
-   thicker borders. Each mini-card carries the full reasoning string as the
-   title attribute (tooltip on hover). Reads from the consensus-direction
-   bundle when present, otherwise from the legacy-direction bundle. */
-/* L_UNIFIED_MINICARDS_V1 — buildFitnessMiniCards retained for any
-   external/diagnostic caller but no longer used in the card render path.
-   buildUnifiedMiniCards subsumes its functionality with origin tagging,
-   bias dimensions, and contribution-sorted ordering. */
-function buildFitnessMiniCards(s) {
-  if (!s || !s.discipline) return '';
-  var consensusDir = s.discipline.suggested_direction;
-  var dirToShow = consensusDir || s.dir || 'LONG';
-  var bundle = (dirToShow === 'SHORT') ? s.discipline.short : s.discipline.long;
-  if (!bundle || !bundle.fitness || !bundle.fitness.dimensions) return '';
+/* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
+   Deprecates the entire Pass 2 mini-card stack (deleted from this file):
+     - buildFitnessMiniCards (L_FITNESS_MINICARDS_V1) — Pass 1 mini-cards
+     - buildUnifiedMiniCards (L_UNIFIED_MINICARDS_V1) — Pass 2 unified array
+     - _miniContribution, _miniSafeDetail, _classifyFitnessGrade,
+       _classifyForcedFlow, _classifyDrive, _classifyPositioningGrade,
+       _classifyEfficiency, _classifySweep, _classifyFunding,
+       _classifySpread, _classifyPctChange, _classifyOiVelocity,
+       _classifyLiq, _classifyShadow, _classifyReasonTag — Pass 2 graders
+       (L_MINICARDS_ORIGIN_ACCENT_V1, L_BIAS_DIMENSION_MINICARDS_V1)
+     - toggleStructureMiniCards (L_STRUCTURE_MINICARDS_COLLAPSE_V1)
+   Replacement: prose-style rendering in main card body using the existing
+   structural helpers (buildPositioningHtml, buildSpotPerpDriveHtml,
+   buildEfficiencyHtml, buildForcedFlowHtml) plus the new helpers below. */
+
+/* L_PROSE_LAYOUT_RESTORE_V1 — renders one fitness dimension as a prose
+   line in the same visual pattern as the structural helpers. The fitness
+   bundle stores its prose string in dim.result.detail; this helper just
+   adds the emoji + label + vel-line color class. */
+function buildFitnessProseLine(dim) {
+  if (!dim) return '';
+  var grade = (dim.result && dim.result.grade) ? dim.result.grade : null;
+  var detail = (dim.result && dim.result.detail) || 'insufficient data';
+  var label = dim.label || dim.key || 'Dimension';
+  var cls, emoji;
+  if (grade === 'GREEN')      { cls = 'vel-green'; emoji = '🟢'; }
+  else if (grade === 'YELLOW'){ cls = 'vel-amber'; emoji = '🟡'; }
+  else if (grade === 'RED')   { cls = 'vel-red';   emoji = '🔴'; }
+  else                        { cls = 'vel-gray';  emoji = '⚪'; detail = 'insufficient data'; }
+  return '<div class="vel-line ' + cls + '">' + emoji + ' ' + label + ': ' + detail + '</div>';
+}
+
+/* L_SPREAD_DIMENSION_V1 — new prose line for spread tightness, fed from
+   signal.velocity.spread_bps. Tight < 3 bps, moderate 3-8, wide ≥8.
+   Returns "insufficient data" placeholder when null/undefined so the
+   slot keeps its canonical vertical position across cards. */
+function buildSpreadProseLine(s) {
+  var sp = s && s.velocity && s.velocity.spread_bps;
+  if (sp == null || !isFinite(sp)) {
+    return '<div class="vel-line vel-gray">⚪ Spread: insufficient data</div>';
+  }
+  var cls, emoji, descriptor;
+  if (sp < 3)      { cls = 'vel-green'; emoji = '🟢'; descriptor = 'tight'; }
+  else if (sp < 8) { cls = 'vel-amber'; emoji = '🟡'; descriptor = 'moderate'; }
+  else             { cls = 'vel-red';   emoji = '🔴'; descriptor = 'wide'; }
+  return '<div class="vel-line ' + cls + '">' + emoji + ' Spread: <b>' + sp.toFixed(1) + ' bps</b> · ' + descriptor + '</div>';
+}
+
+/* L_PROSE_LAYOUT_RESTORE_V1 — small helper to locate one of the five
+   fitness dimensions on the suggested-direction bundle, returning a
+   null-safe object that buildFitnessProseLine can render. When the bundle
+   is missing or the dim key absent, returns null and the caller emits an
+   insufficient-data placeholder line. */
+function findFitnessDim(s, key) {
+  if (!s || !s.discipline) return null;
+  var dir = s.discipline.suggested_direction || s.dir || 'LONG';
+  var bundle = (dir === 'SHORT') ? s.discipline.short : s.discipline.long;
+  if (!bundle || !bundle.fitness || !bundle.fitness.dimensions) return null;
   var dims = bundle.fitness.dimensions;
-  var keyToShort = { sophisticated_flow:'Smart', structural_pull:'Struct', boundary:'Bound', trap_risk:'Trap', execution:'Exec' };
-  var order = ['sophisticated_flow','structural_pull','boundary','trap_risk','execution'];
-  function findDim(k){ for (var i=0;i<dims.length;i++) if (dims[i].key===k) return dims[i]; return null; }
-  var html = '<div class="pc-fitness-row">';
-  for (var i = 0; i < order.length; i++) {
-    var dim = findDim(order[i]);
-    if (!dim) continue;
-    var grade = (dim.result.grade || 'YELLOW').toLowerCase();
-    var critical = (order[i] === 'sophisticated_flow' || order[i] === 'structural_pull') ? ' critical' : '';
-    var detail = (dim.result.detail || '').replace(/"/g, '&quot;');
-    html += '<div class="pc-fit-mini ' + grade + critical + '" title="' + detail + '">'
-         +    '<div class="lbl">' + keyToShort[order[i]] + '</div>'
-         +    '<div class="val">' + detail + '</div>'
-         +  '</div>';
-  }
-  html += '</div>';
-  return html;
-}
-
-/* L_UNIFIED_MINICARDS_V1 — Card Restructure Pass 2 (2026-05-28).
-   Unified mini-card array combining three origin groups:
-     - fitness    (5 dims from s.discipline.[dir].fitness)
-     - structure  (FFC alignment, drive, positioning, efficiency, sweep)
-     - bias       (funding, spread, 5m pct change, OI velocity, liq stats,
-                   shadow agreement, OI/MTF/CVD reasons)
-   Each entry carries an origin tag (used by L_MINICARDS_ORIGIN_ACCENT_V1)
-   and a contribution score in [-2, +2] representing how strongly the
-   dimension supports s.discipline.suggested_direction (falling back to
-   s.dir when null per operator confirmation). Sort: most-supportive at
-   top → most-opposed at bottom.
-   Structure-origin tiles default expanded; toggle (L_STRUCTURE_MINICARDS_COLLAPSE_V1)
-   hides them via .pc-fitness-row.struct-hidden CSS rule, leaving fitness
-   + bias visible. */
-function _miniContribution(grade) {
-  if (grade === 'green') return 1;
-  if (grade === 'green-strong') return 2;
-  if (grade === 'red') return -1;
-  if (grade === 'red-strong') return -2;
-  return 0;
-}
-function _miniSafeDetail(s) {
-  return (s == null ? '' : String(s)).replace(/"/g, '&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function _classifyFitnessGrade(dim) {
-  var g = (dim.result.grade || 'YELLOW').toLowerCase();
-  var crit = (dim.key === 'sophisticated_flow' || dim.key === 'structural_pull');
-  if (g === 'green' && crit) return 'green-strong';
-  if (g === 'red' && crit)   return 'red-strong';
-  return g;   // green | yellow | red
-}
-function _classifyForcedFlow(ffc, dir) {
-  if (!ffc || !ffc.alignment) return null;
-  var rel = (ffc.reliability || 'LOW').toUpperCase();
-  if (ffc.alignment === 'ALIGNED') return rel === 'HIGH' ? 'green-strong' : 'green';
-  if (ffc.alignment === 'AGAINST') return rel === 'HIGH' ? 'red-strong' : 'red';
-  return 'yellow';
-}
-function _classifyDrive(drive, dir) {
-  if (!drive || !drive.state) return null;
-  if (drive.state === 'SPOT_UNAVAILABLE') return null;
-  if (drive.state === 'BALANCED') return 'yellow';
-  if (drive.state === 'SPOT_LED')  return dir === 'LONG' ? 'green' : 'red';
-  if (drive.state === 'PERP_LED')  return dir === 'LONG' ? 'red'   : 'green';
-  return null;
-}
-function _classifyPositioningGrade(pos, dir) {
-  if (!pos) return null;
-  var c = (typeof classifyPositioning === 'function') ? classifyPositioning(pos, dir) : null;
-  if (!c || c.state === 'gathering' || c.state === 'unavailable' || c.state === 'stale') return null;
-  if (c.state === 'ALIGNED_WITH_TOPS') return 'green-strong';
-  if (c.state === 'DIVERGENT_RETAIL')  return 'green';
-  if (c.state === 'AGAINST_TOPS')      return 'red-strong';
-  if (c.state === 'DIVERGENT_RISK')    return 'red';
-  return 'yellow';
-}
-function _classifyEfficiency(eff) {
-  if (!eff) return null;
-  if (eff.status !== 'ok' || eff.pct == null) return null;
-  if (eff.pct >= 70) return 'green';
-  if (eff.pct >= 40) return 'yellow';
-  return 'red';
-}
-function _classifySweep(sweep, dir) {
-  if (!sweep || !sweep.classification) return null;
-  var c = String(sweep.classification);
-  if (c === 'DEPLETED') return 'green';
-  if (c === 'BUILDING') return 'yellow';
-  if (c === 'INTACT')   return 'red';
-  return null;
-}
-/* L_BIAS_DIMENSION_MINICARDS_V1 — Card Restructure Pass 2 (2026-05-28).
-   Direction-relative grading helpers for the bias-origin mini-cards added
-   to the unified array. Each helper returns:
-     'green-strong' | 'green' | 'yellow' | 'red' | 'red-strong' | null
-   null means "data not available, don't render" (mini-card omitted from
-   the unified array). Sign convention: green grades support sortDir,
-   red grades oppose. ATR/volatility deliberately NOT included here — it
-   is already encoded into the fitness 'Execution' dimension. */
-function _classifyFunding(s) {
-  if (s.funding_cost_bps == null || s.funding_applies !== 1) return null;
-  var bps = s.funding_cost_bps;
-  // funding_cost_bps is direction-aware in scanner — positive bps = cost to current dir,
-  // negative = saving for current dir
-  if (bps > 5)  return 'red';
-  if (bps > 0)  return 'yellow';
-  if (bps < -5) return 'green';
-  return 'yellow';
-}
-function _classifySpread(spread_bps) {
-  if (spread_bps == null) return null;
-  if (spread_bps < 3) return 'green';
-  if (spread_bps < 8) return 'yellow';
-  return 'red';
-}
-function _classifyPctChange(pct, dir) {
-  if (pct == null) return null;
-  var sign = dir === 'LONG' ? 1 : -1;
-  var signed = pct * sign;
-  if (signed > 1.0)  return 'green-strong';
-  if (signed > 0.3)  return 'green';
-  if (signed > -0.3) return 'yellow';
-  if (signed > -1.0) return 'red';
-  return 'red-strong';
-}
-function _classifyOiVelocity(oiv, dir) {
-  if (oiv == null) return null;
-  var sign = dir === 'LONG' ? 1 : -1;
-  var signed = oiv * sign;
-  if (signed > 1.0)  return 'green';
-  if (signed > -1.0) return 'yellow';
-  return 'red';
-}
-function _classifyLiq(liq, dir) {
-  if (!liq || liq.intensityTotal == null) return null;
-  var longC = liq.longCount || liq.long_count || 0;
-  var shortC = liq.shortCount || liq.short_count || 0;
-  if (longC + shortC < 1) return null;
-  // Forced liquidations on the opposite side = tailwind for our direction
-  if (dir === 'LONG'  && shortC > longC * 1.5) return 'green';
-  if (dir === 'SHORT' && longC > shortC * 1.5) return 'green';
-  if (dir === 'LONG'  && longC > shortC * 1.5) return 'red';
-  if (dir === 'SHORT' && shortC > longC * 1.5) return 'red';
-  return 'yellow';
-}
-function _classifyShadow(shadow, dir) {
-  if (!shadow || !shadow.emergent_direction) return null;
-  var em = shadow.emergent_direction;
-  if (em === 'NEUTRAL') return 'yellow';
-  var conv = shadow.state_conviction || 'LOW';
-  if (em === dir) return conv === 'HIGH' ? 'green-strong' : 'green';
-  return conv === 'HIGH' ? 'red-strong' : 'red';
-}
-function _classifyReasonTag(reasons, tag) {
-  if (!Array.isArray(reasons)) return null;
-  for (var i = 0; i < reasons.length; i++) {
-    if (reasons[i].tag === tag) {
-      var lvl = reasons[i].lvl;
-      if (lvl === 'ok')      return { grade: 'green', detail: reasons[i].text };
-      if (lvl === 'partial') return { grade: 'yellow', detail: reasons[i].text };
-      if (lvl === 'weak')    return { grade: 'red', detail: reasons[i].text };
-    }
+  for (var i = 0; i < dims.length; i++) {
+    if (dims[i].key === key) return dims[i];
   }
   return null;
 }
-function buildUnifiedMiniCards(s) {
-  if (!s || !s.discipline) return '';
-  /* L_UNIFIED_MINICARDS_V1 — sort reference = suggested_direction with
-     legacy s.dir fallback. */
-  var sortDir = s.discipline.suggested_direction || s.dir || 'LONG';
-  var bundle = (sortDir === 'SHORT') ? s.discipline.short : s.discipline.long;
-  if (!bundle || !bundle.fitness || !bundle.fitness.dimensions) return '';
-  var entries = [];
-  function push(origin, label, detail, grade) {
-    if (!grade) return;
-    entries.push({
-      origin: origin,
-      label: label,
-      detail: _miniSafeDetail(detail),
-      grade: grade,
-      contribution: _miniContribution(grade)
-    });
-  }
 
-  // === FITNESS dimensions (5) — from per-direction discipline bundle ===
-  var fitDims = bundle.fitness.dimensions;
-  var keyToShort = { sophisticated_flow:'Smart', structural_pull:'Struct', boundary:'Bound', trap_risk:'Trap', execution:'Exec' };
-  for (var i = 0; i < fitDims.length; i++) {
-    var dim = fitDims[i];
-    push('fitness', keyToShort[dim.key] || dim.label, dim.result.detail, _classifyFitnessGrade(dim));
-  }
-
-  // === STRUCTURE dimensions ===
-  var ffcGrade = _classifyForcedFlow(s.forcedFlow, sortDir);
-  if (ffcGrade) {
-    var fAlign = (s.forcedFlow && s.forcedFlow.alignment) || '—';
-    var fRel   = (s.forcedFlow && s.forcedFlow.reliability) || '—';
-    var fMag   = (s.forcedFlow && s.forcedFlow.magnitude != null) ? s.forcedFlow.magnitude.toFixed(1) : '—';
-    push('structure', 'FFC', fAlign + ' · ' + fRel + ' · mag ' + fMag, ffcGrade);
-  }
-  var driveGrade = _classifyDrive(s.spotDrive, sortDir);
-  if (driveGrade) push('structure', 'Drive', (s.spotDrive && s.spotDrive.state) || '—', driveGrade);
-  var posGrade = _classifyPositioningGrade(s.positioning, sortDir);
-  if (posGrade) {
-    var posClass = (typeof classifyPositioning === 'function') ? classifyPositioning(s.positioning, sortDir) : null;
-    var posTxt = posClass ? (posClass.state + (posClass.top_long != null ? ' · TL ' + posClass.top_long + '%' : '')) : '—';
-    push('structure', 'Top traders', posTxt, posGrade);
-  }
-  var effGrade = _classifyEfficiency(s.efficiency);
-  if (effGrade) push('structure', 'Efficiency', (s.efficiency.pct != null ? s.efficiency.pct.toFixed(0) + '%' : '—'), effGrade);
-  var swGrade = _classifySweep(s.sweepState, sortDir);
-  if (swGrade) push('structure', 'Sweep', (s.sweepState && s.sweepState.classification) || '—', swGrade);
-
-  // === BIAS dimensions ===
-  var shGrade = _classifyShadow(s.shadow, sortDir);
-  if (shGrade) {
-    var shDir = (s.shadow && s.shadow.emergent_direction) || '—';
-    var shConv = (s.shadow && s.shadow.state_conviction) || '—';
-    push('bias', 'Shadow', shDir + ' · ' + shConv, shGrade);
-  }
-  var fundGrade = _classifyFunding(s);
-  if (fundGrade) {
-    var fbps = s.funding_cost_bps != null ? (s.funding_cost_bps >= 0 ? '+' : '') + s.funding_cost_bps.toFixed(1) + 'bps' : '—';
-    var fmin = s.minutes_to_funding != null ? Math.round(s.minutes_to_funding) + 'm' : '—';
-    push('bias', 'Funding', fbps + ' · ' + fmin, fundGrade);
-  }
-  var spGrade = _classifySpread(s.velocity && s.velocity.spread_bps);
-  if (spGrade) push('bias', 'Spread', (s.velocity.spread_bps).toFixed(1) + ' bps', spGrade);
-  var pctGrade = _classifyPctChange(s.velocity && s.velocity.pct_change_5min, sortDir);
-  if (pctGrade) {
-    var pctVal = s.velocity.pct_change_5min;
-    var pctStr = (pctVal >= 0 ? '+' : '') + pctVal.toFixed(2) + '%';
-    push('bias', '5m Δ', pctStr, pctGrade);
-  }
-  var oivGrade = _classifyOiVelocity(s.oiVelocity, sortDir);
-  if (oivGrade) {
-    var oivStr = (s.oiVelocity >= 0 ? '+' : '') + s.oiVelocity.toFixed(2) + '%';
-    push('bias', 'OI vel', oivStr, oivGrade);
-  }
-  var liqBundle = (typeof window !== 'undefined' && window.__acressLiqStats && s.sym) ? window.__acressLiqStats[s.sym] : null;
-  var liqGrade = _classifyLiq(liqBundle || s.liquidation, sortDir);
-  if (liqGrade) {
-    var liqSrc = liqBundle || s.liquidation;
-    var lc = liqSrc.longCount || liqSrc.long_count || 0;
-    var sc = liqSrc.shortCount || liqSrc.short_count || 0;
-    push('bias', 'Liq', 'L:' + lc + ' S:' + sc, liqGrade);
-  }
-  ['OI', 'MTF', 'CVD', 'OIX'].forEach(function(tag){
-    var r = _classifyReasonTag(s.reasons, tag);
-    if (r) push('bias', tag, r.detail, r.grade);
-  });
-
-  if (!entries.length) return '';
-
-  // Sort: highest contribution first, ties broken by origin (fitness first), then label
-  var originOrder = { fitness: 0, structure: 1, bias: 2 };
-  entries.sort(function(a, b){
-    if (b.contribution !== a.contribution) return b.contribution - a.contribution;
-    if (originOrder[a.origin] !== originOrder[b.origin]) return originOrder[a.origin] - originOrder[b.origin];
-    return a.label.localeCompare(b.label);
-  });
-
-  /* L_STRUCTURE_MINICARDS_COLLAPSE_V1 — structure-origin tiles default expanded.
-     Toggle persists via acress_structure_minicards_expanded; CSS rule
-     .pc-fitness-row.struct-hidden .pc-fit-mini.origin-structure { display:none }
-     applies the hide state without rebuilding HTML. */
-  var structExpanded = true;
-  try {
-    var sv = localStorage.getItem('acress_structure_minicards_expanded');
-    if (sv != null) structExpanded = (sv === 'true');
-  } catch (e) {}
-  var rowCls = 'pc-fitness-row pc-unified-minicards' + (structExpanded ? '' : ' struct-hidden');
-  var html = '<div class="' + rowCls + '">';
-  for (var k = 0; k < entries.length; k++) {
-    var e = entries[k];
-    var baseGrade = e.grade.indexOf('-strong') > 0 ? e.grade.replace('-strong','') : e.grade;
-    var critical = (e.grade.indexOf('-strong') > 0) ? ' critical' : '';
-    /* L_MINICARDS_ORIGIN_ACCENT_V1 — origin-* class drives the left-border
-       accent color: cyan for fitness, violet for structure, amber for bias. */
-    html += '<div class="pc-fit-mini ' + baseGrade + critical + ' origin-' + e.origin + '" title="[' + e.origin + '] ' + e.label + ': ' + e.detail + '">'
-         +    '<div class="lbl">' + e.label + '</div>'
-         +    '<div class="val">' + e.detail + '</div>'
-         +  '</div>';
-  }
-  html += '</div>';
-
-  // Structure toggle row — only render when at least one structure entry exists
-  var hasStructure = entries.some(function(e){ return e.origin === 'structure'; });
-  if (hasStructure) {
-    var togLabel = structExpanded ? 'Hide structure' : 'Show structure';
-    html += '<div class="pc-mini-tools">'
-         +    '<button type="button" class="pc-mini-struct-toggle" onclick="toggleStructureMiniCards(this)" data-expanded="' + (structExpanded ? '1' : '0') + '">'
-         +      togLabel
-         +    '</button>'
-         + '</div>';
-  }
-  return html;
+/* L_PROSE_LAYOUT_RESTORE_V1 — wrapper that handles the null-dim case by
+   emitting a placeholder line so vertical positioning stays consistent. */
+function renderFitnessProse(s, key, fallbackLabel) {
+  var dim = findFitnessDim(s, key);
+  if (dim) return buildFitnessProseLine(dim);
+  return '<div class="vel-line vel-gray">⚪ ' + fallbackLabel + ': insufficient data</div>';
 }
 
-/* L_STRUCTURE_MINICARDS_COLLAPSE_V1 — toggle handler. Applies struct-hidden
-   class to ALL unified mini-card rows on the page and persists preference. */
-function toggleStructureMiniCards(btn) {
-  var nowExpanded = btn.getAttribute('data-expanded') === '0';
-  try { localStorage.setItem('acress_structure_minicards_expanded', nowExpanded ? 'true' : 'false'); } catch (e) {}
-  var rows = document.querySelectorAll('.pc-unified-minicards');
-  for (var i = 0; i < rows.length; i++) {
-    rows[i].classList.toggle('struct-hidden', !nowExpanded);
-  }
-  var btns = document.querySelectorAll('.pc-mini-struct-toggle');
-  for (var j = 0; j < btns.length; j++) {
-    btns[j].setAttribute('data-expanded', nowExpanded ? '1' : '0');
-    btns[j].textContent = nowExpanded ? 'Hide structure' : 'Show structure';
-  }
+/* L_DEMARCATION_BREAK_V1 — subtle visual break between the upper "fitness
+   verdict" cluster (Smart money → Structural pull → Forced exit pressure
+   → Trap risk) and the lower "detail" cluster (Top traders → Drive →
+   CHEAP ENTRY → Boundary → Efficiency → Velocity → Execution → Spread).
+   No label. Just a thin semi-transparent rule with vertical breath. */
+function buildDemarcationBreak() {
+  return '<div class="pc-prose-demarc" aria-hidden="true"></div>';
 }
+
 
 /* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Upgrade 26.B — Track + Execute pairs.
    Both LONG and SHORT buttons always visible regardless of legacy/shadow.
@@ -10471,13 +10169,34 @@ function buildCard(s, moodKey){
       +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+'</div>'
       +'<div class="pc-mech-stats-row">'+mechStatsBadge(s.mechanism.name)+'</div>'
     +'</div>'
-    +buildUnifiedMiniCards(s) /* L_UNIFIED_MINICARDS_V1 — fitness + structure + bias */
-    +buildShadowComparisonHtml(s) /* L_SHADOW_LINE_REPOSITION_V1 — now just-before-buttons */
+    /* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
+       Canonical fixed ordering applied to every card. 12 dimensions plus
+       entry zone, rendered as prose lines in main card body. No expand/
+       collapse — operator wants everything visible at all times. Slots
+       with insufficient data render an "insufficient data" placeholder
+       so vertical positioning stays consistent across cards. */
+    +'<div class="pc-prose-body">'
+      /* === Upper cluster: fitness verdicts === */
+      +renderFitnessProse(s, 'sophisticated_flow', 'Smart money')
+      +renderFitnessProse(s, 'structural_pull',   'Structural pull')
+      +(typeof buildForcedFlowHtml === 'function' ? buildForcedFlowHtml(s.forcedFlow) : '')
+      +renderFitnessProse(s, 'trap_risk',         'Trap risk')
+      /* L_DEMARCATION_BREAK_V1 — visual breath between fitness verdicts
+         and detail cluster. No label. */
+      +buildDemarcationBreak()
+      /* === Lower cluster: structural + entry detail === */
+      +(typeof buildPositioningHtml === 'function' ? buildPositioningHtml(s.positioning, s.dir) : '')
+      +(typeof buildSpotPerpDriveHtml === 'function' ? buildSpotPerpDriveHtml(s.spotDrive) : '')
+      +ezHtml /* L_PROSE_LAYOUT_RESTORE_V1 — entry zone inlined */
+      +verdictHtml /* L_PROSE_LAYOUT_RESTORE_V1 — BE verdict inlined */
+      +renderFitnessProse(s, 'boundary',          'Boundary')
+      +(typeof buildEfficiencyHtml === 'function' ? buildEfficiencyHtml(s.efficiency) : '')
+      +velocityHtml /* L_PROSE_LAYOUT_RESTORE_V1 — Velocity inlined */
+      +renderFitnessProse(s, 'execution',         'Execution')
+      +buildSpreadProseLine(s) /* L_SPREAD_DIMENSION_V1 */
+    +'</div>'
+    +buildShadowComparisonHtml(s) /* L_SHADOW_LINE_REPOSITION_V1 — just-before-buttons */
     +buildTrackExecuteRows(s) /* L_BUTTON_CONSENSUS_EMPHASIS_V1 */
-    /* L_CARD_EXPANDED_DETAILS_V2 — restored detail sections live here, collapsed
-       by default. Entry zone + BE verdict + velocity + efficiency + positioning +
-       drive + FFC + level proximity + pulse all live inside the toggle. */
-    +buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml)
     +'<div class="pc-foot">'
       /* L_COUNTDOWN_FLICKER_FIX_V1 — compute the real m:ss text inline from
          validUntil at render time instead of hard-coding "⏱ 30m" placeholder.
