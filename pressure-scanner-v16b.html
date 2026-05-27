@@ -233,6 +233,34 @@ input{font-family:var(--font-ui);}
 .pc-track-btn.tracked-ok,.pc-exec-btn.tracked-ok{border-color:var(--green) !important;color:var(--green) !important;background:rgba(46,232,160,.10);}
 .pc-track-btn.tracked-queued,.pc-exec-btn.tracked-queued{border-color:#f0b341 !important;color:#f0b341 !important;background:rgba(240,179,65,.10);}
 .pc-track-btn.tracked-err,.pc-exec-btn.tracked-err{border-color:var(--red) !important;color:var(--red) !important;background:rgba(255,82,119,.10);}
+/* L_OPERATOR_LOCAL_FIRST_V1 — distinct 'local-only' state (dusty orange,
+   different from amber queued) for VPS-unreachable bridge-write skipped case. */
+.pc-track-btn.tracked-local,.pc-exec-btn.tracked-local{border-color:#d97e3a !important;color:#e08b45 !important;background:rgba(217,126,58,.10);}
+/* L_HEADER_COLLAPSIBLE_V1 — UI restructure: collapsible scaffolding for
+   header widgets (mood gauge, top movers, risk, pulse filters) and for
+   tracker / analysis summary blocks. State persists per localStorage key. */
+.acress-collapsible{border-bottom:1px solid var(--border);background:var(--s2);font-family:var(--font-mono);}
+.acress-collapsible-head{padding:5px 16px;font-size:10.5px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:8px;letter-spacing:.5px;text-transform:uppercase;user-select:none;}
+.acress-collapsible-head:hover{background:rgba(255,255,255,0.04);color:var(--hi);}
+.acress-collapsible-toggle{font-size:11px;color:var(--muted);width:10px;text-align:center;}
+.acress-collapsible-label{font-weight:700;}
+.acress-collapsible-summary{margin-left:auto;font-size:10px;color:var(--faint);font-weight:600;text-transform:none;letter-spacing:.3px;}
+.acress-collapsible-body{display:none;}
+.acress-collapsible.expanded .acress-collapsible-body{display:block;}
+/* Inside an expanded collapsible, override any position:sticky / position:fixed
+   on the wrapped widget so it renders inline within the body instead of
+   floating over the page. Display:none on body already hides everything when
+   collapsed (including position:fixed descendants, because display:none on a
+   parent collapses the entire subtree). */
+.acress-collapsible.expanded #market-mood-banner,
+.acress-collapsible.expanded #top-movers-widget,
+.acress-collapsible.expanded #pulse-filters,
+.acress-collapsible.expanded #risk-settings-widget,
+.acress-collapsible.expanded #tk-summary{position:static !important;top:auto !important;left:auto !important;right:auto !important;}
+/* L_CROSS_SUMMARY_DEACTIVATE_NAV_V1 — when nav stripped, cross-summary segments
+   become read-only stats (no cursor pointer, no hover effect). */
+.cross-summary .seg.seg-static{cursor:default;}
+.cross-summary .seg.seg-static:hover{background:transparent;}
 /* L_CARD_EXPANDED_DETAILS_V2 — collapsed-by-default details section housing
    the original entry zone, BE verdict, velocity, efficiency, positioning,
    drive, FFC, level proximity, and pulse widget. Toggle affects all cards
@@ -2567,36 +2595,22 @@ function buildDailyPnlWidget(){
   html+='<span class="dp-limit" id="dp-edit-limit" title="Click to change daily loss limit">limit: -$'+limit.toFixed(0)+' (click to edit)</span>';
   return html;
 }
+/* L_TODAY_STATS_REMOVAL_V1 — Upgrade 26.B Fix Pass 1.7 UI Restructure.
+   The "TODAY (EDT) $X · N trades · NN% win · NW/ML · limit: -$Y" widget is
+   now redundant with the persistent top-header status indicators + the
+   acress-daily-budget-header element. Removing the widget entirely. The
+   circuit-breaker logic at isCircuitBreakerActive() remains intact — it
+   reads computeDailyStats() + getDailyLossLimit() directly, independent of
+   the widget DOM. Existing callers of renderDailyPnlWidget() get a silent
+   no-op so we don't break any decorator loop that may still call it. */
 function renderDailyPnlWidget(){
-  injectDailyPnlCSS();
-  var el=document.getElementById('daily-pnl-widget');
-  if(!el){
-    el=document.createElement('div');
-    el.id='daily-pnl-widget';
-    var anchor=document.getElementById('market-mood-banner');
-    if(anchor&&anchor.parentNode){
-      if(anchor.nextSibling)anchor.parentNode.insertBefore(el,anchor.nextSibling);
-      else anchor.parentNode.appendChild(el);
-    }else{
-      document.body.insertBefore(el,document.body.firstChild);
-    }
-  }
-  el.innerHTML=buildDailyPnlWidget();
-  if(isCircuitBreakerActive())el.classList.add('breaker-active');
-  else el.classList.remove('breaker-active');
-  var editEl=document.getElementById('dp-edit-limit');
-  if(editEl&&!editEl.dataset.wired){
-    editEl.dataset.wired='1';
-    editEl.addEventListener('click',function(){
-      var current=getDailyLossLimit();
-      var input=prompt('Daily loss limit in dollars (positive number)\nCurrent: -$'+current.toFixed(0),String(current));
-      if(input===null)return;
-      var v=parseFloat(input);
-      if(isNaN(v)||v<=0){alert('Invalid value. Must be a positive number.');return;}
-      setDailyLossLimit(v);
-      renderDailyPnlWidget();
-    });
-  }
+  // No-op — widget removed per L_TODAY_STATS_REMOVAL_V1.
+  // Also clean up any stale instance that may have been injected before
+  // the new code loaded (e.g. on first load after deploy).
+  try {
+    var stale = document.getElementById('daily-pnl-widget');
+    if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+  } catch (_) {}
 }
 document.addEventListener('click',function(e){
   var t=e.target;
@@ -6180,6 +6194,107 @@ function buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml) {
   return '<div class="' + sectClass + '">' + head + body + '</div>';
 }
 
+/* L_HEADER_COLLAPSIBLE_V1 — Upgrade 26.B Fix Pass 1.7 UI Restructure.
+   Collapsible scaffolding for the scanner header widgets (mood, top movers,
+   risk, pulse filters) and for tracker/analysis summary blocks. Each
+   collapsible has its own localStorage key for state persistence. The wrap
+   function is idempotent — safe to call repeatedly (after each scan, after
+   each widget injection, etc.). */
+function wrapInCollapsible(elementId, lsKey, label) {
+  var el = document.getElementById(elementId);
+  if (!el) return false;
+  // Idempotent: if already wrapped, no-op.
+  if (el.parentElement && el.parentElement.classList && el.parentElement.classList.contains('acress-collapsible-body')) return true;
+  var expanded = false;
+  try { expanded = localStorage.getItem(lsKey) === '1'; } catch (_) {}
+  // Build wrapper
+  var wrap = document.createElement('div');
+  wrap.className = 'acress-collapsible' + (expanded ? ' expanded' : '');
+  wrap.setAttribute('data-ls-key', lsKey);
+  var head = document.createElement('div');
+  head.className = 'acress-collapsible-head';
+  head.setAttribute('onclick', "toggleHeaderCollapsible(this)");
+  head.innerHTML = '<span class="acress-collapsible-toggle">' + (expanded ? '▾' : '▸') + '</span>'
+                 + '<span class="acress-collapsible-label">' + label + '</span>'
+                 + '<span class="acress-collapsible-summary" data-summary-for="' + elementId + '"></span>';
+  var body = document.createElement('div');
+  body.className = 'acress-collapsible-body';
+  // Move the element into the body, preserving its position in the DOM
+  var parent = el.parentNode;
+  var nextSibling = el.nextSibling;
+  wrap.appendChild(head);
+  wrap.appendChild(body);
+  body.appendChild(el);
+  if (nextSibling) parent.insertBefore(wrap, nextSibling);
+  else parent.appendChild(wrap);
+  return true;
+}
+function toggleHeaderCollapsible(headEl) {
+  var sect = headEl.closest('.acress-collapsible');
+  if (!sect) return;
+  var nowExpanded = !sect.classList.contains('expanded');
+  sect.classList.toggle('expanded', nowExpanded);
+  var tog = sect.querySelector('.acress-collapsible-toggle');
+  if (tog) tog.textContent = nowExpanded ? '▾' : '▸';
+  var lsKey = sect.getAttribute('data-ls-key');
+  if (lsKey) {
+    try { localStorage.setItem(lsKey, nowExpanded ? '1' : '0'); } catch (_) {}
+  }
+}
+/* L_HEADER_COLLAPSIBLE_V1 — registry of widgets to wrap. Each entry is
+   [elementId, localStorage key, collapsed-label]. Idempotent init runs at
+   page load + after every renderResults / scan complete (since widgets are
+   dynamically injected, they may not exist at first init). */
+var ACRESS_COLLAPSIBLE_REGISTRY = [
+  // Scanner-tab widgets
+  ['market-mood-banner', 'acress_mood_gauge_expanded',    'Market mood'],
+  ['top-movers-widget',  'acress_top_movers_expanded',     'Top movers'],
+  ['risk-settings-widget','acress_risk_block_expanded',    'Risk settings'],
+  ['pulse-filters',      'acress_pulse_filters_expanded',  'Pulse filters'],
+  // Tracker-tab widgets
+  ['tk-summary',         'acress_tracker_summary_expanded', 'Performance summary'],
+  // Analysis-tab widgets
+  ['analysis-summary',   'acress_analysis_summary_expanded','Analysis summary'],
+];
+function initHeaderCollapsibles() {
+  for (var i = 0; i < ACRESS_COLLAPSIBLE_REGISTRY.length; i++) {
+    var t = ACRESS_COLLAPSIBLE_REGISTRY[i];
+    try { wrapInCollapsible(t[0], t[1], t[2]); } catch (e) {}
+  }
+}
+// L_CROSS_SUMMARY_DEACTIVATE_NAV_V1 — strip navigation behavior from cross-summary
+// so the segments become purely informational. Top dark header tabs continue to
+// handle navigation. Idempotent — safe to re-run.
+function deactivateCrossSummaryNav() {
+  var bar = document.getElementById('cross-summary');
+  if (!bar) return;
+  var segs = bar.querySelectorAll('.seg');
+  for (var i = 0; i < segs.length; i++) {
+    segs[i].removeAttribute('onclick');
+    segs[i].classList.add('seg-static');
+    segs[i].removeAttribute('title');
+  }
+}
+// Wire init to fire on DOM ready + periodically (widgets inject async).
+(function(){
+  function tick() {
+    try { initHeaderCollapsibles(); } catch (_) {}
+    try { deactivateCrossSummaryNav(); } catch (_) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(tick, 300); });
+  } else {
+    setTimeout(tick, 100);
+  }
+  // Re-run every 2s for the first 30s (widgets inject after page load) +
+  // every 10s thereafter (cheap idempotent check; covers re-injection cases).
+  var earlyTicks = 0;
+  setInterval(function(){
+    if (earlyTicks < 15) { tick(); earlyTicks++; }
+  }, 2000);
+  setInterval(tick, 10000);
+})();
+
 /* L_DAILY_BUDGET_HEADER_V1 — Upgrade 26.B — render the daily-budget header.
    Toggled by Settings (acress_show_daily_budget_header, default '1'/true).
    Computes from existing computeDailyBudget(). Color tier: danger when
@@ -6399,9 +6514,12 @@ function operatorDirection(btn, action, direction, signalId) {
   } catch (_) {}
   if (!vpsUrl) {
     try { console.warn('[Acress] operatorDirection: VPS URL not configured — local tracker push succeeded; bridge write skipped'); } catch(_){}
-    try { setOperatorFeedback(btn, 'queued'); } catch(_){}
-    // Local push already done above; this is a soft failure on the bridge
-    // side. Operator sees amber "queued" indicating local-only persistence.
+    /* L_OPERATOR_LOCAL_FIRST_V1 — Pass 1.7 polish: use a distinct 'local' state
+       (amber, different shade from 'queued') so the operator can tell apart:
+         queued  = race condition, bridge will write on next poll
+         local   = bridge unreachable / URL missing, only the local tracker
+                   has the entry; cross-session analytics won't see it. */
+    try { setOperatorFeedback(btn, 'local'); } catch(_){}
     return;
   }
   // Clear any previous feedback state so retry can be visualized.
@@ -6466,9 +6584,10 @@ function operatorDirection(btn, action, direction, signalId) {
    exclusive states to the clicked button. */
 function setOperatorFeedback(btn, kind) {
   if (!btn || !btn.classList) return;
-  btn.classList.remove('tracked-ok','tracked-queued','tracked-err');
-  if (kind === 'ok')     btn.classList.add('tracked-ok');
+  btn.classList.remove('tracked-ok','tracked-queued','tracked-err','tracked-local');
+  if (kind === 'ok')          btn.classList.add('tracked-ok');
   else if (kind === 'queued') btn.classList.add('tracked-queued');
+  else if (kind === 'local')  btn.classList.add('tracked-local');
   else if (kind === 'err')    btn.classList.add('tracked-err');
 }
 
