@@ -982,7 +982,10 @@ input{font-family:var(--font-ui);}
       </div>
     </div>
     <div class="cfg-group">
-      <label><input type="checkbox" id="auto-refresh" checked> Auto-scan 5min</label>
+      <!-- L_SCAN_CADENCE_LABEL_V1 — label fix only. AUTO_REFRESH_MS has been at
+           90s since an earlier session; the "5min" label was stale from when
+           the constant was first changed. The displayed value now matches reality. -->
+      <label><input type="checkbox" id="auto-refresh" checked> Auto-scan 90s</label>
       <button class="scan-toggle autolog-toggle" id="toggle-auto-log" onclick="toggleAutoLog()" title="Auto-log every qualifying signal 24/7 into a separate analysis log (does not affect your trading tracker)">⚡ AUTO-LOG 24/7</button>
       <span class="autolog-meta" id="autolog-meta" style="display:none"></span>
     </div>
@@ -2390,11 +2393,13 @@ function injectTopCombosCSS(){
   document.head.appendChild(s);
 }
 function buildTopCombosWidget(){
+  /* L_TOP_COMBOS_5MIN_V1 — window reduced 30 min → 5 min in bridge endpoint;
+     scanner widget reads the renamed field (recent5m) and renders the new label. */
   if(!pulseCache||!pulseCache.byMechDir)return '';
   var rows=[];
   for(var k in pulseCache.byMechDir){
     var e=pulseCache.byMechDir[k];
-    var r30=e.recent30m||{};
+    var r30=e.recent5m||e.recent30m||{};  // back-compat if bridge still returns old field name during rolling deploy
     if(!r30.n||r30.n<5)continue;
     var parts=k.split('|');
     rows.push({
@@ -2409,7 +2414,7 @@ function buildTopCombosWidget(){
   if(rows.length===0){
     var hasAny=Object.keys(pulseCache.byMechDir).length>0;
     if(!hasAny)return '';
-    return '<div class="top-combos"><div class="tc-header">TOP COMBOS · LAST 30 MIN · N&ge;5</div><div class="tc-empty">No mechanism has 5+ closed trades in the last 30 min yet</div></div>';
+    return '<div class="top-combos"><div class="tc-header">TOP COMBOS · LAST 5 MIN · N&ge;5</div><div class="tc-empty">No mechanism has 5+ closed trades in the last 5 min yet</div></div>';
   }
   rows.sort(function(a,b){return b.perTrade-a.perTrade;});
   var top=rows.slice(0,5);
@@ -2428,7 +2433,7 @@ function buildTopCombosWidget(){
     '</div>';
   }).join('');
   return '<div class="top-combos">'+
-    '<div class="tc-header">TOP COMBOS · LAST 30 MIN · N&ge;5 · sorted by $/trade</div>'+
+    '<div class="tc-header">TOP COMBOS · LAST 5 MIN · N&ge;5 · sorted by $/trade</div>'+
     '<div class="tc-rows">'+rowsHtml+'</div>'+
   '</div>';
 }
@@ -6490,18 +6495,59 @@ function buildTrackExecuteRows(s) {
       + '<button class="pc-track-btn' + conS + fbS + '" onclick="operatorDirection(this,\'track\',\'SHORT\',\'' + s.id + '\')">📝 SHORT</button>'
       + '</div>';
   }
+  /* L_EXEC_BUTTON_HREF_V1 — Upgrade quick-fix 2026-05-28. Execute buttons
+     converted from <button onclick> to <a href target="_blank" onclick>.
+     Native browser behavior: left-click opens new background-or-foreground tab
+     per user's browser preference; Ctrl+click and middle-click reliably open
+     background tabs without focus stealing. Popup blocker is satisfied because
+     the navigation is part of the user gesture, not a Promise-async window.open.
+     onclick still fires operatorDirection for DB logging.
+     L_EXEC_URL_PREPOP_V1 — best-effort pre-population query params attached.
+     Symbol path is reliable on both exchanges; order form params (side/price/
+     sl/tp) are passed but neither Binance nor Bybit reliably honor them in
+     the futures UI. Operator must still enter values manually. The values
+     remain visible on the card + Telegram + tracker for easy reference. */
+  var execExchange = 'binance';
+  try { execExchange = (localStorage.getItem('acress_execute_exchange') || 'binance').toLowerCase(); } catch (_) {}
+  function buildExchangeUrl(direction, bundle) {
+    var bareSym = s.base + 'USDT';
+    if (!bundle || !bundle.sizing || !bundle.pricing) {
+      return execExchange === 'bybit'
+        ? 'https://www.bybit.com/trade/usdt/' + bareSym
+        : 'https://www.binance.com/en/futures/' + bareSym;
+    }
+    var entry = bundle.pricing.entry || s.entryPrice;
+    var sl    = bundle.sizing.sl_price;
+    var tp    = bundle.pricing.tp_price;
+    if (execExchange === 'bybit') {
+      var bSide = direction === 'LONG' ? 'Buy' : 'Sell';
+      return 'https://www.bybit.com/trade/usdt/' + bareSym
+        + '?side=' + bSide
+        + '&price=' + (entry != null ? entry : '')
+        + '&sl=' + (sl != null ? sl : '')
+        + '&tp=' + (tp != null ? tp : '');
+    }
+    var nSide = direction === 'LONG' ? 'BUY' : 'SELL';
+    return 'https://www.binance.com/en/futures/' + bareSym
+      + '?type=limit&side=' + nSide
+      + '&price=' + (entry != null ? entry : '')
+      + '&sl=' + (sl != null ? sl : '')
+      + '&tp=' + (tp != null ? tp : '');
+  }
+  var urlLong  = buildExchangeUrl('LONG',  longBundle);
+  var urlShort = buildExchangeUrl('SHORT', shortBundle);
   var execLongHtml = execDisabledL
     ? '<button class="pc-exec-btn long" disabled>—</button>'
-    : '<button class="pc-exec-btn long' + conL + fbExL + '" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
+    : '<a class="pc-exec-btn long' + conL + fbExL + '" href="' + urlLong + '" target="_blank" rel="noopener noreferrer" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
       +   '<span class="ex-head">🟢 LONG ' + l.notional + '</span>'
       +   '<span class="ex-detail">SL ' + l.sl + ' · TP ' + l.tp + '</span>'
-      + '</button>';
+      + '</a>';
   var execShortHtml = execDisabledS
     ? '<button class="pc-exec-btn short" disabled>—</button>'
-    : '<button class="pc-exec-btn short' + conS + fbExS + '" onclick="operatorDirection(this,\'execute\',\'SHORT\',\'' + s.id + '\')">'
+    : '<a class="pc-exec-btn short' + conS + fbExS + '" href="' + urlShort + '" target="_blank" rel="noopener noreferrer" onclick="operatorDirection(this,\'execute\',\'SHORT\',\'' + s.id + '\')">'
       +   '<span class="ex-head">🔴 SHORT ' + sh.notional + '</span>'
       +   '<span class="ex-detail">SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
-      + '</button>';
+      + '</a>';
   var execRow = '<div class="pc-action-row' + rowCls + '">' + execLongHtml + execShortHtml + '</div>';
   return hint + trackRow + execRow;
 }
@@ -6645,15 +6691,14 @@ function operatorDirection(btn, action, direction, signalId) {
     }
     setOperatorFeedback(btn, outcome);
     recordOperatorOutcome(signalId, direction, action, outcome);
-    if (action === 'execute' && j.exchange_url) {
-      try { window.open(j.exchange_url, '_blank', 'noopener,noreferrer'); } catch(_){}
-    }
+    /* L_EXEC_BUTTON_HREF_V1 — Execute URL navigation is now handled by the
+       native <a href target="_blank"> click; we no longer call window.open
+       here. Bridge response may still include exchange_url for backward
+       compat but the scanner does not act on it. */
   }).catch(function(e){
     setOperatorFeedback(btn, 'err');
     recordOperatorOutcome(signalId, direction, action, 'err');
     try { console.error('[Acress] operatorDirection POST failed:', e.message); } catch(_){}
-    // For Execute, do NOT open the exchange URL on network failure — would
-    // mislead the operator into thinking the position is being tracked.
   });
 }
 /* L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — apply one of three mutually
@@ -9126,6 +9171,26 @@ function renderResults(){invalidateMechanismStats();
       return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9;
     });
   }
+  /* L_MIN_NOTIONAL_FILTER_V1 — Upgrade quick-fix 2026-05-28. Hide signals
+     where the max-achievable notional across either direction is below
+     the $1,000 floor (operator's minimum tradeable position at $100 margin
+     × 10x leverage). When 5-min liquidity binds the notional low on a
+     thin-volume symbol, the operator can't actually take the trade at
+     their minimum margin, so the card is clutter. Display-layer only;
+     scanner still computes + logs these signals. Default ON. */
+  var _minNotionalFilterPref = localStorage.getItem('acress_min_notional_filter');
+  if (_minNotionalFilterPref == null) _minNotionalFilterPref = 'true';   // default ON
+  var _minNotionalActive = (_minNotionalFilterPref === 'true');
+  var _preMinNotionalCount = filtered.length;
+  var MIN_NOTIONAL_USD = 1000;
+  if (_minNotionalActive) {
+    filtered = filtered.filter(function(s){
+      if (!s.discipline) return true;   // can't evaluate, don't drop
+      var nL = (s.discipline.long  && s.discipline.long.sizing  && s.discipline.long.sizing.notional_usd)  || 0;
+      var nS = (s.discipline.short && s.discipline.short.sizing && s.discipline.short.sizing.notional_usd) || 0;
+      return Math.max(nL, nS) >= MIN_NOTIONAL_USD;
+    });
+  }
   /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — apply the new filters. For OI stage,
      'untagged' matches signals where s.oiStage is null/undefined (the DB
      stores those as NULL and the endpoint surfaces them via
@@ -9141,16 +9206,23 @@ function renderResults(){invalidateMechanismStats();
     // The old "diagnostic fallback" that showed top 8 cards regardless of
     // threshold has been removed — it made the score range filter appear broken.
     var msgTitle, msgBody;
-    /* L_VELOCITY_FILTER_EMPTY_STATE_V1 — when the velocity green-display
-       filter cut signals to zero AND signals exist pre-velocity, show a
-       filter-specific informational message rather than the generic
-       "no signals match your filter" copy. */
-    if (_velFilterActive && _preVelocityCount > 0) {
-      msgTitle = '0 cards meet velocity filter';
+    /* L_VELOCITY_FILTER_EMPTY_STATE_V1 +
+       L_FILTER_EMPTY_STATE_EXTENDED_V1 — Upgrade quick-fix 2026-05-28.
+       When velocity OR min-notional filter cuts results to zero AND signals
+       exist pre-filter, surface which filter(s) are active so the operator
+       knows what to toggle. Extended copy lists every active display filter. */
+    if ((_velFilterActive || _minNotionalActive) && (_preVelocityCount > 0 || _preMinNotionalCount > 0)) {
+      var activeFilters = [];
+      if (_velFilterActive) activeFilters.push('Velocity ≥ green decile 9');
+      if (_minNotionalActive) activeFilters.push('Minimum $' + MIN_NOTIONAL_USD.toLocaleString() + ' notional achievable');
+      msgTitle = '0 cards meet active filters';
       msgBody = '0 of ' + _preVelocityCount + ' signal' + (_preVelocityCount !== 1 ? 's' : '') +
-        ' qualify under the current velocity-green threshold (decile 9+). ' +
-        'This is the filter working as designed in current market conditions — non-green-velocity signals are still logged to the DB and flow through PRIME alerts. ' +
-        'Toggle the filter off in Settings → Position Discipline → "Hide non-green velocity signals" to see all signals on the dashboard.';
+        ' pass the active display filter' + (activeFilters.length > 1 ? 's' : '') + ':<br>' +
+        '<ul style="margin:8px 0;padding-left:24px;text-align:left;display:inline-block;">' +
+        activeFilters.map(function(f){ return '<li>' + f + '</li>'; }).join('') +
+        '</ul><br>' +
+        'These are display-layer filters — hidden signals are still logged to the DB and flow through PRIME alerts. ' +
+        'Toggle off in Settings → Position Discipline to see all signals.';
     } else if(live.length){
       msgTitle='No signals match your filter';
       var rangeStr=__sr.min+'–'+__sr.max;
@@ -13133,6 +13205,11 @@ function openDrilldownByHourFromVPS(hour){
           <input type="checkbox" id="set-show-budget-header" onchange="(function(c){try{localStorage.setItem('acress_show_daily_budget_header',c?'1':'0');}catch(e){};if(typeof renderDailyBudgetHeader==='function')renderDailyBudgetHeader();})(this.checked)">
           Show daily-budget header on scanner page
         </label>
+        <!-- L_MIN_NOTIONAL_FILTER_V1 — display filter for thin-liquidity symbols -->
+        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--hi);cursor:pointer;margin-bottom:4px;">
+          <input type="checkbox" id="set-min-notional-filter" onchange="(function(c){try{localStorage.setItem('acress_min_notional_filter',c?'true':'false');}catch(e){};if(typeof renderResults==='function')renderResults();})(this.checked)">
+          Hide signals where max achievable position is below $1,000 (thin liquidity)
+        </label>
         <script>
           (function(){
             try {
@@ -13140,6 +13217,11 @@ function openDrilldownByHourFromVPS(hour){
               if (sel) sel.value = (localStorage.getItem('acress_execute_exchange') || 'binance');
               var bx = document.getElementById('set-show-budget-header');
               if (bx) bx.checked = (localStorage.getItem('acress_show_daily_budget_header') !== '0');  // default true
+              var mn = document.getElementById('set-min-notional-filter');
+              if (mn) {
+                var v = localStorage.getItem('acress_min_notional_filter');
+                mn.checked = (v == null || v === 'true');  // default true
+              }
             } catch (e) {}
           })();
         </script>
