@@ -227,11 +227,36 @@ input{font-family:var(--font-ui);}
    helpers already emit, so no new color classes were needed. */
 .pc-prose-body{padding:9px 11px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}
 .pc-prose-body .vel-line{margin:0;}
-/* L_DEMARCATION_BREAK_V1 — subtle visual breath between fitness verdicts
-   (Smart money / Structural pull / Forced exit pressure / Trap risk) and
-   the detail cluster below. No label, no section header — just a 1px
-   semi-transparent rule with vertical margin. */
+/* L_DEMARCATION_BREAK_V1 + L_CARD_COLLAPSE_PER_SYMBOL_V1 — the
+   demarcation row doubles as the per-card expand/collapse toggle. Thin
+   semi-transparent rule on the left, chevron label "▾ Show details" /
+   "▴ Hide details" on the right. Whole row clickable. */
 .pc-prose-demarc{height:1px;background:var(--border);opacity:.55;margin:6px 0;}
+.pc-prose-demarc-toggle{display:flex;align-items:center;gap:8px;margin:4px 0;padding:2px 0;cursor:pointer;user-select:none;color:var(--muted);font-family:var(--font-mono);font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;font-weight:700;transition:color .12s;}
+.pc-prose-demarc-toggle:hover{color:var(--hi);}
+.pc-prose-demarc-rule{flex:1;height:1px;background:var(--border);opacity:.55;}
+.pc-prose-demarc-chev{flex-shrink:0;white-space:nowrap;}
+/* L_CARD_COLLAPSE_PER_SYMBOL_V1 — collapsible cluster default-hidden;
+   shown when the parent .pc-prose-body has .card-expanded class added
+   by the render path based on isSymbolExpanded(base). Display:flex
+   (rather than block) so the gap on .pc-prose-body still spaces the
+   children when expanded. */
+.pc-prose-body .pc-prose-collapse{display:none;flex-direction:column;gap:5px;}
+.pc-prose-body.card-expanded .pc-prose-collapse{display:flex;}
+/* Chev text rendered dynamically in JS per card (see render-block IIFE
+   pulling isSymbolExpanded(base)); no CSS toggle needed. */
+/* L_PINNED_ALWAYS_EXPANDED_V1 — pinned cards override the collapse:
+   always show the full detail cluster and hide the toggle row entirely
+   (operator can't accidentally collapse a card they're actively
+   monitoring). */
+.pinned-section .pc-prose-body .pc-prose-collapse{display:flex !important;}
+.pinned-section .pc-prose-body .pc-prose-demarc-toggle{display:none !important;}
+/* L_CARD_COLLAPSE_GLOBAL_TOGGLE_V1 — Expand all / Collapse all pair
+   sits inline next to the sort dropdown. Buttons styled to match the
+   existing scan-toggle pattern for visual consistency. */
+.pc-collapse-globals{display:inline-flex;gap:6px;margin-left:10px;}
+.pc-collapse-globals button{font-family:var(--font-mono);font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:4px 9px;border-radius:var(--r-pill);background:var(--s2);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .12s;}
+.pc-collapse-globals button:hover{color:var(--hi);border-color:var(--border2);}
 /* L_PIN_BUTTON_V1 — Upgrade 26.D Pin V1 (2026-05-28). Pin row sits above
    the Track row, single full-width button. Unpinned: neutral border.
    Pinned: gold/amber border + background tint for unmistakable state. */
@@ -1017,6 +1042,16 @@ body.acress-budget-footer-on{padding-bottom:42px;}
         <option value="sym_asc">Symbol (A → Z)</option>
       </select>
       <span style="font-size:9px;color:var(--muted);margin-left:6px;">Default: confluence quality (highest potential first)</span>
+      <!-- L_CARD_COLLAPSE_GLOBAL_TOGGLE_V1 — Card UI Restructure Pass 4
+           (2026-05-28). Bulk expand/collapse the below-demarcation
+           cluster across every currently-visible card. Per-card chevron
+           clicks continue to work after this; the global buttons just
+           seed the expandedSymbols Set in one shot. Pinned cards
+           are unaffected (they override collapse via CSS). -->
+      <span class="pc-collapse-globals">
+        <button type="button" onclick="expandAllCards()" title="Expand the details cluster on every visible card">Expand all</button>
+        <button type="button" onclick="collapseAllCards()" title="Collapse the details cluster on every visible card">Collapse all</button>
+      </span>
     </div>
     <div class="cfg-group">
       <button class="scan-toggle" id="toggle-show-all" onclick="toggleShowAll()" title="Show every signal that passed the 25-point storage floor, bypassing the score-threshold slider">SHOW ALL</button>
@@ -10540,18 +10575,38 @@ function buildCard(s, moodKey){
        collapse — operator wants everything visible at all times. Slots
        with insufficient data render an "insufficient data" placeholder
        so vertical positioning stays consistent across cards. */
-    +'<div class="pc-prose-body">'
-      /* === Upper cluster: fitness verdicts === */
+    /* L_CANONICAL_REORDER_V2 + L_CARD_COLLAPSE_PER_SYMBOL_V1 — Card UI
+       Restructure Pass 4 (2026-05-28). Above-demarcation cluster now
+       includes Top traders + Drive (promoted from below-demarcation per
+       operator request — they're decision-driving like the fitness
+       dimensions and benefit from always-visibility). Below-demarcation
+       cluster is wrapped in .pc-prose-collapse and default-hidden via
+       CSS unless the card's base is in the global expandedSymbols Set
+       (per-symbol persistence via acress_expanded_symbols localStorage).
+       Pinned cards override the collapse via CSS so they always show
+       full detail (L_PINNED_ALWAYS_EXPANDED_V1). */
+    +'<div class="pc-prose-body' + ((typeof isSymbolExpanded === 'function' && isSymbolExpanded(s.base)) ? ' card-expanded' : '') + '">'
+      /* === Always-visible cluster: fitness verdicts + Top traders + Drive === */
       +renderFitnessProse(s, 'sophisticated_flow', 'Smart money')
       +renderFitnessProse(s, 'structural_pull',   'Structural pull')
       +(typeof buildForcedFlowHtml === 'function' ? buildForcedFlowHtml(s.forcedFlow) : '')
       +renderFitnessProse(s, 'trap_risk',         'Trap risk')
-      /* L_DEMARCATION_BREAK_V1 — visual breath between fitness verdicts
-         and detail cluster. No label. */
-      +buildDemarcationBreak()
-      /* === Lower cluster: structural + entry detail === */
       +(typeof buildPositioningHtml === 'function' ? buildPositioningHtml(s.positioning, s.dir) : '')
       +(typeof buildSpotPerpDriveHtml === 'function' ? buildSpotPerpDriveHtml(s.spotDrive) : '')
+      /* L_DEMARCATION_BREAK_V1 + L_CARD_COLLAPSE_PER_SYMBOL_V1 — the
+         demarcation now doubles as the collapse-toggle control. The
+         chevron sits at the right-end of the rule; clicking anywhere
+         on the demarcation row expands/collapses the lower cluster
+         for this card. */
+      +(function(__b){
+        var __exp = (typeof isSymbolExpanded === 'function' && isSymbolExpanded(__b));
+        return '<div class="pc-prose-demarc-toggle" onclick="togglePerCardCollapse(\'' + __b + '\')" data-base="' + __b + '">'
+          +   '<span class="pc-prose-demarc-rule" aria-hidden="true"></span>'
+          +   '<span class="pc-prose-demarc-chev">' + (__exp ? '▴ Hide details' : '▾ Show details') + '</span>'
+          +   '</div>';
+      })(s.base)
+      /* === Collapsible cluster: entry detail + remaining structural === */
+      +'<div class="pc-prose-collapse">'
       +ezHtml /* L_PROSE_LAYOUT_RESTORE_V1 — entry zone inlined */
       +verdictHtml /* L_PROSE_LAYOUT_RESTORE_V1 — BE verdict inlined */
       +renderFitnessProse(s, 'boundary',          'Boundary')
@@ -10559,6 +10614,7 @@ function buildCard(s, moodKey){
       +velocityHtml /* L_PROSE_LAYOUT_RESTORE_V1 — Velocity inlined */
       +renderFitnessProse(s, 'execution',         'Execution')
       +buildSpreadProseLine(s) /* L_SPREAD_DIMENSION_V1 */
+      +'</div>'
     +'</div>'
     +buildShadowComparisonHtml(s) /* L_SHADOW_LINE_REPOSITION_V1 — just-before-buttons */
     +buildTrackExecuteRows(s) /* L_BUTTON_CONSENSUS_EMPHASIS_V1 */
@@ -12262,6 +12318,63 @@ function onVelocityFilterToggle(enabled){
   if (typeof renderResults === 'function') {
     try { renderResults(); } catch(e) {}
   }
+}
+
+/* L_CARD_COLLAPSE_PERSISTENCE_V1 — Card UI Restructure Pass 4 (2026-05-28).
+   Per-symbol expand/collapse state persisted via acress_expanded_symbols
+   localStorage (JSON array of base symbols). In-memory backing is a Set
+   for O(1) lookup at render time. Defensive parse on read; tolerates
+   corruption by yielding empty Set. */
+var EXPANDED_SYMBOLS_LS_KEY = 'acress_expanded_symbols';
+var expandedSymbols = (function(){
+  try {
+    var raw = localStorage.getItem(EXPANDED_SYMBOLS_LS_KEY);
+    if (!raw) return new Set();
+    var arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.length; }) : []);
+  } catch (e) { return new Set(); }
+})();
+function isSymbolExpanded(base) {
+  return expandedSymbols.has(base);
+}
+function saveExpandedSymbols() {
+  try {
+    var arr = Array.from(expandedSymbols);
+    localStorage.setItem(EXPANDED_SYMBOLS_LS_KEY, JSON.stringify(arr));
+  } catch (e) {}
+}
+
+/* L_CARD_COLLAPSE_PER_SYMBOL_V1 — Card UI Restructure Pass 4. Toggle a single
+   card's expanded state. Re-renders results so the chevron + collapse
+   state both repaint. Pinned cards have their toggle hidden by CSS
+   (.pinned-section .pc-prose-demarc-toggle {display:none}) so this
+   handler is unreachable from the pinned section — pinned cards are
+   always-expanded by design per L_PINNED_ALWAYS_EXPANDED_V1. */
+function togglePerCardCollapse(base) {
+  if (!base) return;
+  if (expandedSymbols.has(base)) expandedSymbols.delete(base);
+  else expandedSymbols.add(base);
+  saveExpandedSymbols();
+  if (typeof renderResults === 'function') { try { renderResults(); } catch (e) {} }
+}
+
+/* L_CARD_COLLAPSE_GLOBAL_TOGGLE_V1 — Card UI Restructure Pass 4. Bulk
+   expand/collapse all currently-visible cards. "Expand all" adds every
+   visible base symbol to the Set; "Collapse all" clears the Set
+   entirely. Per-card chevron clicks continue to override after this. */
+function expandAllCards() {
+  var cards = document.querySelectorAll('#results .pcard');
+  cards.forEach(function(card){
+    var sym = (card.querySelector('.pc-sym') || {}).textContent;
+    if (sym) expandedSymbols.add(sym);
+  });
+  saveExpandedSymbols();
+  if (typeof renderResults === 'function') { try { renderResults(); } catch (e) {} }
+}
+function collapseAllCards() {
+  expandedSymbols.clear();
+  saveExpandedSymbols();
+  if (typeof renderResults === 'function') { try { renderResults(); } catch (e) {} }
 }
 
 /* L_DECILE_SELECTOR_V1 — Upgrade 27.3 (2026-05-28). Decile dropdown handler.
