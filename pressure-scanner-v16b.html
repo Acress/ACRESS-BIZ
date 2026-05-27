@@ -59,6 +59,11 @@ input{font-family:var(--font-ui);}
 .btn-scan:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 24px rgba(65,209,255,.5);}
 .btn-scan:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 .cfg-group{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);}
+/* L_VOLUME_FLOOR_INLINE_DISPLAY_V1 — Upgrade 27.4 (2026-05-28). Compact
+   "Vol: $X auto" readout next to the main-page velocity decile dropdown.
+   Smaller + dimmer than the dropdown so it reads as a derived hint, not
+   a control. */
+.cfg-aux-display{font-family:var(--font-mono);font-size:10px;color:var(--faint);letter-spacing:.3px;white-space:nowrap;padding:0 2px;}
 .cfg-group select,.cfg-group input[type=number]{background:var(--s2);border:1px solid var(--border2);border-radius:var(--r-sm);padding:6px 10px;color:var(--body);font-family:var(--font-mono);font-size:11px;outline:none;cursor:pointer;}
 .cfg-group select:focus,.cfg-group input:focus{border-color:var(--cyan);}
 .cfg-group input[type=range]{accent-color:var(--cyan);width:120px;}
@@ -990,6 +995,35 @@ body.acress-budget-footer-on{padding-bottom:42px;}
         <option value="long">Long only</option>
         <option value="short">Short only</option>
       </select>
+    </div>
+    <!-- L_VELOCITY_DECILE_MAIN_PAGE_V1 — Upgrade 27.4 (2026-05-28).
+         Decile dropdown surfaced on the main scanner page so the
+         operator doesn't have to open Settings to tune the most
+         frequently-adjusted filter. Settings copy remains canonical
+         (#disc-velocity-decile-min); this is a synchronized mirror via
+         onDecileSelectChange. Compact #cfg-volume-floor-display shows
+         derived volume floor inline so the operator sees both knobs at
+         once. L_DECILE_SETTINGS_MAIN_SYNC_V1 — both surfaces read/write
+         the same localStorage key acress_velocity_decile_min. -->
+    <div class="cfg-group">
+      <span>Velocity</span>
+      <select id="cfg-velocity-decile-min" onchange="onDecileSelectChange(this.value)" title="Velocity decile floor + auto-derived volume floor">
+        <option value="all">All</option>
+        <option value="10">Decile 10 (top 10%)</option>
+        <option value="9" selected>Decile 9 (top 20%)</option>
+        <option value="8">Decile 8 (top 30%)</option>
+        <option value="7">Decile 7 (top 40%)</option>
+        <option value="6">Decile 6 (top 50%)</option>
+        <option value="5">Decile 5 (top 60%)</option>
+        <option value="4">Decile 4 (top 70%)</option>
+        <option value="3">Decile 3 (top 80%)</option>
+        <option value="2">Decile 2 (top 90%)</option>
+        <option value="1">Decile 1 (all)</option>
+      </select>
+      <!-- L_VOLUME_FLOOR_INLINE_DISPLAY_V1 — compact derived-vol display
+           updated whenever the decile dropdown changes. Reuses
+           getVolumeFloorForDecile + _formatVolLabel from 27.3. -->
+      <span id="cfg-volume-floor-display" class="cfg-aux-display" title="Auto-derived from selected decile">Vol: $750K auto</span>
     </div>
     <div class="cfg-group">
       <span>Mechanism</span>
@@ -12185,6 +12219,25 @@ try{
 }catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
 try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
 try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
+/* L_VELOCITY_DECILE_MAIN_PAGE_V1 — Upgrade 27.4 (2026-05-28). One-shot
+   populate of the main-page decile dropdown + compact volume display
+   from localStorage. The HTML default-selected option is '9' (matching
+   the Settings copy); this init handles the case where the operator
+   previously set a non-default value via Settings before this upgrade
+   shipped. Safe to call before the dropdown exists (defensive null
+   check); idempotent if called again later. */
+try {
+  (function(){
+    var stored = localStorage.getItem('acress_velocity_decile_min');
+    if (stored == null) stored = '9';
+    var msel = document.getElementById('cfg-velocity-decile-min');
+    if (msel) msel.value = stored;
+    var mdisp = document.getElementById('cfg-volume-floor-display');
+    if (mdisp && typeof getVolumeFloorForDecile === 'function' && typeof _formatVolLabel === 'function') {
+      mdisp.textContent = 'Vol: ' + _formatVolLabel(getVolumeFloorForDecile(stored)) + ' auto';
+    }
+  })();
+} catch (e) { console.warn('[Acress] init: cfg velocity decile', e.message); }
 /* L_PINNED_CADENCE_V1 — Upgrade 26.D Pin V1 (2026-05-28). Independent
    30s timer polls pinned symbols. First refresh fires immediately so
    pinned cards appear on page reload without a 30s wait. Empty-list
@@ -12425,15 +12478,31 @@ function collapseAllCards() {
 /* L_DECILE_SELECTOR_V1 — Upgrade 27.3 (2026-05-28). Decile dropdown handler.
    Stores selection, updates the live "Auto volume floor: $X" info text
    beside the dropdown, and triggers renderResults() to immediately
-   re-apply the filter chain (decile + derived volume). */
+   re-apply the filter chain (decile + derived volume).
+   L_DECILE_SETTINGS_MAIN_SYNC_V1 — Upgrade 27.4 (2026-05-28). Now also
+   keeps the main-page mirror dropdown (#cfg-velocity-decile-min) and its
+   compact "Vol: $X auto" display (#cfg-volume-floor-display) in sync
+   with the Settings copy. Both surfaces read/write the same localStorage
+   key acress_velocity_decile_min; whichever the operator interacts with,
+   the other reflects the new state immediately. Defensive: each DOM
+   write checks the element exists (Settings modal may be closed; main
+   page may not be active). */
 function onDecileSelectChange(value){
   try { localStorage.setItem('acress_velocity_decile_min', String(value)); } catch (e) {}
+  var floorUsd = (typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(value) : 500000;
+  var floorTxt = (typeof _formatVolLabel === 'function') ? _formatVolLabel(floorUsd) : ('$' + floorUsd);
+  /* Settings copy (modal — may not be open) */
   var dinfo = document.getElementById('disc-velocity-decile-info');
   if (dinfo) {
-    var floorUsd = (typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(value) : 500000;
-    var floorTxt = (typeof _formatVolLabel === 'function') ? _formatVolLabel(floorUsd) : ('$' + floorUsd);
     dinfo.innerHTML = 'Auto volume floor: <b style="color:var(--hi);">' + floorTxt + '</b> (based on selected decile)';
   }
+  var dsel = document.getElementById('disc-velocity-decile-min');
+  if (dsel && dsel.value !== String(value)) dsel.value = String(value);
+  /* Main-page mirror (cfg-row1) */
+  var msel = document.getElementById('cfg-velocity-decile-min');
+  if (msel && msel.value !== String(value)) msel.value = String(value);
+  var mdisp = document.getElementById('cfg-volume-floor-display');
+  if (mdisp) mdisp.textContent = 'Vol: ' + floorTxt + ' auto';
   if (typeof renderResults === 'function') { try { renderResults(); } catch (e) {} }
 }
 
