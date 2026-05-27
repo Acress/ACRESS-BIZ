@@ -9503,14 +9503,40 @@ function renderResults(){invalidateMechanismStats();
         }
       }
       if (_minVolActive) activeFilters.push('5-min volume ≥ ' + _formatVolLabel(_minVolUsd));
+      /* L_FILTER_EMPTY_STATE_EXTENDED_V1 + L_EMPTY_STATE_REGIME_CONTEXT_V1
+         (2026-05-28) — when zero signals pass and a velocity floor is the
+         binding gate, compute the top observed |pct_change_5min| across
+         green-decile signals in the current scan and surface it as regime
+         context. Converts "mysterious silence" into "the market itself is
+         slow today." Diagnostic-grade information at the empty-state
+         surface. Computed from `live` (pre-display-filter signals) so the
+         number reflects the actual scan, not just whatever scraped through. */
+      var regimeContextHtml = '';
+      if (_velFilterActive && _velMinPct > 0) {
+        var greenDecile = live.filter(function(s){ return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9; });
+        var topPct = 0;
+        for (var __i = 0; __i < greenDecile.length; __i++) {
+          var __v = Math.abs(greenDecile[__i].velocity.pct_change_5min || 0);
+          if (__v > topPct) topPct = __v;
+        }
+        if (greenDecile.length > 0) {
+          var topPctTxt = topPct.toFixed(2);
+          regimeContextHtml = '<div style="margin-top:14px;padding:10px 12px;background:rgba(240,179,65,0.08);border-left:3px solid rgba(240,179,65,0.55);border-radius:4px;text-align:left;display:inline-block;max-width:560px;">'
+            + '<b style="color:#f0b341;">Market regime check:</b> top mover in current scan is moving <b>' + topPctTxt + '%</b> in 5 min '
+            + '(below the ' + _velMinPct + '% threshold). This may indicate a slow regime. '
+            + 'Reduce velocity floor in Settings → Position Discipline to see available signals, or sit out until market activity increases.'
+            + '</div>';
+        }
+      }
       msgTitle = '0 cards meet active filters';
       msgBody = '0 of ' + _preVelocityCount + ' signal' + (_preVelocityCount !== 1 ? 's' : '') +
         ' pass the active display filter' + (activeFilters.length > 1 ? 's' : '') + ':<br>' +
         '<ul style="margin:8px 0;padding-left:24px;text-align:left;display:inline-block;">' +
         activeFilters.map(function(f){ return '<li>' + f + '</li>'; }).join('') +
-        '</ul><br>' +
-        'These are display-layer filters — hidden signals are still logged to the DB and flow through PRIME alerts. ' +
-        'Toggle off in Settings → Position Discipline to see all signals.';
+        '</ul>' +
+        regimeContextHtml +
+        '<div style="margin-top:12px;">These are display-layer filters — hidden signals are still logged to the DB and flow through PRIME alerts. ' +
+        'Toggle off in Settings → Position Discipline to see all signals.</div>';
     } else if(live.length){
       msgTitle='No signals match your filter';
       var rangeStr=__sr.min+'–'+__sr.max;
