@@ -4059,17 +4059,24 @@ function injectTopbarCSS(){
   s.id='topbar-css';
   s.textContent=
     '#acress-topbar{position:sticky;top:0;left:0;right:0;z-index:500;background:rgba(11,15,26,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,0.08);padding:10px 20px;display:flex;align-items:center;gap:14px;font-family:var(--font-mono);height:54px;box-sizing:border-box;}'+
+    /* L_PERSISTENT_MENU_ZONE_V1 — three-zone flex layout. Right zone has
+       reserved fit-content min-width so Settings + theme NEVER get
+       squeezed off-screen. Center zone is the first to compress. */
+    '#acress-topbar .tb-zone-left{display:flex;align-items:center;gap:14px;flex:0 0 auto;}'+
+    '#acress-topbar .tb-zone-center{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;overflow:hidden;justify-content:flex-start;margin:0 8px;}'+
+    '#acress-topbar .tb-zone-right{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:fit-content;}'+
     '#acress-topbar .tb-brand{display:flex;align-items:center;gap:9px;}'+
     '#acress-topbar .tb-brand-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);}'+
     '#acress-topbar .tb-brand-name{font-weight:800;font-size:14px;color:#fff;letter-spacing:1.5px;}'+
-    '#acress-topbar .tb-brand-sub{font-size:10px;color:var(--faint);letter-spacing:2px;}'+
-    '#acress-topbar .tb-version{padding:2px 7px;border-radius:10px;background:rgba(255,170,0,0.15);color:var(--amber);font-size:9px;font-weight:800;letter-spacing:1px;margin-left:4px;}'+
-    '#acress-topbar .tb-tabs{display:flex;gap:2px;margin-left:20px;background:rgba(255,255,255,0.04);padding:3px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);}'+
+    '#acress-topbar .tb-brand-sub{font-size:10px;color:var(--faint);letter-spacing:2px;white-space:nowrap;}'+
+    '#acress-topbar .tb-version{padding:2px 7px;border-radius:10px;background:rgba(255,170,0,0.15);color:var(--amber);font-size:9px;font-weight:800;letter-spacing:1px;flex-shrink:0;white-space:nowrap;}'+
+    '#acress-topbar .tb-tabs{display:flex;gap:2px;background:rgba(255,255,255,0.04);padding:3px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);}'+
     '#acress-topbar .tb-tab{padding:5px 14px;border-radius:7px;border:none;background:transparent;color:var(--faint);font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:0.8px;cursor:pointer;text-transform:uppercase;transition:all 0.15s;}'+
     '#acress-topbar .tb-tab:hover{color:#fff;background:rgba(255,255,255,0.06);}'+
     '#acress-topbar .tb-tab.active{color:#000;background:var(--green);}'+
+    /* .tb-spacer retained for legacy callers but no longer used in zone layout. */
     '#acress-topbar .tb-spacer{flex:1;}'+
-    '#acress-topbar .tb-status{display:flex;gap:6px;align-items:center;}'+
+    '#acress-topbar .tb-status{display:flex;gap:6px;align-items:center;flex-shrink:1;min-width:0;overflow:hidden;}'+
     '#acress-topbar .tb-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:10px;font-weight:700;letter-spacing:0.5px;color:var(--faint);}'+
     '#acress-topbar .tb-chip-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;}'+
     '#acress-topbar .tb-chip.live-fresh{color:var(--green);background:rgba(46,232,160,0.12);border-color:rgba(46,232,160,0.3);}'+
@@ -4080,8 +4087,15 @@ function injectTopbarCSS(){
     '@keyframes tbPulse{0%,100%{opacity:1;}50%{opacity:0.65;}}'+
     '#acress-topbar .tb-chip.pnl-pos{color:var(--green);background:rgba(46,232,160,0.08);}'+
     '#acress-topbar .tb-chip.pnl-neg{color:var(--red);background:rgba(255,82,119,0.10);}'+
-    '#acress-topbar .tb-scan{padding:6px 14px;border-radius:8px;background:linear-gradient(135deg,#2ee8a0 0%,#22c990 100%);color:#000;border:none;font-family:var(--font-mono);font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;transition:filter 0.15s;}'+
+    '#acress-topbar .tb-scan{padding:6px 14px;border-radius:8px;background:linear-gradient(135deg,#2ee8a0 0%,#22c990 100%);color:#000;border:none;font-family:var(--font-mono);font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;transition:filter 0.15s;flex-shrink:0;}'+
     '#acress-topbar .tb-scan:hover{filter:brightness(1.12);}'+
+    /* L_SETTINGS_DISCOVERABILITY_V1 — icon buttons (Settings ⚙ + theme 🌙).
+       Reserved 32×32 hit target, clear hover state, flex-shrink:0 so they
+       never get squeezed. The title attribute serves as the tooltip
+       affordance (operator hovers to confirm). */
+    '#acress-topbar .tb-icon-btn{min-width:32px;min-height:32px;display:inline-flex;align-items:center;justify-content:center;padding:0 8px;border-radius:8px;background:rgba(255,255,255,0.05);color:var(--faint);border:1px solid rgba(255,255,255,0.08);cursor:pointer;font-size:14px;flex-shrink:0;transition:all 0.15s;line-height:1;}'+
+    '#acress-topbar .tb-icon-btn:hover{color:#fff;background:rgba(255,255,255,0.10);border-color:rgba(255,255,255,0.20);}'+
+    '#acress-topbar #tb-settings:hover{color:var(--cyan);border-color:rgba(65,209,255,0.45);transform:rotate(30deg);}'+
     'body.with-acress-topbar #liveness-indicator,body.with-acress-topbar #mode-badge{display:none !important;}'+
     /* L_HEADER_SCROLL_AWAY_V1 — removed: body.with-acress-topbar
        #market-mood-banner{top:54px;} no longer applicable since the
@@ -4089,17 +4103,48 @@ function injectTopbarCSS(){
     '.acress-hidden-by-topbar-LEGACY-DISABLED{}';
   document.head.appendChild(s);
 }
+/* L_PERSISTENT_MENU_ZONE_V1 + L_TOPBAR_LAYOUT_INVARIANT_V1 \u2014 2026-05-28.
+   TOPBAR LAYOUT INVARIANT \u2014 the topbar is the single canonical home for
+   always-accessible controls. Three zones with explicit flex allocation:
+     LEFT  (flex 0 0 auto) \u2014 brand + tab navigation
+     CENTER(flex 1 1 auto, min-width:0, overflow:hidden) \u2014 V16B pill +
+       status chips (LIVE/PAPER/PnL). Compresses first when narrow.
+     RIGHT (flex 0 0 auto, min-width:fit-content) \u2014 Scan button + notif
+       bell (injected) + Settings gear + theme toggle. NEVER gets squeezed
+       off-screen \u2014 center compresses first.
+   Future additions to the right zone must respect the layout invariant:
+   add a button (\u226532\u00D732px) via direct buildTopbar edit OR a documented
+   helper. Do NOT inject ad-hoc via DOM appendChild without ensuring
+   flex-shrink:0 on the new element.
+   L_TOPBAR_OVERLAY_FIX_V1 \u2014 Settings gear + theme toggle + V16B pill
+   migrated into this topbar after the Header Scroll-Away (commit 136cba2)
+   regression hid them by hiding the legacy header.hdr. */
 function buildTopbar(){
-  return '<div class="tb-brand">'+
-    '<span class="tb-brand-dot"></span>'+
-    '<span class="tb-brand-name">ACRESS</span>'+
-    '<span class="tb-brand-sub">PRESSURE SCANNER</span>'+
-    '<span class="tb-version">V16B</span>'+
+  return '<div class="tb-zone-left">'+
+    '<div class="tb-brand">'+
+      '<span class="tb-brand-dot"></span>'+
+      '<span class="tb-brand-name">ACRESS</span>'+
+      '<span class="tb-brand-sub">PRESSURE SCANNER</span>'+
+    '</div>'+
+    '<div class="tb-tabs" id="tb-tabs"></div>'+
   '</div>'+
-  '<div class="tb-tabs" id="tb-tabs"></div>'+
-  '<div class="tb-spacer"></div>'+
-  '<div class="tb-status" id="tb-status"></div>'+
-  '<button class="tb-scan" id="tb-scan" title="Run scan now">\u26A1 SCAN</button>';
+  '<div class="tb-zone-center">'+
+    '<span class="tb-version">V16B</span>'+
+    '<div class="tb-status" id="tb-status"></div>'+
+  '</div>'+
+  '<div class="tb-zone-right" id="tb-zone-right">'+
+    '<button class="tb-scan" id="tb-scan" title="Run scan now">\u26A1 SCAN</button>'+
+    /* #tb-notif-btn is inserted before #tb-scan by ensureNotifButton().
+       Settings + theme follow #tb-scan in DOM order (rightmost). */
+    /* L_DECILE_SELECTOR_VISIBILITY_V1 \u2014 once the Settings gear is in
+       the topbar, the Velocity decile dropdown from Upgrade 27.3 v2
+       (lives at Settings \u2192 Position Discipline \u2192 "Velocity decile floor")
+       becomes reachable again. No code change needed in the dropdown
+       itself \u2014 it was always there; just inaccessible via the hidden
+       legacy .hdr gear. */
+    '<button id="tb-settings" class="tb-icon-btn" title="Settings" aria-label="Settings" onclick="openSettingsModal()">\u2699</button>'+
+    '<button id="tb-theme" class="tb-icon-btn" title="Toggle theme" aria-label="Toggle theme" onclick="toggleTheme()">\uD83C\uDF19</button>'+
+  '</div>';
 }
 var TB_TABS=[
   {label:'SCANNER',match:'SCANNER'},
