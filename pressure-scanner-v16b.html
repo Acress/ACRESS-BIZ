@@ -9079,14 +9079,21 @@ function computeConfluenceTier(s) {
   }
   return { tier: 'mixed', dir: null };
 }
-/* Sort comparator for shadow_section_v1 — confluence tier (green→red→mixed),
-   then score desc as tiebreaker. */
+/* L_VELOCITY_SORT_PRIMARY_V1 — Upgrade 27.2 (2026-05-28).
+   Replaces L_CONFLUENCE_SORT_HELPER_V1 within-section ordering. Sort is
+   now velocity-descending on |pct_change_5min|, always showing the
+   fastest movers first within each section. The confluence tier is still
+   computed for the .conf-{green|red|mixed} left-border decoration
+   (informational; not load-bearing on sort order). Two independent
+   information channels:
+     - vertical position = velocity rank (operator scans top to bottom)
+     - border color      = confluence quality (Smart Money + Structural
+                           Pull confluence across either direction)
+   No tiebreaker needed; velocity is sufficient resolution. */
 function shadowSectionSort(a, b) {
-  var ta = computeConfluenceTier(a).tier;
-  var tb = computeConfluenceTier(b).tier;
-  var rank = { green: 0, red: 1, mixed: 2 };
-  if (rank[ta] !== rank[tb]) return rank[ta] - rank[tb];
-  return (b.score || 0) - (a.score || 0);
+  var av = (a && a.velocity && typeof a.velocity.pct_change_5min === 'number') ? Math.abs(a.velocity.pct_change_5min) : 0;
+  var bv = (b && b.velocity && typeof b.velocity.pct_change_5min === 'number') ? Math.abs(b.velocity.pct_change_5min) : 0;
+  return bv - av;
 }
 function currentTrackerSort(){var el=document.getElementById('tk-sort');return el?el.value:'logged_desc';}
 
@@ -9163,15 +9170,17 @@ function renderResults(){invalidateMechanismStats();
   if (_hideNonGreen == null) _hideNonGreen = 'true';   // default ON at first scan
   var _velFilterActive = (_hideNonGreen === 'true');
   var _preVelocityCount = filtered.length;
-  /* L_VELOCITY_ABSOLUTE_FLOOR_V1 + L_REGIME_ADAPTIVE_VELOCITY_V1 (Upgrade 27.0
-     2026-05-28). Compound velocity filter: percentile (decile >= 9) AND
-     absolute 5-min movement floor. The absolute floor resolves via:
-       - manual override (acress_velocity_pct_manual === 'true'):
-         use acress_velocity_pct_min (fallback 2.5%)
-       - auto (default): getRegimeAdaptiveFloor() reads the current mood
-         from pulseCache and returns the per-regime floor (HOT 2.5%,
-         MIXED 1.5%, HOSTILE 1.0%, DEAD 0.5%, UNKNOWN 1.5%).
-     0 disables the absolute floor, leaving percentile-only behavior. */
+  /* L_VELOCITY_ABSOLUTE_FLOOR_V1 + L_REGIME_ADAPTIVE_VELOCITY_V1 (Upgrade 27.0).
+     L_VELOCITY_FLOOR_OPTIONAL_V1 (Upgrade 27.2 — 2026-05-28).
+     Decile 9 gate (acress_hide_non_green_velocity) and absolute % gate
+     (acress_velocity_floor_enabled) are now INDEPENDENT toggles.
+     - Decile 9 stays default-on (the existing checkbox).
+     - Absolute % gate is opt-in (default OFF). When OFF, only the decile
+       gate + volume gate apply, and velocity becomes the within-section
+       sort dimension instead of a hard cliff.
+     Resolution of the abs floor value (when enabled):
+       - manual (acress_velocity_pct_manual === 'true'): acress_velocity_pct_min, fallback 2.5
+       - auto (default): getRegimeAdaptiveFloor() per the mood classifier. */
   var _velManual = (localStorage.getItem('acress_velocity_pct_manual') === 'true');
   var _velMinPctRaw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
   var _velMinPct;
@@ -9182,10 +9191,13 @@ function renderResults(){invalidateMechanismStats();
   }
   var _velMode = _velManual ? 'manual' : 'auto';
   var _velMoodCode = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
+  /* L_VELOCITY_FLOOR_OPTIONAL_V1 — new parent toggle (default OFF) gating
+     only the absolute % check. Decile 9 still applied via _velFilterActive. */
+  var _velAbsFloorActive = (localStorage.getItem('acress_velocity_floor_enabled') === 'true') && (_velMinPct > 0);
   if (_velFilterActive) {
     filtered = filtered.filter(function(s){
       if (!(s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9)) return false;
-      if (_velMinPct > 0) {
+      if (_velAbsFloorActive) {
         var pct = Math.abs(s.velocity.pct_change_5min || 0);
         if (pct < _velMinPct) return false;
       }
@@ -9249,13 +9261,11 @@ function renderResults(){invalidateMechanismStats();
        knows what to toggle. Extended copy lists every active display filter. */
     if ((_velFilterActive || _minVolActive) && (_preVelocityCount > 0 || _preMinVolCount > 0)) {
       var activeFilters = [];
-      /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — empty-state copy reflects both the
-         decile and absolute-pct conditions when the absolute floor is active. */
-      /* L_REGIME_ADAPTIVE_VELOCITY_V1 — surface the floor mode (auto vs manual)
-         + the detected regime so the operator knows whether the threshold
-         they're hitting was their own setting or the system's adaptive call. */
+      /* L_VELOCITY_FLOOR_OPTIONAL_V1 (Upgrade 27.2) — abs % is now opt-in.
+         When disabled (default), copy mentions only the decile gate. When
+         enabled, copy includes the abs % threshold + mode (auto/manual). */
       if (_velFilterActive) {
-        if (_velMinPct > 0) {
+        if (_velAbsFloorActive) {
           var __floorMode = (_velMode === 'auto')
             ? '(auto-adapted to ' + _velMoodCode + ' regime)'
             : '(manual)';
@@ -9265,14 +9275,12 @@ function renderResults(){invalidateMechanismStats();
         }
       }
       if (_minVolActive) activeFilters.push('5-min volume ≥ ' + _formatVolLabel(_minVolUsd));
-      /* L_FILTER_EMPTY_STATE_EXTENDED_V1 + L_EMPTY_STATE_REGIME_CONTEXT_V1
-         + L_REGIME_ADAPTIVE_VELOCITY_V1 (Upgrade 27.0) — when zero signals pass
-         and a velocity floor is the binding gate, compute the top observed
-         |pct_change_5min| across green-decile signals in the current scan and
-         surface it as regime context. The note now mentions whether the floor
-         is auto-adapted or manual so the operator knows the lever to pull. */
+      /* L_EMPTY_STATE_REGIME_CONTEXT_V1 (Upgrade 27.0) — only render the
+         regime-context paragraph when the absolute floor is the binding
+         gate. With the abs floor optional and default-off, this paragraph
+         is irrelevant in default state. */
       var regimeContextHtml = '';
-      if (_velFilterActive && _velMinPct > 0) {
+      if (_velFilterActive && _velAbsFloorActive) {
         var greenDecile = live.filter(function(s){ return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9; });
         var topPct = 0;
         for (var __i = 0; __i < greenDecile.length; __i++) {
@@ -9282,14 +9290,25 @@ function renderResults(){invalidateMechanismStats();
         if (greenDecile.length > 0) {
           var topPctTxt = topPct.toFixed(2);
           var __modeSuffix = (_velMode === 'auto')
-            ? ' The floor is auto-adapted to the current ' + _velMoodCode + ' regime; if the regime tightens further, the floor will drop automatically. You can also override in Settings.'
-            : ' The floor is set manually; loosen it in Settings or switch to auto-adapt to let the system follow the regime.';
+            ? ' The floor is auto-adapted to the current ' + _velMoodCode + ' regime; if the regime tightens further, the floor will drop automatically. You can also disable the floor entirely in Settings → Position Discipline.'
+            : ' The floor is set manually; loosen it, switch to auto-adapt, or disable the floor entirely in Settings → Position Discipline.';
           regimeContextHtml = '<div style="margin-top:14px;padding:10px 12px;background:rgba(240,179,65,0.08);border-left:3px solid rgba(240,179,65,0.55);border-radius:4px;text-align:left;display:inline-block;max-width:560px;">'
             + '<b style="color:#f0b341;">Market regime check:</b> top mover in current scan is moving <b>' + topPctTxt + '%</b> in 5 min '
             + '(below the ' + _velMinPct + '% threshold).'
             + __modeSuffix
             + '</div>';
         }
+      }
+      /* L_VELOCITY_FLOOR_OPTIONAL_V1 — when zero cards remain under the
+         default config (abs floor disabled), the binding gate is most
+         likely the volume floor. Surface that explicitly so the operator
+         doesn't have to guess which knob to relax. */
+      var defaultEmptyHintHtml = '';
+      if (!_velAbsFloorActive && _minVolActive && _preVelocityCount > 0) {
+        defaultEmptyHintHtml = '<div style="margin-top:14px;padding:10px 12px;background:rgba(65,209,255,0.08);border-left:3px solid rgba(65,209,255,0.55);border-radius:4px;text-align:left;display:inline-block;max-width:560px;">'
+          + 'No symbols in the universe are in the top 10% velocity tier <b>AND</b> meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold. '
+          + 'Try reducing the volume requirement in Settings → Position Discipline.'
+          + '</div>';
       }
       msgTitle = '0 cards meet active filters';
       msgBody = '0 of ' + _preVelocityCount + ' signal' + (_preVelocityCount !== 1 ? 's' : '') +
@@ -9298,6 +9317,7 @@ function renderResults(){invalidateMechanismStats();
         activeFilters.map(function(f){ return '<li>' + f + '</li>'; }).join('') +
         '</ul>' +
         regimeContextHtml +
+        defaultEmptyHintHtml +
         '<div style="margin-top:12px;">These are display-layer filters — hidden signals are still logged to the DB and flow through PRIME alerts. ' +
         'Toggle off in Settings → Position Discipline to see all signals.</div>';
     } else if(live.length){
@@ -11889,6 +11909,20 @@ function onVelocityFilterToggle(enabled){
   }
 }
 
+/* L_VELOCITY_FLOOR_OPTIONAL_V1 — Upgrade 27.2 (2026-05-28). Parent toggle
+   for the absolute % gate. When OFF (default), the gate is bypassed
+   entirely and velocity becomes the within-section sort. When ON, the
+   existing auto-adapt / manual logic from Upgrade 27.0 applies. */
+function onVelocityFloorEnabledToggle(enabled){
+  try { localStorage.setItem('acress_velocity_floor_enabled', enabled ? 'true' : 'false'); } catch (e) {}
+  var childrenBox = document.getElementById('disc-velocity-floor-children');
+  if (childrenBox) {
+    childrenBox.style.opacity = enabled ? '1' : '0.5';
+    childrenBox.style.pointerEvents = enabled ? '' : 'none';
+  }
+  if (typeof renderResults === 'function') { try { renderResults(); } catch(e) {} }
+}
+
 /* L_REGIME_ADAPTIVE_VELOCITY_V1 — auto-adapt toggle handler.
    Checked (default) → clear the manual flag; numeric input goes read-only
    and shows live regime-resolved value. Unchecked → set manual flag true;
@@ -13285,11 +13319,27 @@ function openDrilldownByHourFromVPS(hour){
             <input type="checkbox" id="disc-hide-non-green-vel" onchange="onVelocityFilterToggle(this.checked)" />
             <span><b>Hide non-green velocity signals</b> from card display (DB logging continues — only visual filtering)</span>
           </label>
-          <!-- L_REGIME_ADAPTIVE_VELOCITY_V1 — auto-adapt toggle. Default ON
-               (checkbox checked). When ON, the numeric input below shows the
-               live regime-resolved value with the regime label and is read-only.
-               When OFF, the numeric input becomes editable; the flag
-               acress_velocity_pct_manual flips to 'true'. -->
+          <!-- L_VELOCITY_FLOOR_OPTIONAL_V1 — Upgrade 27.2 (2026-05-28).
+               Parent toggle gating the absolute % gate. Default OFF: the
+               scanner shows everything in the top-10% velocity tier
+               regardless of absolute speed, sorted by velocity descending
+               within each section. When ON, the existing auto-adapt /
+               manual logic from Upgrade 27.0 applies. Decile 9 gate
+               (above) and volume gate (below) are independent toggles. -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;cursor:pointer;">
+            <input type="checkbox" id="disc-velocity-floor-enabled" onchange="onVelocityFloorEnabledToggle(this.checked)" />
+            <span><b>Enable velocity floor (hide slow movers)</b>
+              <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
+                When OFF (default), the dashboard shows every top-10%-velocity signal that clears the volume gate, sorted by 5-min movement descending. Turn ON to additionally require a minimum 5-min price change.
+              </span>
+            </span>
+          </label>
+          <div id="disc-velocity-floor-children" style="margin-left:24px;padding-left:10px;border-left:2px solid var(--border);opacity:0.5;pointer-events:none;">
+          <!-- L_REGIME_ADAPTIVE_VELOCITY_V1 — auto-adapt toggle. Nested
+               under L_VELOCITY_FLOOR_OPTIONAL_V1 parent — when parent is
+               OFF, this entire <div> is visually disabled (opacity + no
+               pointer events). When ON, the regime-adaptive logic from
+               Upgrade 27.0 applies as before. -->
           <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;cursor:pointer;">
             <input type="checkbox" id="disc-velocity-auto-adapt" checked onchange="onVelocityAutoAdaptToggle(this.checked)" />
             <span><b>Auto-adapt velocity floor to market regime</b>
@@ -13299,20 +13349,18 @@ function openDrilldownByHourFromVPS(hour){
             </span>
           </label>
           <!-- L_VELOCITY_PCT_SETTING_V1 — configurable absolute movement floor.
-               Compound velocity filter: decile >= 9 AND |5-min pct change| >= this value.
-               0 disables the absolute floor (percentile-only). Default 2.5%
-               (raised from 1.5% on 2026-05-28 after operator review).
-               L_REGIME_ADAPTIVE_VELOCITY_V1 — disabled when auto-adapt is on;
-               shows the live regime-resolved value with a "(auto, REGIME)" suffix. -->
+               Compound filter: decile >= 9 AND |5-min pct change| >= this value.
+               Active only when the parent "Enable velocity floor" is ON. -->
           <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;">
             <span style="min-width:0;flex:1;"><b>Min 5min price change (%)</b> for velocity-green display
               <span id="disc-velocity-pct-min-suffix" style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
-                Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable the floor (percentile-only behavior). Default 2.5%.
+                Compound filter: card must clear BOTH the decile and this absolute floor. Default 2.5%.
               </span>
             </span>
             <input type="number" id="disc-velocity-pct-min" min="0" max="5" step="0.1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);width:70px;"
                    onchange="onVelocityPctMinManualChange(this.value)" />
           </label>
+          </div>
           <!-- L_MIN_VOLUME_FILTER_V1 — direct expression of liquidity floor.
                Replaces L_MIN_NOTIONAL_FILTER_V1 checkbox. Filter checks
                signal._medianVol5m >= this value. 0 disables. Default $500K. -->
@@ -13328,6 +13376,16 @@ function openDrilldownByHourFromVPS(hour){
           <script>
             (function(){
               try {
+                /* L_VELOCITY_FLOOR_OPTIONAL_V1 — initialize parent toggle.
+                   Default OFF (no localStorage value → 'false'). */
+                var floorEnabled = (localStorage.getItem('acress_velocity_floor_enabled') === 'true');
+                var parentCb = document.getElementById('disc-velocity-floor-enabled');
+                if (parentCb) parentCb.checked = floorEnabled;
+                var childrenBox = document.getElementById('disc-velocity-floor-children');
+                if (childrenBox) {
+                  childrenBox.style.opacity = floorEnabled ? '1' : '0.5';
+                  childrenBox.style.pointerEvents = floorEnabled ? '' : 'none';
+                }
                 /* L_REGIME_ADAPTIVE_VELOCITY_V1 — initialize auto-adapt
                    checkbox + numeric input from current localStorage state. */
                 var manual = (localStorage.getItem('acress_velocity_pct_manual') === 'true');
