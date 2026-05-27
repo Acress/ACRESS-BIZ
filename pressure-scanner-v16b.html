@@ -170,6 +170,13 @@ input{font-family:var(--font-ui);}
 .pc-chip{font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:var(--r-pill);letter-spacing:.3px;line-height:1.4;}
 .pc-chip-prime{background:rgba(64,180,255,0.16);color:#5cc1ff;border:1px solid rgba(64,180,255,0.42);}
 .pc-chip-hc{background:rgba(240,200,80,0.14);color:#f0c850;border:1px solid rgba(240,200,80,0.36);}
+/* L_VERDICT_CHIP_HEADER_V1 — cohort verdict chip in card header. Replaces
+   the in-body pulse widget as the primary decision surface. */
+.pc-chip-verdict{font-size:9px;}
+.pc-chip-verdict-trade-it{background:rgba(0,200,100,0.18);color:var(--green);border:1px solid rgba(0,200,100,0.42);}
+.pc-chip-verdict-wait{background:rgba(255,170,0,0.18);color:var(--amber);border:1px solid rgba(255,170,0,0.42);}
+.pc-chip-verdict-skip{background:rgba(255,60,60,0.18);color:var(--red);border:1px solid rgba(255,60,60,0.42);}
+.pc-chip-verdict-not-enough{background:rgba(128,128,128,0.18);color:var(--faint);border:1px solid rgba(128,128,128,0.36);}
 
 /* L_DISCIPLINE_CARD_V1 — Position-level Discipline Surface section between
    .pc-head and .pc-mech. Collapsed by default (just verdict + sizing
@@ -212,16 +219,33 @@ input{font-family:var(--font-ui);}
 .pc-shadow-cmp .tail{color:var(--muted);font-size:9.5px;}
 /* L_FITNESS_MINICARDS_V1 — Upgrade 26.B — five compact mini-cards side-by-side. */
 .pc-fitness-row{display:grid;grid-template-columns:1.15fr 1.15fr 1fr 1fr 1fr;gap:5px;padding:7px 11px;background:var(--s2);border-bottom:1px solid var(--border);}
-.pc-fit-mini{padding:5px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--s1);font-family:var(--font-mono);font-size:9px;line-height:1.3;cursor:help;display:flex;flex-direction:column;gap:2px;min-width:0;}
+/* L_UNIFIED_MINICARDS_V1 — unified mini-card array (fitness + structure + bias)
+   uses auto-fit grid so the larger entry count flows over multiple rows
+   instead of squeezing five columns into 10+ tiles. */
+.pc-fitness-row.pc-unified-minicards{grid-template-columns:repeat(auto-fit, minmax(95px, 1fr));}
+.pc-fit-mini{padding:5px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--s1);font-family:var(--font-mono);font-size:9px;line-height:1.3;cursor:help;display:flex;flex-direction:column;gap:2px;min-width:0;border-left-width:3px;}
 .pc-fit-mini.green{border-color:rgba(46,232,160,.55);}
 .pc-fit-mini.yellow{border-color:rgba(240,179,65,.55);}
 .pc-fit-mini.red{border-color:rgba(255,90,107,.55);}
-.pc-fit-mini.critical{border-width:2px;}
+.pc-fit-mini.critical{border-width:2px;border-left-width:3px;}
 .pc-fit-mini .lbl{font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
 .pc-fit-mini .val{font-size:10px;color:var(--hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pc-fit-mini.green .val{color:var(--green);}
 .pc-fit-mini.yellow .val{color:#f0b341;}
 .pc-fit-mini.red .val{color:var(--red);}
+/* L_MINICARDS_ORIGIN_ACCENT_V1 — left-border accent identifies origin group.
+   Cyan = fitness (signal-discipline-derived). Violet = structure (FFC, drive,
+   positioning, efficiency, sweep). Amber = bias (funding, spread, OI/MTF/CVD
+   reasons, shadow agreement, liq stats). */
+.pc-fit-mini.origin-fitness{border-left-color:rgba(65,209,255,.85);}
+.pc-fit-mini.origin-structure{border-left-color:rgba(190,140,255,.85);}
+.pc-fit-mini.origin-bias{border-left-color:rgba(240,179,65,.85);}
+/* L_STRUCTURE_MINICARDS_COLLAPSE_V1 — collapse hides structure-origin tiles
+   without rebuilding HTML. */
+.pc-fitness-row.struct-hidden .pc-fit-mini.origin-structure{display:none;}
+.pc-mini-tools{padding:4px 11px 7px;background:var(--s2);border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;}
+.pc-mini-struct-toggle{font-family:var(--font-mono);font-size:9px;letter-spacing:.4px;text-transform:uppercase;font-weight:700;padding:3px 8px;border:1px solid var(--border2);background:var(--s1);color:var(--muted);border-radius:4px;cursor:pointer;}
+.pc-mini-struct-toggle:hover{color:var(--hi);border-color:rgba(190,140,255,.55);}
 /* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Track + Execute paired rows with optional emphasis. */
 .pc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 11px;background:var(--s1);border-bottom:1px solid var(--border);}
 .pc-action-row.three-col{grid-template-columns:1fr 1fr 1fr;}  /* L_LOG_BOTH_BUTTON_V1 */
@@ -2278,30 +2302,36 @@ async function loadFilterOptions(profile){
   }
 }
 
-function buildPulseWidget(mechName, dir){
-  if (!mechName || !dir) return '';
+/* L_VERDICT_CHIP_HEADER_V1 — Card Restructure Pass 2 (2026-05-28).
+   Cohort verdict (TRADE IT / WAIT / SKIP / NOT ENOUGH DATA) lookup —
+   exposes the bare verdict string + style class to the card header
+   render path. Source: pulseCache populated by /api/stats/pulse
+   bridge endpoint. Returns null when no data available. */
+function getCohortVerdict(mechName, dir){
+  if (!mechName || !dir) return null;
+  if (typeof pulseCache === 'undefined' || !pulseCache || !pulseCache.byMechDir) return null;
   var key = mechName + '|' + dir;
   var pulse = pulseCache.byMechDir[key];
-  if (!pulse) return '';
+  if (!pulse) return null;
   var verdict = pulse.verdict || 'NOT ENOUGH DATA';
-  var r30 = pulse.recent30m || { n: 0, wins: 0, winPct: 0, perTrade: 0 };
-  var inf = pulse.inflight || { n: 0, avgUnrealizedPct: 0 };
-  var verdictCls = verdict === 'TRADE IT' ? 'trade-it' :
-                   verdict === 'SKIP' ? 'skip' :
-                   verdict === 'WAIT' ? 'wait' : 'not-enough';
-  var verdictColor = verdict === 'TRADE IT' ? 'var(--green)' :
-                     verdict === 'SKIP' ? 'var(--red)' :
-                     verdict === 'WAIT' ? 'var(--amber)' : 'var(--faint)';
-  var html = '<div class="pulse-widget ' + verdictCls + '" title="Last 30 min: ' + r30.n + ' closed · ' + (r30.winPct*100).toFixed(0) + '% win · $' + r30.perTrade.toFixed(2) + '/trade | In-flight: ' + inf.n + ' open · ' + (inf.avgUnrealizedPct>=0?'+':'') + inf.avgUnrealizedPct.toFixed(2) + '% avg">'
-    + '<span class="pulse-verdict" style="color:' + verdictColor + ';">' + verdict + '</span>'
-    + '<span class="pulse-detail">'
-      + 'Last 30m: ' + r30.n + ' · ' + (r30.winPct*100).toFixed(0) + '% · $' + r30.perTrade.toFixed(2) + '/trade'
-    + '</span>'
-    + '<span class="pulse-detail">'
-      + 'In-flight: ' + inf.n + ' · ' + (inf.avgUnrealizedPct>=0?'+':'') + inf.avgUnrealizedPct.toFixed(2) + '%'
-    + '</span>'
+  var cls = verdict === 'TRADE IT' ? 'trade-it' :
+            verdict === 'SKIP' ? 'skip' :
+            verdict === 'WAIT' ? 'wait' : 'not-enough';
+  return { verdict: verdict, cls: cls };
+}
+/* L_VERDICT_CHIP_HEADER_V1 — pulse widget now renders the bare verdict only.
+   Inner Last 30m / In-flight stats removed per operator: only the verdict
+   label matters at point of decision; historical context lives in the
+   mood banner, not duplicated per card. The widget is still emitted into
+   the expandable details section so the verdict shows there too when
+   structural details are expanded; the chip in the header is the primary
+   surface. */
+function buildPulseWidget(mechName, dir){
+  var v = getCohortVerdict(mechName, dir);
+  if (!v) return '';
+  return '<div class="pulse-widget ' + v.cls + '" title="Cohort verdict for ' + mechName + ' · ' + dir + '">'
+    + '<span class="pulse-verdict">' + v.verdict + '</span>'
   + '</div>';
-  return html;
 }
 
 // ── MARKET MOOD BANNER ─────────────────────────────────────────────
@@ -2841,13 +2871,10 @@ function setLiqParticipationPct(v){
 /* L_DISCIPLINE_SETTINGS_V1 — card collapsible state. Default false (collapsed)
    per Q2 2026-05-26. Persists across reloads — operator only expands cards
    they're actively evaluating. */
-var DISCIPLINE_EXPANDED_KEY = 'acress_discipline_section_expanded';
-function getDisciplineExpanded(){
-  return localStorage.getItem(DISCIPLINE_EXPANDED_KEY) === 'true';
-}
-function setDisciplineExpanded(v){
-  localStorage.setItem(DISCIPLINE_EXPANDED_KEY, v ? 'true' : 'false');
-}
+/* L_DEAD_DISCIPLINE_HTML_CLEANUP_V1 — DISCIPLINE_EXPANDED_KEY +
+   getDisciplineExpanded + setDisciplineExpanded removed alongside
+   buildDisciplineHtml. Their only consumer was the now-deleted
+   per-card sizing/pricing/daily-budget block from Upgrade 19.0a. */
 
 /* L_DAILY_BUDGET_V1 — UTC midnight anchor per CLAUDE.md "today's UTC 00:00"
    convention. Distinct from the existing isDateToday() which uses NY time
@@ -6059,104 +6086,15 @@ function buildSpotPerpDriveHtml(drive, opts){
    Render the discipline section between .pc-head and .pc-mech on every card.
    Default collapsed (per Q2). Only verdict header + position notional + max
    loss visible on collapse. Expand reveals full sizing/pricing/budget/fitness. */
-function buildDisciplineHtml(s){
-  if (!s || !s.discipline) return '';
-  var d = s.discipline;
-  if (!d.sizing || !d.fitness) return '';
-  var verdict = d.fitness.verdict;
-  var greens  = d.fitness.greens;
-  var yellows = d.fitness.yellows;
-  var reds    = d.fitness.reds;
-  var critRed = d.fitness.critical_red;
-  // Verdict header
-  var verdictEmoji, verdictCls, verdictDetail;
-  if (verdict === 'TAKE') {
-    verdictEmoji = '✓';
-    verdictCls   = 'verdict-take';
-    verdictDetail = greens + ' green' + (yellows ? ' · ' + yellows + ' yellow' : '');
-  } else if (verdict === 'CAUTION') {
-    verdictEmoji = '⚠️';
-    verdictCls   = 'verdict-caution';
-    verdictDetail = greens + ' green · ' + yellows + ' yellow' + (reds ? ' · ' + reds + ' red non-critical' : '');
-  } else {
-    verdictEmoji = '🛑';
-    verdictCls   = 'verdict-skip';
-    if (critRed) {
-      var causes = [];
-      for (var i = 0; i < d.fitness.dimensions.length; i++) {
-        var dm = d.fitness.dimensions[i];
-        if ((dm.key === 'sophisticated_flow' || dm.key === 'structural_pull') && dm.result.grade === 'RED') causes.push(dm.label);
-      }
-      verdictDetail = 'critical-RED on ' + causes.join(' · ');
-    } else {
-      verdictDetail = reds + ' red · ' + yellows + ' yellow';
-    }
-  }
-  // Budget snapshot at render time (depends on tracker which updates continuously)
-  var budget = computeDailyBudget();
-  var expanded = getDisciplineExpanded();
-  var sectClass = 'pc-discipline' + (expanded ? ' expanded' : '');
-  // Sizing summary (always visible)
-  var notionalUsd = Math.round(d.sizing.notional_usd);
-  var maxLossUsd  = Math.round(d.sizing.max_loss_usd);
-  var slPctTxt    = d.sizing.sl_distance_pct.toFixed(2);
-  // Build collapsed header
-  var head = '<div class="pc-discipline-head" onclick="toggleDisciplineSection(this)">'
-    + '<span class="pc-verdict ' + verdictCls + '">' + verdictEmoji + ' ' + verdict + '</span>'
-    + '<span class="pc-verdict-detail">' + verdictDetail + '</span>'
-    + '<span class="pc-disc-sizing">$' + notionalUsd.toLocaleString() + ' · $' + maxLossUsd + ' max loss · SL ' + slPctTxt + '%</span>'
-    + '<span class="pc-disc-toggle">' + (expanded ? '▾' : '▸') + '</span>'
-    + '</div>';
-  // Build expanded body — only when expanded class on root
-  var p = d.pricing;
-  var entryStr = '$' + fP(p.entry);
-  var beStr    = '$' + fP(p.true_be);
-  var fpStr    = '$' + fP(p.first_profit);
-  var tpStr    = '$' + fP(p.tp_price);
-  var tpPct    = getTpTargetPct().toFixed(1);
-  var slPriceStr = '$' + fP(d.sizing.sl_price);
-  var marginUsd  = Math.round(d.sizing.margin_usd);
-  var lev        = d.sizing.leverage;
-  // TP profit potential (USD) — direction-aware
-  var tpProfitUsd = 0;
-  if (p.entry > 0 && p.tp_price > 0) {
-    if (s.dir === 'LONG') tpProfitUsd = (p.tp_price - p.entry) / p.entry * d.sizing.notional_usd;
-    else                  tpProfitUsd = (p.entry - p.tp_price) / p.entry * d.sizing.notional_usd;
-  }
-  var budgetTxt = '$' + Math.round(budget.remaining_usd) + ' of $' + Math.round(budget.limit_usd) + ' remaining (' + budget.remaining_pct + '%)';
-  // Fitness rows
-  var fitRows = '';
-  for (var di = 0; di < d.fitness.dimensions.length; di++) {
-    var dim = d.fitness.dimensions[di];
-    var emoji = dim.result.grade === 'GREEN' ? '🟢' : (dim.result.grade === 'YELLOW' ? '🟡' : '🔴');
-    var rowCls = 'pc-disc-fit-row pc-disc-fit-' + dim.result.grade.toLowerCase();
-    fitRows += '<div class="' + rowCls + '">' + emoji + ' <b>' + dim.label + ':</b> ' + dim.result.detail + '</div>';
-  }
-  var body = '<div class="pc-discipline-body">'
-    + '<div class="pc-disc-block">'
-      + '<div class="pc-disc-block-title">Sizing</div>'
-      + '<div class="pc-disc-row">Position: <b>$' + notionalUsd.toLocaleString() + '</b> notional · $' + marginUsd + ' margin at ' + lev + 'x'
-      + (d.sizing.bound_by === 'liquidity' ? ' <span class="pc-disc-cap-note">(liquidity-capped)</span>' : '') + '</div>'
-      + '<div class="pc-disc-row">Max loss: <b>$' + maxLossUsd + '</b> · SL: ' + slPriceStr + ' (' + slPctTxt + '%)</div>'
-    + '</div>'
-    + '<div class="pc-disc-block">'
-      + '<div class="pc-disc-block-title">Pricing</div>'
-      + '<div class="pc-disc-row">Entry: ' + entryStr + '</div>'
-      + '<div class="pc-disc-row">True BE: ' + beStr + '</div>'
-      + '<div class="pc-disc-row">First profit: ' + fpStr + '</div>'
-      + '<div class="pc-disc-row">TP: <b>' + tpStr + '</b> (' + tpPct + '% · $' + Math.round(tpProfitUsd) + ' potential)</div>'
-    + '</div>'
-    + '<div class="pc-disc-block">'
-      + '<div class="pc-disc-block-title">Daily budget</div>'
-      + '<div class="pc-disc-row">' + budgetTxt + '</div>'
-    + '</div>'
-    + '<div class="pc-disc-block">'
-      + '<div class="pc-disc-block-title">Fitness</div>'
-      + fitRows
-    + '</div>'
-  + '</div>';
-  return '<div class="' + sectClass + '">' + head + body + '</div>';
-}
+/* L_DEAD_DISCIPLINE_HTML_CLEANUP_V1 — Card Restructure Pass 2 (2026-05-28).
+   buildDisciplineHtml was the per-card sizing/pricing/daily-budget block
+   from Upgrade 19.0a, rendered before per-direction sizing landed. Since
+   Upgrade 26.B introduced the Track + Execute button pairs (each carrying
+   notional / margin / leverage / entry / SL / TP per direction), this
+   block has been dead code with no call sites. Removed entirely.
+   Daily-budget reading remains available via #acress-daily-budget-header
+   (header element, not per-card). Cohort verdict moves to a header chip
+   under L_VERDICT_CHIP_HEADER_V1. */
 
 /* L_SHADOW_VISIBILITY_CARD_V1 — Upgrade 26.0 Part 3.5 — side-by-side legacy vs
    shadow direction comparison on the card. Default ON (acress_show_shadow_comparison).
@@ -6224,21 +6162,22 @@ function toggleCardDetails(headEl) {
   try { localStorage.setItem(EXPANDED_DETAILS_KEY, nowExpanded ? '1' : '0'); } catch (e) {}
 }
 function buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml) {
+  /* L_CARD_RESTRUCTURE_V2 — Card Restructure Pass 2 (2026-05-28).
+     Expandable details body trimmed to ENTRY ZONE + BE VERDICT only —
+     two pieces of information not surfaced by the unified mini-card
+     array. Velocity / efficiency / positioning / drive / FFC / sweep
+     have all moved to mini-card form to satisfy the no-duplication
+     rule. Pulse widget removed too — cohort verdict now lives in the
+     header chip via L_VERDICT_CHIP_HEADER_V1. */
   var expanded = getDetailsExpanded();
   var sectClass = 'pc-details' + (expanded ? ' expanded' : '');
   var head = '<div class="pc-details-head" onclick="toggleCardDetails(this)">'
     + '<span class="pc-details-toggle">' + (expanded ? '▾' : '▸') + '</span>'
-    + '<span class="pc-details-label">' + (expanded ? 'Hide structural details' : 'Show structural details') + '</span>'
+    + '<span class="pc-details-label">' + (expanded ? 'Hide entry detail' : 'Show entry detail') + '</span>'
     + '</div>';
   var bodyContent = (ezHtml || '')
-    + (verdictHtml || '')
-    + (velocityHtml || '')
-    + (typeof buildEfficiencyHtml === 'function' ? buildEfficiencyHtml(s.efficiency) : '')
-    + (typeof buildPositioningHtml === 'function' ? buildPositioningHtml(s.positioning, s.dir) : '')
-    + (typeof buildSpotPerpDriveHtml === 'function' ? buildSpotPerpDriveHtml(s.spotDrive) : '')
-    + (typeof buildForcedFlowHtml === 'function' ? buildForcedFlowHtml(s.forcedFlow) : '')
-    + (typeof buildLevelProximityHtml === 'function' ? buildLevelProximityHtml(s.sweepState) : '')
-    + (typeof buildPulseWidget === 'function' ? buildPulseWidget(s.mechanism && s.mechanism.name ? s.mechanism.name : 'Unknown', s.dir) : '');
+    + (verdictHtml || '');
+  if (!bodyContent) return '';
   var body = '<div class="pc-details-body">' + bodyContent + '</div>';
   return '<div class="' + sectClass + '">' + head + body + '</div>';
 }
@@ -6421,6 +6360,10 @@ function renderDailyBudgetHeader() {
    thicker borders. Each mini-card carries the full reasoning string as the
    title attribute (tooltip on hover). Reads from the consensus-direction
    bundle when present, otherwise from the legacy-direction bundle. */
+/* L_UNIFIED_MINICARDS_V1 — buildFitnessMiniCards retained for any
+   external/diagnostic caller but no longer used in the card render path.
+   buildUnifiedMiniCards subsumes its functionality with origin tagging,
+   bias dimensions, and contribution-sorted ordering. */
 function buildFitnessMiniCards(s) {
   if (!s || !s.discipline) return '';
   var consensusDir = s.discipline.suggested_direction;
@@ -6447,6 +6390,301 @@ function buildFitnessMiniCards(s) {
   return html;
 }
 
+/* L_UNIFIED_MINICARDS_V1 — Card Restructure Pass 2 (2026-05-28).
+   Unified mini-card array combining three origin groups:
+     - fitness    (5 dims from s.discipline.[dir].fitness)
+     - structure  (FFC alignment, drive, positioning, efficiency, sweep)
+     - bias       (funding, spread, 5m pct change, OI velocity, liq stats,
+                   shadow agreement, OI/MTF/CVD reasons)
+   Each entry carries an origin tag (used by L_MINICARDS_ORIGIN_ACCENT_V1)
+   and a contribution score in [-2, +2] representing how strongly the
+   dimension supports s.discipline.suggested_direction (falling back to
+   s.dir when null per operator confirmation). Sort: most-supportive at
+   top → most-opposed at bottom.
+   Structure-origin tiles default expanded; toggle (L_STRUCTURE_MINICARDS_COLLAPSE_V1)
+   hides them via .pc-fitness-row.struct-hidden CSS rule, leaving fitness
+   + bias visible. */
+function _miniContribution(grade) {
+  if (grade === 'green') return 1;
+  if (grade === 'green-strong') return 2;
+  if (grade === 'red') return -1;
+  if (grade === 'red-strong') return -2;
+  return 0;
+}
+function _miniSafeDetail(s) {
+  return (s == null ? '' : String(s)).replace(/"/g, '&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function _classifyFitnessGrade(dim) {
+  var g = (dim.result.grade || 'YELLOW').toLowerCase();
+  var crit = (dim.key === 'sophisticated_flow' || dim.key === 'structural_pull');
+  if (g === 'green' && crit) return 'green-strong';
+  if (g === 'red' && crit)   return 'red-strong';
+  return g;   // green | yellow | red
+}
+function _classifyForcedFlow(ffc, dir) {
+  if (!ffc || !ffc.alignment) return null;
+  var rel = (ffc.reliability || 'LOW').toUpperCase();
+  if (ffc.alignment === 'ALIGNED') return rel === 'HIGH' ? 'green-strong' : 'green';
+  if (ffc.alignment === 'AGAINST') return rel === 'HIGH' ? 'red-strong' : 'red';
+  return 'yellow';
+}
+function _classifyDrive(drive, dir) {
+  if (!drive || !drive.state) return null;
+  if (drive.state === 'SPOT_UNAVAILABLE') return null;
+  if (drive.state === 'BALANCED') return 'yellow';
+  if (drive.state === 'SPOT_LED')  return dir === 'LONG' ? 'green' : 'red';
+  if (drive.state === 'PERP_LED')  return dir === 'LONG' ? 'red'   : 'green';
+  return null;
+}
+function _classifyPositioningGrade(pos, dir) {
+  if (!pos) return null;
+  var c = (typeof classifyPositioning === 'function') ? classifyPositioning(pos, dir) : null;
+  if (!c || c.state === 'gathering' || c.state === 'unavailable' || c.state === 'stale') return null;
+  if (c.state === 'ALIGNED_WITH_TOPS') return 'green-strong';
+  if (c.state === 'DIVERGENT_RETAIL')  return 'green';
+  if (c.state === 'AGAINST_TOPS')      return 'red-strong';
+  if (c.state === 'DIVERGENT_RISK')    return 'red';
+  return 'yellow';
+}
+function _classifyEfficiency(eff) {
+  if (!eff) return null;
+  if (eff.status !== 'ok' || eff.pct == null) return null;
+  if (eff.pct >= 70) return 'green';
+  if (eff.pct >= 40) return 'yellow';
+  return 'red';
+}
+function _classifySweep(sweep, dir) {
+  if (!sweep || !sweep.classification) return null;
+  var c = String(sweep.classification);
+  if (c === 'DEPLETED') return 'green';
+  if (c === 'BUILDING') return 'yellow';
+  if (c === 'INTACT')   return 'red';
+  return null;
+}
+/* L_BIAS_DIMENSION_MINICARDS_V1 — Card Restructure Pass 2 (2026-05-28).
+   Direction-relative grading helpers for the bias-origin mini-cards added
+   to the unified array. Each helper returns:
+     'green-strong' | 'green' | 'yellow' | 'red' | 'red-strong' | null
+   null means "data not available, don't render" (mini-card omitted from
+   the unified array). Sign convention: green grades support sortDir,
+   red grades oppose. ATR/volatility deliberately NOT included here — it
+   is already encoded into the fitness 'Execution' dimension. */
+function _classifyFunding(s) {
+  if (s.funding_cost_bps == null || s.funding_applies !== 1) return null;
+  var bps = s.funding_cost_bps;
+  // funding_cost_bps is direction-aware in scanner — positive bps = cost to current dir,
+  // negative = saving for current dir
+  if (bps > 5)  return 'red';
+  if (bps > 0)  return 'yellow';
+  if (bps < -5) return 'green';
+  return 'yellow';
+}
+function _classifySpread(spread_bps) {
+  if (spread_bps == null) return null;
+  if (spread_bps < 3) return 'green';
+  if (spread_bps < 8) return 'yellow';
+  return 'red';
+}
+function _classifyPctChange(pct, dir) {
+  if (pct == null) return null;
+  var sign = dir === 'LONG' ? 1 : -1;
+  var signed = pct * sign;
+  if (signed > 1.0)  return 'green-strong';
+  if (signed > 0.3)  return 'green';
+  if (signed > -0.3) return 'yellow';
+  if (signed > -1.0) return 'red';
+  return 'red-strong';
+}
+function _classifyOiVelocity(oiv, dir) {
+  if (oiv == null) return null;
+  var sign = dir === 'LONG' ? 1 : -1;
+  var signed = oiv * sign;
+  if (signed > 1.0)  return 'green';
+  if (signed > -1.0) return 'yellow';
+  return 'red';
+}
+function _classifyLiq(liq, dir) {
+  if (!liq || liq.intensityTotal == null) return null;
+  var longC = liq.longCount || liq.long_count || 0;
+  var shortC = liq.shortCount || liq.short_count || 0;
+  if (longC + shortC < 1) return null;
+  // Forced liquidations on the opposite side = tailwind for our direction
+  if (dir === 'LONG'  && shortC > longC * 1.5) return 'green';
+  if (dir === 'SHORT' && longC > shortC * 1.5) return 'green';
+  if (dir === 'LONG'  && longC > shortC * 1.5) return 'red';
+  if (dir === 'SHORT' && shortC > longC * 1.5) return 'red';
+  return 'yellow';
+}
+function _classifyShadow(shadow, dir) {
+  if (!shadow || !shadow.emergent_direction) return null;
+  var em = shadow.emergent_direction;
+  if (em === 'NEUTRAL') return 'yellow';
+  var conv = shadow.state_conviction || 'LOW';
+  if (em === dir) return conv === 'HIGH' ? 'green-strong' : 'green';
+  return conv === 'HIGH' ? 'red-strong' : 'red';
+}
+function _classifyReasonTag(reasons, tag) {
+  if (!Array.isArray(reasons)) return null;
+  for (var i = 0; i < reasons.length; i++) {
+    if (reasons[i].tag === tag) {
+      var lvl = reasons[i].lvl;
+      if (lvl === 'ok')      return { grade: 'green', detail: reasons[i].text };
+      if (lvl === 'partial') return { grade: 'yellow', detail: reasons[i].text };
+      if (lvl === 'weak')    return { grade: 'red', detail: reasons[i].text };
+    }
+  }
+  return null;
+}
+function buildUnifiedMiniCards(s) {
+  if (!s || !s.discipline) return '';
+  /* L_UNIFIED_MINICARDS_V1 — sort reference = suggested_direction with
+     legacy s.dir fallback. */
+  var sortDir = s.discipline.suggested_direction || s.dir || 'LONG';
+  var bundle = (sortDir === 'SHORT') ? s.discipline.short : s.discipline.long;
+  if (!bundle || !bundle.fitness || !bundle.fitness.dimensions) return '';
+  var entries = [];
+  function push(origin, label, detail, grade) {
+    if (!grade) return;
+    entries.push({
+      origin: origin,
+      label: label,
+      detail: _miniSafeDetail(detail),
+      grade: grade,
+      contribution: _miniContribution(grade)
+    });
+  }
+
+  // === FITNESS dimensions (5) — from per-direction discipline bundle ===
+  var fitDims = bundle.fitness.dimensions;
+  var keyToShort = { sophisticated_flow:'Smart', structural_pull:'Struct', boundary:'Bound', trap_risk:'Trap', execution:'Exec' };
+  for (var i = 0; i < fitDims.length; i++) {
+    var dim = fitDims[i];
+    push('fitness', keyToShort[dim.key] || dim.label, dim.result.detail, _classifyFitnessGrade(dim));
+  }
+
+  // === STRUCTURE dimensions ===
+  var ffcGrade = _classifyForcedFlow(s.forcedFlow, sortDir);
+  if (ffcGrade) {
+    var fAlign = (s.forcedFlow && s.forcedFlow.alignment) || '—';
+    var fRel   = (s.forcedFlow && s.forcedFlow.reliability) || '—';
+    var fMag   = (s.forcedFlow && s.forcedFlow.magnitude != null) ? s.forcedFlow.magnitude.toFixed(1) : '—';
+    push('structure', 'FFC', fAlign + ' · ' + fRel + ' · mag ' + fMag, ffcGrade);
+  }
+  var driveGrade = _classifyDrive(s.spotDrive, sortDir);
+  if (driveGrade) push('structure', 'Drive', (s.spotDrive && s.spotDrive.state) || '—', driveGrade);
+  var posGrade = _classifyPositioningGrade(s.positioning, sortDir);
+  if (posGrade) {
+    var posClass = (typeof classifyPositioning === 'function') ? classifyPositioning(s.positioning, sortDir) : null;
+    var posTxt = posClass ? (posClass.state + (posClass.top_long != null ? ' · TL ' + posClass.top_long + '%' : '')) : '—';
+    push('structure', 'Top traders', posTxt, posGrade);
+  }
+  var effGrade = _classifyEfficiency(s.efficiency);
+  if (effGrade) push('structure', 'Efficiency', (s.efficiency.pct != null ? s.efficiency.pct.toFixed(0) + '%' : '—'), effGrade);
+  var swGrade = _classifySweep(s.sweepState, sortDir);
+  if (swGrade) push('structure', 'Sweep', (s.sweepState && s.sweepState.classification) || '—', swGrade);
+
+  // === BIAS dimensions ===
+  var shGrade = _classifyShadow(s.shadow, sortDir);
+  if (shGrade) {
+    var shDir = (s.shadow && s.shadow.emergent_direction) || '—';
+    var shConv = (s.shadow && s.shadow.state_conviction) || '—';
+    push('bias', 'Shadow', shDir + ' · ' + shConv, shGrade);
+  }
+  var fundGrade = _classifyFunding(s);
+  if (fundGrade) {
+    var fbps = s.funding_cost_bps != null ? (s.funding_cost_bps >= 0 ? '+' : '') + s.funding_cost_bps.toFixed(1) + 'bps' : '—';
+    var fmin = s.minutes_to_funding != null ? Math.round(s.minutes_to_funding) + 'm' : '—';
+    push('bias', 'Funding', fbps + ' · ' + fmin, fundGrade);
+  }
+  var spGrade = _classifySpread(s.velocity && s.velocity.spread_bps);
+  if (spGrade) push('bias', 'Spread', (s.velocity.spread_bps).toFixed(1) + ' bps', spGrade);
+  var pctGrade = _classifyPctChange(s.velocity && s.velocity.pct_change_5min, sortDir);
+  if (pctGrade) {
+    var pctVal = s.velocity.pct_change_5min;
+    var pctStr = (pctVal >= 0 ? '+' : '') + pctVal.toFixed(2) + '%';
+    push('bias', '5m Δ', pctStr, pctGrade);
+  }
+  var oivGrade = _classifyOiVelocity(s.oiVelocity, sortDir);
+  if (oivGrade) {
+    var oivStr = (s.oiVelocity >= 0 ? '+' : '') + s.oiVelocity.toFixed(2) + '%';
+    push('bias', 'OI vel', oivStr, oivGrade);
+  }
+  var liqBundle = (typeof window !== 'undefined' && window.__acressLiqStats && s.sym) ? window.__acressLiqStats[s.sym] : null;
+  var liqGrade = _classifyLiq(liqBundle || s.liquidation, sortDir);
+  if (liqGrade) {
+    var liqSrc = liqBundle || s.liquidation;
+    var lc = liqSrc.longCount || liqSrc.long_count || 0;
+    var sc = liqSrc.shortCount || liqSrc.short_count || 0;
+    push('bias', 'Liq', 'L:' + lc + ' S:' + sc, liqGrade);
+  }
+  ['OI', 'MTF', 'CVD', 'OIX'].forEach(function(tag){
+    var r = _classifyReasonTag(s.reasons, tag);
+    if (r) push('bias', tag, r.detail, r.grade);
+  });
+
+  if (!entries.length) return '';
+
+  // Sort: highest contribution first, ties broken by origin (fitness first), then label
+  var originOrder = { fitness: 0, structure: 1, bias: 2 };
+  entries.sort(function(a, b){
+    if (b.contribution !== a.contribution) return b.contribution - a.contribution;
+    if (originOrder[a.origin] !== originOrder[b.origin]) return originOrder[a.origin] - originOrder[b.origin];
+    return a.label.localeCompare(b.label);
+  });
+
+  /* L_STRUCTURE_MINICARDS_COLLAPSE_V1 — structure-origin tiles default expanded.
+     Toggle persists via acress_structure_minicards_expanded; CSS rule
+     .pc-fitness-row.struct-hidden .pc-fit-mini.origin-structure { display:none }
+     applies the hide state without rebuilding HTML. */
+  var structExpanded = true;
+  try {
+    var sv = localStorage.getItem('acress_structure_minicards_expanded');
+    if (sv != null) structExpanded = (sv === 'true');
+  } catch (e) {}
+  var rowCls = 'pc-fitness-row pc-unified-minicards' + (structExpanded ? '' : ' struct-hidden');
+  var html = '<div class="' + rowCls + '">';
+  for (var k = 0; k < entries.length; k++) {
+    var e = entries[k];
+    var baseGrade = e.grade.indexOf('-strong') > 0 ? e.grade.replace('-strong','') : e.grade;
+    var critical = (e.grade.indexOf('-strong') > 0) ? ' critical' : '';
+    /* L_MINICARDS_ORIGIN_ACCENT_V1 — origin-* class drives the left-border
+       accent color: cyan for fitness, violet for structure, amber for bias. */
+    html += '<div class="pc-fit-mini ' + baseGrade + critical + ' origin-' + e.origin + '" title="[' + e.origin + '] ' + e.label + ': ' + e.detail + '">'
+         +    '<div class="lbl">' + e.label + '</div>'
+         +    '<div class="val">' + e.detail + '</div>'
+         +  '</div>';
+  }
+  html += '</div>';
+
+  // Structure toggle row — only render when at least one structure entry exists
+  var hasStructure = entries.some(function(e){ return e.origin === 'structure'; });
+  if (hasStructure) {
+    var togLabel = structExpanded ? 'Hide structure' : 'Show structure';
+    html += '<div class="pc-mini-tools">'
+         +    '<button type="button" class="pc-mini-struct-toggle" onclick="toggleStructureMiniCards(this)" data-expanded="' + (structExpanded ? '1' : '0') + '">'
+         +      togLabel
+         +    '</button>'
+         + '</div>';
+  }
+  return html;
+}
+
+/* L_STRUCTURE_MINICARDS_COLLAPSE_V1 — toggle handler. Applies struct-hidden
+   class to ALL unified mini-card rows on the page and persists preference. */
+function toggleStructureMiniCards(btn) {
+  var nowExpanded = btn.getAttribute('data-expanded') === '0';
+  try { localStorage.setItem('acress_structure_minicards_expanded', nowExpanded ? 'true' : 'false'); } catch (e) {}
+  var rows = document.querySelectorAll('.pc-unified-minicards');
+  for (var i = 0; i < rows.length; i++) {
+    rows[i].classList.toggle('struct-hidden', !nowExpanded);
+  }
+  var btns = document.querySelectorAll('.pc-mini-struct-toggle');
+  for (var j = 0; j < btns.length; j++) {
+    btns[j].setAttribute('data-expanded', nowExpanded ? '1' : '0');
+    btns[j].textContent = nowExpanded ? 'Hide structure' : 'Show structure';
+  }
+}
+
 /* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Upgrade 26.B — Track + Execute pairs.
    Both LONG and SHORT buttons always visible regardless of legacy/shadow.
    When engines agree on a non-NEUTRAL direction (s.discipline.suggested_direction),
@@ -6465,16 +6703,21 @@ function buildTrackExecuteRows(s) {
   /* L_MARGIN_DISPLAY_V1 — Upgrade 26.B Fix Pass 1.7. Operator wanted to see
      both notional and margin on the same line so they don't have to divide
      by leverage mentally. Compact form: "$6,667 / $667 @10x" — both values
-     visible without overflowing the button on smaller viewports. */
+     visible without overflowing the button on smaller viewports.
+     L_EXEC_BUTTON_ENTRY_V1 — Card Restructure Pass 2 — entry price added to
+     the detail line so the operator has notional / margin / leverage / entry
+     / SL / TP all on the button without scanning elsewhere. */
   function btnTxt(bundle) {
     if (!bundle || !bundle.sizing || !bundle.pricing) return '—';
     var n = Math.round(bundle.sizing.notional_usd);
     var m = Math.round(bundle.sizing.margin_usd);
     var lev = bundle.sizing.leverage || 1;
+    var entry = (typeof fP === 'function') ? fP(bundle.pricing.entry) : bundle.pricing.entry.toFixed(4);
     var sl = (typeof fP === 'function') ? fP(bundle.sizing.sl_price) : bundle.sizing.sl_price.toFixed(4);
     var tp = (typeof fP === 'function') ? fP(bundle.pricing.tp_price) : bundle.pricing.tp_price.toFixed(4);
     return {
       notional: '$' + n.toLocaleString() + ' / $' + m.toLocaleString() + ' @' + lev + 'x',
+      entry: '$' + entry,
       sl: '$' + sl,
       tp: '$' + tp
     };
@@ -6557,13 +6800,15 @@ function buildTrackExecuteRows(s) {
     ? '<button class="pc-exec-btn long" disabled>—</button>'
     : '<a class="pc-exec-btn long' + conL + fbExL + '" href="' + urlLong + '" target="_blank" rel="noopener noreferrer" onclick="operatorDirection(this,\'execute\',\'LONG\',\'' + s.id + '\')">'
       +   '<span class="ex-head">🟢 LONG ' + l.notional + '</span>'
-      +   '<span class="ex-detail">SL ' + l.sl + ' · TP ' + l.tp + '</span>'
+      /* L_EXEC_BUTTON_ENTRY_V1 — entry price added alongside SL/TP. */
+      +   '<span class="ex-detail">Entry ' + l.entry + ' · SL ' + l.sl + ' · TP ' + l.tp + '</span>'
       + '</a>';
   var execShortHtml = execDisabledS
     ? '<button class="pc-exec-btn short" disabled>—</button>'
     : '<a class="pc-exec-btn short' + conS + fbExS + '" href="' + urlShort + '" target="_blank" rel="noopener noreferrer" onclick="operatorDirection(this,\'execute\',\'SHORT\',\'' + s.id + '\')">'
       +   '<span class="ex-head">🔴 SHORT ' + sh.notional + '</span>'
-      +   '<span class="ex-detail">SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
+      /* L_EXEC_BUTTON_ENTRY_V1 — entry price added alongside SL/TP. */
+      +   '<span class="ex-detail">Entry ' + sh.entry + ' · SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
       + '</a>';
   var execRow = '<div class="pc-action-row' + rowCls + '">' + execLongHtml + execShortHtml + '</div>';
   return hint + trackRow + execRow;
@@ -6729,21 +6974,8 @@ function setOperatorFeedback(btn, kind) {
   else if (kind === 'err')    btn.classList.add('tracked-err');
 }
 
-/* L_DISCIPLINE_CARD_V1 — click handler on the header toggles expand state and
-   persists to localStorage so the operator's preference survives reloads. */
-function toggleDisciplineSection(headEl){
-  var sect = headEl.closest('.pc-discipline');
-  if (!sect) return;
-  var nowExpanded = !sect.classList.contains('expanded');
-  // Toggle ALL discipline sections on the page (operator preference, not per-card)
-  setDisciplineExpanded(nowExpanded);
-  var all = document.querySelectorAll('.pc-discipline');
-  for (var i = 0; i < all.length; i++) {
-    all[i].classList.toggle('expanded', nowExpanded);
-    var tog = all[i].querySelector('.pc-disc-toggle');
-    if (tog) tog.textContent = nowExpanded ? '▾' : '▸';
-  }
-}
+/* L_DEAD_DISCIPLINE_HTML_CLEANUP_V1 — toggleDisciplineSection removed.
+   Its only consumer was the now-deleted buildDisciplineHtml block. */
 // OI comes from Bybit. Binance's openInterestHist rejects file:// origin and
 // CORS proxies are too unreliable for hundred-coin scans. Bybit returns CORS
 // headers properly and covers virtually every liquid USDT perpetual.
@@ -10028,6 +10260,13 @@ function buildCard(s, moodKey){
   var chipsHtml = '';
   if (s.prime === true)  chipsHtml += '<span class="pc-chip pc-chip-prime" title="PRIME — all six confluence dimensions in green tier">💎 PRIME</span>';
   if (isHc)              chipsHtml += '<span class="pc-chip pc-chip-hc" title="HIGH CONFIDENCE — qualifying hour + mechanism + symbol + cluster + low BE">🎯 HIGH CONFIDENCE</span>';
+  /* L_VERDICT_CHIP_HEADER_V1 — cohort verdict (TRADE IT/WAIT/SKIP/NED)
+     surfaced as a compact chip in the card header, replacing the
+     in-body pulse widget as the primary decision surface. Source:
+     pulseCache via getCohortVerdict(mech, dir). When verdict lookup
+     returns null (mech not yet in cohort data), chip is omitted. */
+  var __cv = (typeof getCohortVerdict === 'function') ? getCohortVerdict(s.mechanism && s.mechanism.name, s.dir) : null;
+  if (__cv) chipsHtml += '<span class="pc-chip pc-chip-verdict pc-chip-verdict-' + __cv.cls + '" title="Cohort verdict — recent mechanism × direction performance">' + __cv.verdict + '</span>';
   var signalHtml=s.reasons.map(function(r){
     var icon=r.lvl==='ok'?'✓':r.lvl==='partial'?'·':r.lvl==='weak'?'✗':'·';
     return '<div class="psig"><span class="psig-icon '+r.lvl+'">'+icon+'</span><span class="psig-tag">'+r.tag+'</span><span class="psig-text">'+r.text+'</span></div>';
@@ -10106,20 +10345,23 @@ function buildCard(s, moodKey){
         +'<span class="pc-score-lbl">'+tierLbl+'</span>'
       +'</div>'
     +'</div>'
-    +buildShadowComparisonHtml(s) /* L_SHADOW_VISIBILITY_CARD_V1 — permanent post-26.B */
-    /* L_CARD_RESTRUCTURE_V1 — Upgrade 26.B body layout:
-         pc-mech (compact one-line label) → fitness mini-cards → entry zone →
-         BE verdict → Track row → Execute row → countdown.
-       Removed: pc-signals breakdown, velocity/efficiency/positioning/drive/ffc/
-       level-proximity inline sections (folded into mini-card tooltips), pulse
-       widget, +Log / Bybit / Binance buttons (replaced by Track/Execute), the
-       trade-actions EXECUTE/REVERSE pair (also replaced). */
+    /* L_SHADOW_LINE_REPOSITION_V1 — Card Restructure Pass 2 (2026-05-28).
+       Shadow comparison line moved from immediately-after-pc-head (where it
+       pre-biased the operator's read) to just-before-buttons. New mental
+       flow: scan mini-cards → form your view → see shadow's opinion as a
+       check → decide → click. */
+    /* L_CARD_RESTRUCTURE_V2 — Card Restructure Pass 2 (2026-05-28). New
+       body order: pc-mech → unified mini-cards (fitness + structure + bias,
+       sorted by contribution to suggested_direction) → shadow comparison →
+       Track row → Execute row → expandable details (full drill-down still
+       available) → countdown. */
     +'<div class="pc-mech">'
       +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+oiStageBadge(s)+'</div>'
       +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+'</div>'
       +'<div class="pc-mech-stats-row">'+mechStatsBadge(s.mechanism.name)+'</div>'
     +'</div>'
-    +buildFitnessMiniCards(s) /* L_FITNESS_MINICARDS_V1 */
+    +buildUnifiedMiniCards(s) /* L_UNIFIED_MINICARDS_V1 — fitness + structure + bias */
+    +buildShadowComparisonHtml(s) /* L_SHADOW_LINE_REPOSITION_V1 — now just-before-buttons */
     +buildTrackExecuteRows(s) /* L_BUTTON_CONSENSUS_EMPHASIS_V1 */
     /* L_CARD_EXPANDED_DETAILS_V2 — restored detail sections live here, collapsed
        by default. Entry zone + BE verdict + velocity + efficiency + positioning +
