@@ -1019,20 +1019,25 @@ body.acress-budget-footer-on{padding-bottom:42px;}
          derived volume floor inline so the operator sees both knobs at
          once. L_DECILE_SETTINGS_MAIN_SYNC_V1 — both surfaces read/write
          the same localStorage key acress_velocity_decile_min. -->
+    <!-- L_VELOCITY_NAMING_HONEST_V1 — Upgrade 27.5 (2026-05-28). Label
+         updated from "Velocity" to "Forward velocity"; option text
+         normalized to "strongest outlook" / "weakest outlook" framing
+         instead of "top X%" framing (the % numbers no longer have
+         absolute meaning under cross-sectional prospective ranking). -->
     <div class="cfg-group">
-      <span>Velocity</span>
-      <select id="cfg-velocity-decile-min" onchange="onDecileSelectChange(this.value)" title="Velocity decile floor + auto-derived volume floor">
+      <span>Forward velocity</span>
+      <select id="cfg-velocity-decile-min" onchange="onDecileSelectChange(this.value)" title="Estimated probability of continued movement built from OI behavior, FFC, sweep state, drive, positioning, taker flow, and efficiency. Cross-sectional ranking within the current scan. Calibration placeholder weights — refined empirically as 26.F historical persistence data accumulates.">
         <option value="all">All</option>
-        <option value="10">Decile 10 (top 10%)</option>
-        <option value="9" selected>Decile 9 (top 20%)</option>
-        <option value="8">Decile 8 (top 30%)</option>
-        <option value="7">Decile 7 (top 40%)</option>
-        <option value="6">Decile 6 (top 50%)</option>
-        <option value="5">Decile 5 (top 60%)</option>
-        <option value="4">Decile 4 (top 70%)</option>
-        <option value="3">Decile 3 (top 80%)</option>
-        <option value="2">Decile 2 (top 90%)</option>
-        <option value="1">Decile 1 (all)</option>
+        <option value="10">Decile 10 (strongest outlook)</option>
+        <option value="9" selected>Decile 9</option>
+        <option value="8">Decile 8</option>
+        <option value="7">Decile 7</option>
+        <option value="6">Decile 6</option>
+        <option value="5">Decile 5</option>
+        <option value="4">Decile 4</option>
+        <option value="3">Decile 3</option>
+        <option value="2">Decile 2</option>
+        <option value="1">Decile 1 (weakest outlook)</option>
       </select>
       <!-- L_VOLUME_FLOOR_INLINE_DISPLAY_V1 — compact derived-vol display
            updated whenever the decile dropdown changes. Reuses
@@ -1475,20 +1480,28 @@ function computeLiveVelocity(k1, k5, spreadBps){
     }
   }
   var insufficient = (nBars1m < VELOCITY_MIN_1M_KLINES) || (avg1m == null) || (avg1m < VELOCITY_HALTED_MIN_BPS);
-  var decile = insufficient ? null : velocityDecileFor(max5m);
-  var stats  = (decile != null) ? VELOCITY_DECILE_STATS[decile - 1] : null;
+  /* L_PROSPECTIVE_VELOCITY_COMPOSITE_V1 — Upgrade 27.5 (2026-05-28).
+     ABSOLUTE-cuts decile (velocityDecileFor) is REPLACED by the
+     post-scan cross-sectional pass recomputeProspectiveDeciles. We
+     set decile = null here; the post-pass writes the prospective
+     decile after all signals are in hand. expected_mfe_pct +
+     expected_ttm_min stay null too (those were derived from the
+     realized-cuts table and don't apply under prospective methodology).
+     pct_change_5min stays untouched — it's the "current speed" reading
+     on cards but no longer drives decile ranking. */
   return {
     avg_1m_bps: avg1m,
     max_5m_bps: max5m,
     spread_bps: spreadBps,
     n_1m_klines: nBars1m,
     insufficient: insufficient,
-    decile: decile,
-    expected_mfe_pct: stats ? stats.mfe : null,
-    expected_ttm_min: stats ? stats.ttm : null,
+    decile: null,                      /* filled by recomputeProspectiveDeciles post-scan */
+    expected_mfe_pct: null,            /* deprecated under prospective methodology */
+    expected_ttm_min: null,            /* deprecated under prospective methodology */
     score: null,
-    /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — recent-5min absolute pct change for
-       compound velocity filter (decile >= 9 AND |pct_change_5min| >= floor). */
+    prospective_score: null,           /* filled by recomputeProspectiveDeciles */
+    /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — recent-5min absolute pct change.
+       Retained for "current speed Y%/5min" descriptive display on cards. */
     pct_change_5min: pct_change_5min,
   };
 }
@@ -1524,6 +1537,239 @@ function recomputeVelocityScores(arr){
     live[k].velocity.score = Math.round(composite * 100);
   }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   L_PROSPECTIVE_VELOCITY_COMPOSITE_V1 + L_CALIBRATION_PLACEHOLDER_DOC_V1
+   Upgrade 27.5 — Prospective Velocity Decile (2026-05-28).
+   ════════════════════════════════════════════════════════════════════
+
+   REPLACES the realized-velocity decile (max_5m_bps via velocityDecileFor
+   absolute cuts) with a composite prospective-velocity score built from
+   structural inputs that theory-correlate with forward continuation.
+   The composite is cross-sectionally ranked into deciles 1-10 per scan
+   (decile 10 = top 10% strongest forward outlook in this scan).
+
+   ──────────────────────────────────────────────────────────────────────
+   CALIBRATION_PLACEHOLDER — ALL WEIGHTS AND SCALING CONSTANTS BELOW
+   ARE PHASE-1 PLACEHOLDERS. Empirical recalibration follows in Upgrade
+   26.F (Cascade Lifecycle Engine) once historical persistence data
+   accumulates. The composite SHIP today carries a known epistemic gap:
+   weights are theory-motivated but not data-validated.
+   ──────────────────────────────────────────────────────────────────────
+
+   PER-INPUT NORMALIZERS (each maps to [-1, +1] where +1 = strongest
+   forward-continuation signal in current direction, -1 = strongest
+   against, 0 = neutral/unknown):
+
+     ffc          tanh(score/100) × alignSign  ← FFC magnitude with
+                                                  direction-aware sign
+     oiVelocity   tanh(value / 5) × dirSign    ← OI buildup speed
+     oiAccel      tanh(value / 5) × dirSign    ← OI buildup acceleration
+     positioning  classifyPositioning state mapped to {+1,+0.5,0,-0.5,-1}
+                    DIVERGENT_RETAIL = +1   (smart money with us, crowd against)
+                    ALIGNED_WITH_TOPS = +0.5 (smart money with us)
+                    BALANCED = 0
+                    AGAINST_TOPS = -0.5
+                    DIVERGENT_RISK = -1     (smart money against, crowd with us = exit liq)
+     sweep        +1 if counter-direction level depleted + retest≥2 (squeeze fuel)
+                  -1 if same-direction level not yet swept (resistance ahead)
+                  0  otherwise
+     spotDrive    SPOT_LED=+1, BALANCED=0, PERP_LED=-1, SPOT_UNAVAILABLE=null
+     taker        tanh((ratio - 0.5) × 10) × dirSign
+     efficiency   (pct - 50) / 50  (linear; 70%→+0.4, 30%→-0.4)
+
+   The scaling constants in the tanh() normalizers (5 in OI, 10 in
+   taker) are CALIBRATION_PLACEHOLDER scaling factors controlling the
+   saturation steepness. They will need empirical refinement once
+   26.F's historical persistence data lands.
+
+   WEIGHTS (placeholder, sum = 1.0; null inputs are skipped and
+   remaining weights are normalized proportionally so a missing input
+   doesn't artificially flatten the score):
+
+     0.20 ffc           ← direction-aware cascade primary
+     0.15 oi_velocity   ← current participation buildup
+     0.10 oi_accel      ← momentum-of-buildup
+     0.15 positioning   ← crowding fragility
+     0.10 sweep         ← recent forced-flow trigger
+     0.10 spot_drive    ← sustainability tier
+     0.10 taker         ← active aggressive flow
+     0.10 efficiency    ← clean-displacement continuation health
+
+   The OLD signal.velocity.pct_change_5min field is RETAINED unchanged
+   for descriptive "current speed Y%/5min" display on cards. It just
+   no longer drives the decile ranking.
+
+   The decile semantic shifts from ABSOLUTE (historic cuts table) to
+   CROSS-SECTIONAL (top 10% of THIS scan). V1 ships cross-sectional
+   to guarantee always-meaningful 1-10 spread regardless of regime;
+   V2 (post-26.F) can introduce composite-score absolute cuts for
+   regime-invariance.
+
+   PRIME GATE SEMANTIC SHIFT: attachPrimeFields (line ~1881) reads
+   signal.velocity.decile to evaluate the velocity-green dimension at
+   decile >= 9. With this upgrade, "PRIME velocity-green" becomes
+   "top 20% forward outlook" instead of "top 20% realized 5m move".
+   Alert volume may shift meaningfully on first deploy — this is
+   intended behavioral change, not regression.
+   ════════════════════════════════════════════════════════════════════ */
+
+function _prospDirSign(dir){ return dir === 'LONG' ? 1 : (dir === 'SHORT' ? -1 : 0); }
+
+function _prospNormFFC(signal, dirSign){
+  var ff = signal && signal.forcedFlow;
+  if (!ff || typeof ff.score !== 'number') return null;
+  var alignSign = 0;
+  if (ff.alignment === 'ALIGNED') alignSign = 1;
+  else if (ff.alignment === 'AGAINST') alignSign = -1;
+  // Magnitude in [0,1] from |score|/100; signed by alignment (which is direction-aware)
+  var mag = Math.min(1, Math.abs(ff.score) / 100);
+  return mag * alignSign;
+}
+
+function _prospNormOiVel(signal, dirSign){
+  if (signal == null || typeof signal.oiVelocity !== 'number') return null;
+  if (!dirSign) return null;
+  /* CALIBRATION_PLACEHOLDER: scaling factor 5 in tanh saturation */
+  return Math.tanh(signal.oiVelocity / 5) * dirSign;
+}
+function _prospNormOiAccel(signal, dirSign){
+  if (signal == null || typeof signal.oiAcceleration !== 'number') return null;
+  if (!dirSign) return null;
+  /* CALIBRATION_PLACEHOLDER: scaling factor 5 in tanh saturation */
+  return Math.tanh(signal.oiAcceleration / 5) * dirSign;
+}
+
+function _prospNormPositioning(signal, dirSign){
+  var pos = signal && signal.positioning;
+  if (!pos || typeof classifyPositioning !== 'function') return null;
+  var c = classifyPositioning(pos, signal.dir);
+  if (!c) return null;
+  switch (c.state) {
+    case 'DIVERGENT_RETAIL':  return +1;
+    case 'ALIGNED_WITH_TOPS': return +0.5;
+    case 'BALANCED':          return 0;
+    case 'AGAINST_TOPS':      return -0.5;
+    case 'DIVERGENT_RISK':    return -1;
+    default:                  return null;   // gathering/unavailable/stale
+  }
+}
+
+function _prospNormSweep(signal, dirSign){
+  var ss = signal && signal.sweepState;
+  if (!ss || !dirSign) return null;
+  /* Counter-direction level depleted + retested → squeeze fuel toward our direction.
+     Same-direction level intact + retesting → resistance ahead. */
+  var counterLevel = (signal.dir === 'LONG') ? ss.nearest_above : ss.nearest_below;
+  var sameLevel    = (signal.dir === 'LONG') ? ss.nearest_below : ss.nearest_above;
+  // Wait — for a LONG signal, the LEVEL ABOVE is the resistance we want to break.
+  // If the counter-direction (above for LONG) level is DEPLETED → break is likely → +1.
+  // If the same-direction level (below for LONG, support) is still intact and not swept → support still holding → 0/neutral.
+  // The "resistance ahead" case: nearest_above for LONG is at high depletion_score (still firm) → -1.
+  if (counterLevel) {
+    var dep = counterLevel.depletion_score;
+    var retests = counterLevel.retest_count || 0;
+    if (typeof dep !== 'number') return 0;
+    // depletion_score in [0,1] where 1 = fully depleted
+    if (dep >= 0.7 && retests >= 2) return +1;   // squeeze fuel
+    if (dep <= 0.2) return -1;                    // firm resistance ahead
+    return 0;
+  }
+  return 0;
+}
+
+function _prospNormSpotDrive(signal, dirSign){
+  var sd = signal && signal.spotDrive;
+  if (!sd || sd.state === 'SPOT_UNAVAILABLE') return null;
+  if (sd.state === 'SPOT_LED') return +1;
+  if (sd.state === 'PERP_LED') return -1;
+  return 0;   // BALANCED
+}
+
+function _prospNormTaker(signal, dirSign){
+  if (signal == null || typeof signal._takerRatio5m !== 'number' || !dirSign) return null;
+  /* CALIBRATION_PLACEHOLDER: scaling factor 10 in tanh saturation */
+  return Math.tanh((signal._takerRatio5m - 0.5) * 10) * dirSign;
+}
+
+function _prospNormEfficiency(signal, dirSign){
+  var ef = signal && signal.efficiency;
+  if (!ef || ef.status !== 'ok' || typeof ef.pct !== 'number') return null;
+  return Math.max(-1, Math.min(1, (ef.pct - 50) / 50));
+}
+
+/* CALIBRATION_PLACEHOLDER weights — sum = 1.0. Refined empirically in
+   Upgrade 26.F once historical persistence data accumulates. */
+var PROSP_WEIGHTS = {
+  ffc:         0.20,
+  oi_velocity: 0.15,
+  oi_accel:    0.10,
+  positioning: 0.15,
+  sweep:       0.10,
+  spot_drive:  0.10,
+  taker:       0.10,
+  efficiency:  0.10
+};
+
+function computeProspectiveScore(signal){
+  var dirSign = _prospDirSign(signal && signal.dir);
+  var inputs = {
+    ffc:         _prospNormFFC(signal, dirSign),
+    oi_velocity: _prospNormOiVel(signal, dirSign),
+    oi_accel:    _prospNormOiAccel(signal, dirSign),
+    positioning: _prospNormPositioning(signal, dirSign),
+    sweep:       _prospNormSweep(signal, dirSign),
+    spot_drive:  _prospNormSpotDrive(signal, dirSign),
+    taker:       _prospNormTaker(signal, dirSign),
+    efficiency:  _prospNormEfficiency(signal, dirSign)
+  };
+  /* Null-skip-and-rescale: sum weighted values over present inputs only,
+     divide by sum of present weights. A missing input doesn't pull the
+     composite toward 0 — its weight is redistributed proportionally
+     across the inputs that DID return a value. */
+  var sumWeighted = 0;
+  var sumWeights = 0;
+  for (var key in PROSP_WEIGHTS) {
+    if (inputs[key] == null) continue;
+    sumWeighted += PROSP_WEIGHTS[key] * inputs[key];
+    sumWeights  += PROSP_WEIGHTS[key];
+  }
+  if (sumWeights <= 0) return null;
+  return sumWeighted / sumWeights;   // ∈ [-1, +1]
+}
+
+/* Cross-sectional decile assignment over the current scan's signals.
+   Decile 10 = top 10% by prospective score (strongest forward outlook),
+   decile 1 = bottom 10%. Mirrors the existing recomputeVelocityScores
+   ranking pattern. Stores both prospective_score and decile on
+   signal.velocity. */
+function recomputeProspectiveDeciles(arr){
+  if (!Array.isArray(arr) || !arr.length) return;
+  // Phase 1: compute prospective_score per signal
+  var scores = [];
+  arr.forEach(function(s){
+    if (!s || !s.velocity) { return; }
+    var score = computeProspectiveScore(s);
+    s.velocity.prospective_score = score;
+    if (score == null) {
+      s.velocity.decile = null;
+      return;
+    }
+    scores.push({ s: s, v: score });
+  });
+  // Phase 2: cross-sectional rank → decile 1..10
+  if (!scores.length) return;
+  scores.sort(function(a, b){ return a.v - b.v; });
+  scores.forEach(function(entry, rank){
+    // rank ∈ [0, n-1]. Map to decile 1..10.
+    // pct_rank = rank / (n-1). decile = floor(pct_rank * 10) + 1, capped at 10.
+    var n = scores.length;
+    var pct = n > 1 ? rank / (n - 1) : 0.5;
+    var decile = Math.min(10, Math.floor(pct * 10) + 1);
+    entry.s.velocity.decile = decile;
+  });
+}
+
 
 /* L_DISPLACEMENT_EFFICIENCY_V1 — Displacement Efficiency Metric.
    Healthy directional moves have efficient displacement (small effort, large
@@ -9089,6 +9335,12 @@ async function runScan(){
      across the full live universe before rendering. Must run before
      renderResults so velocity_desc sort and card display see the score. */
   try { recomputeVelocityScores(signals); } catch(e) { console.warn('[Acress] velocity rank pass err:', e.message); }
+  /* L_PROSPECTIVE_VELOCITY_COMPOSITE_V1 — Upgrade 27.5. Cross-sectional
+     prospective-decile pass runs immediately after recomputeVelocityScores
+     so the dropdown filter + card renders see the new decile values
+     before renderResults. The pass writes signal.velocity.decile +
+     signal.velocity.prospective_score on every live signal. */
+  try { recomputeProspectiveDeciles(signals); } catch(e) { console.warn('[Acress] prospective decile pass err:', e.message); }
   signals.sort(function(a,b){return b.score-a.score;});
   diagnostics.topScores.sort(function(a,b){return b.score-a.score;});
   window._lastDiagnostics=diagnostics;
@@ -9759,10 +10011,14 @@ function renderResults(){invalidateMechanismStats();
          abs % is opt-in; decile is dropdown-selectable. Copy reflects both
          the current decile selection and (when enabled) the abs % threshold
          + mode (auto/manual). */
+      /* L_VELOCITY_NAMING_HONEST_V1 + L_FILTER_EMPTY_STATE_EXTENDED_V1 —
+         Upgrade 27.5: empty-state copy reflects "Forward velocity"
+         naming. Cross-sectional decile means percentage labels no
+         longer have absolute meaning, so "(top X%)" suffix dropped. */
       if (_velFilterActive) {
         var __decilePhrase = (_decileMin == null)
           ? 'All deciles (no velocity filter)'
-          : 'Velocity ≥ decile ' + _decileMin + ' (top ' + _decileTopPct + '%)';
+          : 'Forward velocity ≥ decile ' + _decileMin;
         if (_velAbsFloorActive) {
           var __floorMode = (_velMode === 'auto')
             ? '(auto-adapted to ' + _velMoodCode + ' regime)'
@@ -9806,9 +10062,13 @@ function renderResults(){invalidateMechanismStats();
          Surface both so the operator knows which lever to pull. */
       var defaultEmptyHintHtml = '';
       if (!_velAbsFloorActive && _minVolActive && _preVelocityCount > 0) {
+        /* L_VELOCITY_NAMING_HONEST_V1 — Upgrade 27.5: phrase rewritten to
+           "at forward-velocity decile N or higher" framing (no "top X%"
+           since cross-sectional decile means absolute percentages no
+           longer apply). */
         var __velTierPhrase = (_decileMin == null)
           ? 'meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold'
-          : 'in the top ' + _decileTopPct + '% velocity tier <b>AND</b> meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold';
+          : 'at forward-velocity decile ' + _decileMin + ' or higher <b>AND</b> meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold';
         defaultEmptyHintHtml = '<div style="margin-top:14px;padding:10px 12px;background:rgba(65,209,255,0.08);border-left:3px solid rgba(65,209,255,0.55);border-radius:4px;text-align:left;display:inline-block;max-width:560px;">'
           + 'No symbols in the universe are ' + __velTierPhrase + '. '
           + 'Loosen the velocity decile in Settings → Position Discipline (volume floor follows automatically).'
@@ -10663,20 +10923,27 @@ function buildCard(s, moodKey){
     var v = s.velocity;
     if(!v){ return; }
     if(v.insufficient){
-      /* L_CARD_CASE_AUDIT_V1 — Pass 5: compact placeholder matching
-         the Top traders / Efficiency / Drive gathering pattern.
-         Verbose diagnostic moved to the title attribute (hover). */
       var __velTip = 'n_1m_klines=' + v.n_1m_klines + ' · avg=' + (v.avg_1m_bps != null ? v.avg_1m_bps.toFixed(1) : '—') + 'bps';
-      velocityHtml = '<div class="vel-line vel-gray" title="' + __velTip + '">⚪ Velocity: gathering data</div>';
+      velocityHtml = '<div class="vel-line vel-gray" title="' + __velTip + '">⚪ Forward velocity: gathering data</div>';
       return;
     }
+    /* L_VELOCITY_NAMING_HONEST_V1 — Upgrade 27.5 (2026-05-28). Card prose
+       now reads "Forward velocity · decile X · current speed Y%/5min".
+       The decile reflects the cross-sectional prospective rank
+       (computed by recomputeProspectiveDeciles); current speed remains
+       as descriptive backdrop. MFE/TTM/spread sub-readings DROPPED —
+       they were derived from realized-velocity cuts and are
+       methodologically inconsistent under prospective framing. */
     var emoji = velocityColorEmoji(v.decile);
     var colorCls = velocityColorClass(v.decile);
-    var scoreTxt = (v.score != null) ? (v.score + '/100') : '—';
     var decileTxt = (v.decile != null) ? ('decile ' + v.decile) : 'decile —';
-    var mfeTxt = (v.expected_mfe_pct != null) ? ('~±' + v.expected_mfe_pct.toFixed(2) + '% / ' + Math.round(v.expected_ttm_min) + 'min') : '—';
-    var spreadTxt = (v.spread_bps != null) ? (v.spread_bps.toFixed(1) + ' bps spread') : 'spread —';
-    velocityHtml = '<div class="vel-line '+colorCls+'">'+emoji+' Velocity <b>'+scoreTxt+'</b> ('+decileTxt+') · '+mfeTxt+' · '+spreadTxt+'</div>';
+    var speedTxt = (typeof v.pct_change_5min === 'number')
+      ? ('current speed ' + (v.pct_change_5min >= 0 ? '+' : '') + v.pct_change_5min.toFixed(2) + '%/5min')
+      : 'current speed —';
+    var __velTip2 = 'Forward velocity outlook · cross-sectional decile within this scan. ' +
+      'Composite inputs: FFC · OI velocity · OI accel · positioning · sweep · drive · taker · efficiency. ' +
+      'Calibration placeholder weights — refined empirically as 26.F historical persistence data accumulates.';
+    velocityHtml = '<div class="vel-line '+colorCls+'" title="' + __velTip2 + '">'+emoji+' Forward velocity · <b>'+decileTxt+'</b> · '+speedTxt+'</div>';
   })();
   /* L_PIN_HEADER_RELOCATE_V1 — Pass 5: Pin emoji rendered in pc-score-wrap. */
   var __pinned = (typeof isSymbolPinned === 'function') && isSymbolPinned(s.base);
@@ -14010,24 +14277,30 @@ function openDrilldownByHourFromVPS(hour){
                selecting the velocity decile floor (or "All" for no filter).
                Volume floor below is DERIVED from this selection via
                getVolumeFloorForDecile() — no separate volume input. -->
+          <!-- L_VELOCITY_NAMING_HONEST_V1 — Upgrade 27.5 (2026-05-28).
+               Settings dropdown label updated from "Velocity decile floor"
+               to "Forward velocity floor". Option text normalized to
+               "strongest outlook" / "weakest outlook" framing matching
+               the main-page mirror. Help tooltip explains the composite
+               structural inputs + calibration-placeholder caveat. -->
           <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:10px;">
-            <span style="min-width:0;flex:1;"><b>Velocity decile floor</b>
+            <span style="min-width:0;flex:1;"><b>Forward velocity floor</b>
               <span id="disc-velocity-decile-info" style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
                 Auto volume floor: $500K (based on selected decile)
               </span>
             </span>
-            <select id="disc-velocity-decile-min" onchange="onDecileSelectChange(this.value)" style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:var(--font-mono);font-size:11px;">
+            <select id="disc-velocity-decile-min" onchange="onDecileSelectChange(this.value)" title="Estimated probability of continued movement built from OI behavior, FFC, sweep state, drive, positioning, taker flow, and efficiency. Cross-sectional ranking within the current scan. Calibration placeholder weights — refined empirically as 26.F historical persistence data accumulates." style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:var(--font-mono);font-size:11px;">
               <option value="all">All deciles (no filter)</option>
-              <option value="10">Decile 10 (top 10%)</option>
-              <option value="9" selected>Decile 9 (top 20%)</option>
-              <option value="8">Decile 8 (top 30%)</option>
-              <option value="7">Decile 7 (top 40%)</option>
-              <option value="6">Decile 6 (top 50%)</option>
-              <option value="5">Decile 5 (top 60%)</option>
-              <option value="4">Decile 4 (top 70%)</option>
-              <option value="3">Decile 3 (top 80%)</option>
-              <option value="2">Decile 2 (top 90%)</option>
-              <option value="1">Decile 1 (all 100%)</option>
+              <option value="10">Decile 10 (strongest outlook)</option>
+              <option value="9" selected>Decile 9</option>
+              <option value="8">Decile 8</option>
+              <option value="7">Decile 7</option>
+              <option value="6">Decile 6</option>
+              <option value="5">Decile 5</option>
+              <option value="4">Decile 4</option>
+              <option value="3">Decile 3</option>
+              <option value="2">Decile 2</option>
+              <option value="1">Decile 1 (weakest outlook)</option>
             </select>
           </label>
           <!-- L_VELOCITY_FLOOR_OPTIONAL_V1 — Upgrade 27.2 (2026-05-28).
