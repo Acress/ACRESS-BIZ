@@ -232,6 +232,30 @@ input{font-family:var(--font-ui);}
    the detail cluster below. No label, no section header — just a 1px
    semi-transparent rule with vertical margin. */
 .pc-prose-demarc{height:1px;background:var(--border);opacity:.55;margin:6px 0;}
+/* L_PIN_BUTTON_V1 — Upgrade 26.D Pin V1 (2026-05-28). Pin row sits above
+   the Track row, single full-width button. Unpinned: neutral border.
+   Pinned: gold/amber border + background tint for unmistakable state. */
+.pc-pin-row{grid-template-columns:1fr;}
+.pc-pin-btn{font-family:var(--font-mono);font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:6px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--s2);color:var(--muted);cursor:pointer;transition:all .15s;text-align:center;}
+.pc-pin-btn:hover{color:var(--hi);border-color:rgba(240,200,80,.45);background:rgba(240,200,80,.06);}
+.pc-pin-btn.pinned{color:#f0c850;border-color:rgba(240,200,80,.60);background:rgba(240,200,80,.10);}
+.pc-pin-btn.pinned:hover{color:#f0c850;border-color:rgba(240,200,80,.85);background:rgba(240,200,80,.16);}
+/* L_PINNED_SECTION_V1 — gold/amber left-border accent on pinned cards
+   so they are visually distinct from main-feed cards. Sits on top of
+   any existing .conf-* left-border (border-left wins via 3px width). */
+.pinned-section{margin-bottom:18px;}
+.shadow-section-hdr.pinned{border-color:rgba(240,200,80,.4);color:#f0c850;}
+.pinned-section .pcard{border-left:3px solid rgba(240,200,80,.85) !important;}
+.pinned-section .pcard .pc-sym::before{content:"📌 ";font-size:11px;opacity:.85;}
+/* Placeholder "no active signal" row for pinned symbols whose mechanism
+   isn't firing right now. Stays in the pinned section so the operator
+   can see the pin is alive but the symbol is quiet. */
+.pc-pin-placeholders{padding:6px 11px;background:var(--s1);border:1px solid var(--border);border-left:3px solid rgba(240,200,80,.85);border-radius:6px;margin-top:6px;display:flex;flex-direction:column;gap:4px;}
+.pc-pin-placeholder{display:flex;align-items:center;gap:10px;padding:5px 8px;background:var(--s2);border-radius:4px;font-family:var(--font-mono);font-size:11px;}
+.pc-pin-placeholder-sym{font-weight:800;color:#f0c850;min-width:80px;}
+.pc-pin-placeholder-msg{flex:1;color:var(--muted);font-size:10.5px;}
+.pc-pin-placeholder-unpin{background:transparent;border:1px solid var(--border2);color:var(--muted);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:11px;line-height:1;}
+.pc-pin-placeholder-unpin:hover{color:var(--red);border-color:var(--red);}
 /* L_BUTTON_CONSENSUS_EMPHASIS_V1 — Track + Execute paired rows with optional emphasis. */
 .pc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 11px;background:var(--s1);border-bottom:1px solid var(--border);}
 .pc-action-row.three-col{grid-template-columns:1fr 1fr 1fr;}  /* L_LOG_BOTH_BUTTON_V1 */
@@ -1067,6 +1091,14 @@ body.acress-budget-footer-on{padding-bottom:42px;}
 
 <!-- L_DAILY_BUDGET_HEADER_V1 — Upgrade 26.B — moved off cards onto a single scanner-page header element. Renders on demand from computeDailyBudget(). Toggle via Settings. -->
 <div id="acress-daily-budget-header" style="display:none;"></div>
+
+<!-- L_PINNED_SECTION_V1 — Upgrade 26.D Pin V1 (2026-05-28). Host element
+     for the operator-pinned symbols section. Sits above the main results
+     area so pinned cards are the first thing the operator sees. Hidden
+     when no symbols are pinned (renderPinnedSection sets display:none).
+     Refreshed independently of the main scan via the 30s refreshPinned
+     setInterval — pinned cards persist beyond the 30-min signal TTL. -->
+<div id="pinned-section" style="display:none;"></div>
 
 <div class="results" id="results">
   <div class="empty">
@@ -6536,6 +6568,18 @@ function buildTrackExecuteRows(s) {
   var fbB = getOperatorOutcomeClass(s.id, 'BOTH', 'track');
   var fbExL = getOperatorOutcomeClass(s.id, 'LONG', 'execute');
   var fbExS = getOperatorOutcomeClass(s.id, 'SHORT', 'execute');
+    /* L_PIN_BUTTON_V1 — Upgrade 26.D Pin V1 (2026-05-28). Standalone full-
+     width row above the Track row. Toggle button: "📌 Pin" when not in
+     pinned list, "📌 Pinned" when present. Click runs togglePin(base)
+     which mutates acress_pinned_symbols localStorage and triggers a
+     pinned-section re-render. Pin is conceptually distinct from
+     direction-specific Track/Execute actions, so it gets its own row. */
+  var __pinned = (typeof isSymbolPinned === 'function') && isSymbolPinned(s.base);
+  var pinRow = '<div class="pc-action-row pc-pin-row">'
+    + '<button class="pc-pin-btn' + (__pinned ? ' pinned' : '') + '" onclick="togglePin(\'' + s.base + '\')" title="' + (__pinned ? 'Unpin · stop live monitoring' : 'Pin · live-monitor at 30s cadence regardless of signal lifecycle') + '">'
+    +   (__pinned ? '📌 Pinned' : '📌 Pin')
+    + '</button>'
+    + '</div>';
   var trackRow;
   if (showBoth) {
     trackRow = '<div class="pc-action-row' + rowCls + ' three-col">'
@@ -6605,7 +6649,185 @@ function buildTrackExecuteRows(s) {
       +   '<span class="ex-detail">Entry ' + sh.entry + ' · SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
       + '</a>';
   var execRow = '<div class="pc-action-row' + rowCls + '">' + execLongHtml + execShortHtml + '</div>';
-  return hint + trackRow + execRow;
+  /* L_PIN_BUTTON_V1 — pinRow rendered above Track row. */
+  return hint + pinRow + trackRow + execRow;
+}
+
+/* L_PINNED_PERSISTENCE_V1 — Upgrade 26.D Pin V1 (2026-05-28).
+   localStorage key: acress_pinned_symbols, JSON array of base symbols.
+   Defensive: parse failures or non-array values yield an empty list. */
+var PINNED_LS_KEY = 'acress_pinned_symbols';
+function getPinnedSymbols() {
+  try {
+    var raw = localStorage.getItem(PINNED_LS_KEY);
+    if (!raw) return [];
+    var arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.length; }) : [];
+  } catch (e) { return []; }
+}
+function savePinnedSymbols(arr) {
+  try {
+    var clean = Array.isArray(arr) ? arr.filter(function(x){ return typeof x === 'string' && x.length; }) : [];
+    localStorage.setItem(PINNED_LS_KEY, JSON.stringify(clean));
+  } catch (e) {}
+}
+function isSymbolPinned(base) {
+  return getPinnedSymbols().indexOf(base) >= 0;
+}
+
+/* L_PIN_BUTTON_V1 — toggle handler. Local-first: localStorage mutation
+   is synchronous (no network call needed), so visual feedback is
+   instant. Triggers main re-render to repaint the button's pinned state
+   on the main-feed card AND triggers a pinned-section refresh to add
+   or remove the card from the pinned section immediately. */
+function togglePin(base) {
+  if (!base) return;
+  var list = getPinnedSymbols();
+  var idx = list.indexOf(base);
+  if (idx >= 0) {
+    list.splice(idx, 1);
+  } else {
+    list.push(base);
+  }
+  savePinnedSymbols(list);
+  /* Trigger main render so all .pc-pin-btn instances repaint with the
+     new pinned state (a symbol can appear on multiple cards — main feed
+     + pinned section — and both need to reflect the toggle). */
+  try { if (typeof renderResults === 'function') renderResults(); } catch (e) {}
+  /* Kick the pinned-section refresh immediately so the operator sees
+     the new card appear (or disappear) without waiting for the 30s
+     timer. When adding a pin, the refresh will fetch fresh data for
+     just-pinned symbols. When unpinning, refreshPinnedSection's render
+     path naturally drops the unpinned card. */
+  if (typeof refreshPinned === 'function') { try { refreshPinned(); } catch (e) {} }
+}
+
+/* L_PINNED_CADENCE_V1 — Upgrade 26.D Pin V1 (2026-05-28).
+   Independent setInterval polls pinned symbols at 30-second cadence,
+   separate from the 90-second main scan. Concurrency guard prevents a
+   second refresh from firing while the first is in flight (slow
+   network or many pinned symbols). When the pinned list is empty, the
+   refresh cycle exits early — no bandwidth wasted. */
+var PIN_REFRESH_MS = 30 * 1000;
+var pinnedSignals = {};       // base → most-recent analyzed signal (or null)
+var pinnedRefreshAt = {};     // base → timestamp of last successful refresh
+var pinnedRefreshInflight = false;
+async function refreshPinned() {
+  if (pinnedRefreshInflight) return;
+  var bases = getPinnedSymbols();
+  if (!bases.length) {
+    /* No pinned symbols — clear any residual state and re-render so the
+       pinned section disappears cleanly when the operator unpins all. */
+    pinnedSignals = {};
+    pinnedRefreshAt = {};
+    if (typeof renderPinnedSection === 'function') renderPinnedSection();
+    return;
+  }
+  pinnedRefreshInflight = true;
+  try {
+    /* fetchWatchlistCoins() resolves base symbols to Binance ticker
+       objects {symbol, lastPrice, priceChangePercent, quoteVolume}.
+       Pin refresh reuses this rather than reading from window.signals
+       because signals expire from window.signals at TTL (~30min) while
+       pinned cards must persist beyond the signal lifecycle. */
+    var pool;
+    try { pool = await fetchWatchlistCoins(bases); } catch (e) { pool = []; }
+    var poolByBase = {};
+    pool.forEach(function(t){ poolByBase[t.symbol.replace(/USDT$/, '')] = t; });
+    /* Analyze each pinned base sequentially. Parallel via Promise.all
+       would be faster but pin refresh is small-N (operator typically
+       pins <10 symbols) and sequential keeps memory pressure even. */
+    var nextSignals = {};
+    var nextRefreshAt = {};
+    var diag = { oiPass:0, takerPass:0, mtfPass:0, cvdPass:0, sweepPass:0, aggregatedOI:0 };
+    for (var i = 0; i < bases.length; i++) {
+      var base = bases[i];
+      var ticker = poolByBase[base];
+      if (!ticker) {
+        /* Symbol not found on Binance Futures — record null so the card
+           renders the "no active signal" placeholder. */
+        nextSignals[base] = null;
+        nextRefreshAt[base] = Date.now();
+        continue;
+      }
+      try {
+        var sig = await analyzeCoinDiag(ticker, diag);
+        nextSignals[base] = sig;
+        nextRefreshAt[base] = Date.now();
+      } catch (e) {
+        nextSignals[base] = null;
+        nextRefreshAt[base] = Date.now();
+      }
+    }
+    pinnedSignals = nextSignals;
+    pinnedRefreshAt = nextRefreshAt;
+    if (typeof renderPinnedSection === 'function') renderPinnedSection();
+  } finally {
+    pinnedRefreshInflight = false;
+  }
+}
+
+/* L_PINNED_SECTION_V1 — Upgrade 26.D Pin V1 (2026-05-28).
+   Renders the "📌 Pinned" section in the #pinned-section host element
+   (inserted at the top of the results column above Shadow Active /
+   Shadow Neutral sections). Reads from pinnedSignals + pinnedRefreshAt
+   maps; falls back to a "no active signal" placeholder when a pinned
+   symbol returns no data this refresh. Cards reuse the prose-style
+   layout via renderSortedColumn so the format is identical to the main
+   feed; the .pcard-pinned class adds the gold left-border accent +
+   the 📌 emoji prefix in the header (via CSS). */
+function renderPinnedSection() {
+  var host = document.getElementById('pinned-section');
+  if (!host) return;
+  var bases = getPinnedSymbols().slice().sort();   // alphabetical
+  if (!bases.length) {
+    host.innerHTML = '';
+    host.style.display = 'none';
+    return;
+  }
+  host.style.display = '';
+  /* Two card groups: those with live signal data, and those without
+     (placeholder for "no active signal"). */
+  var activeCards = [];
+  var placeholders = [];
+  bases.forEach(function(base){
+    var sig = pinnedSignals[base];
+    var refreshTs = pinnedRefreshAt[base];
+    if (sig) {
+      /* Tag the signal so the card render path can apply the pinned
+         visual treatment. Non-destructive — refresh re-emits a fresh
+         signal next cycle. */
+      sig._pinned = true;
+      sig._pinnedRefreshAt = refreshTs;
+      activeCards.push(sig);
+    } else {
+      placeholders.push({ base: base, refreshTs: refreshTs });
+    }
+  });
+  var hdr = '<div class="shadow-section-hdr pinned">'
+    + '<span class="rule-line"></span>'
+    + '<span>📌 Pinned</span>'
+    + '<span class="count">' + bases.length + ' symbol' + (bases.length !== 1 ? 's' : '') + '</span>'
+    + '<span class="rule-line"></span>'
+    + '</div>';
+  var activeHtml = activeCards.length
+    ? '<div class="col-grid col-grid-merged"><div class="col"><div class="col-cards">' + renderSortedColumn(activeCards) + '</div></div></div>'
+    : '';
+  var placeholderHtml = placeholders.map(function(p){
+    var agoSec = p.refreshTs ? Math.round((Date.now() - p.refreshTs) / 1000) : null;
+    var agoTxt = agoSec == null ? 'never' : (agoSec < 60 ? agoSec + 's ago' : Math.round(agoSec/60) + 'm ago');
+    return '<div class="pc-pin-placeholder">'
+      +    '<span class="pc-pin-placeholder-sym">📌 ' + p.base + '</span>'
+      +    '<span class="pc-pin-placeholder-msg">no active signal · last refresh ' + agoTxt + '</span>'
+      +    '<button class="pc-pin-placeholder-unpin" onclick="togglePin(\'' + p.base + '\')" title="Unpin">✕</button>'
+      +  '</div>';
+  }).join('');
+  host.innerHTML = '<div class="shadow-section pinned-section">'
+    + hdr
+    + activeHtml
+    + (placeholderHtml ? '<div class="pc-pin-placeholders">' + placeholderHtml + '</div>' : '')
+    + '</div>';
+  if (typeof startCardTimers === 'function') startCardTimers();
 }
 
 /* L_OPERATOR_DIRECTION_VISUAL_FEEDBACK_V1 — Persistent click-outcome map.
@@ -11785,6 +12007,16 @@ try{
 }catch(e){console.warn('[Acress] init: pulse refresh',e.message);}
 try{renderLivenessIndicator();setInterval(renderLivenessIndicator,500);}catch(e){console.warn('[Acress] init: liveness',e.message);}
 try{renderDailyPnlWidget();setInterval(renderDailyPnlWidget,1000);}catch(e){console.warn('[Acress] init: daily pnl',e.message);}
+/* L_PINNED_CADENCE_V1 — Upgrade 26.D Pin V1 (2026-05-28). Independent
+   30s timer polls pinned symbols. First refresh fires immediately so
+   pinned cards appear on page reload without a 30s wait. Empty-list
+   case short-circuits inside refreshPinned (no bandwidth). */
+try {
+  if (typeof refreshPinned === 'function') {
+    refreshPinned();   // fire immediately so pinned cards appear on reload
+    setInterval(function(){ try { refreshPinned(); } catch (e) {} }, PIN_REFRESH_MS);
+  }
+} catch (e) { console.warn('[Acress] init: pin refresh', e.message); }
 try{migrateTrackerForMode();renderModeBadge();setInterval(function(){renderModeBadge();tagUntaggedEntries();},1000);}catch(e){console.warn('[Acress] init: paper mode',e.message);}
 try{renderRiskSettingsWidget();}catch(e){console.warn('[Acress] init: risk settings',e.message);}
 try{renderPulseFiltersWidget();setupPulseRenderHooks();setInterval(function(){applyPulseSorting();applyPulseFilters();},2000);}catch(e){console.warn('[Acress] init: pulse filters',e.message);}
