@@ -212,16 +212,20 @@ input{font-family:var(--font-ui);}
 /* L_SHADOW_VISIBILITY_CARD_V1 — Upgrade 26.0 Part 3.5 — side-by-side display of
    legacy vs shadow direction. Slot sits between pc-head and pc-discipline.
    Vestigial display; planned removal in Upgrade 26.2 post-cutover. */
-.pc-shadow-cmp{padding:5px 11px;font-family:var(--font-mono);font-size:10px;line-height:1.4;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+/* L_SHADOW_BADGE_COMPACT_V1 — Card UI Restructure Pass 5 (2026-05-28).
+   Compact arrow-pair format. Legacy direction on the left, shadow on
+   the right. Color follows the agreement state (green/amber/gray). */
+.pc-shadow-cmp{padding:4px 11px;font-family:var(--font-mono);font-size:10px;line-height:1.3;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
 .pc-shadow-cmp .lbl{color:var(--muted);font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;}
-.pc-shadow-cmp .chip{padding:1.5px 7px;border-radius:8px;font-weight:700;letter-spacing:.3px;border:1px solid;font-size:9.5px;}
-.pc-shadow-cmp.agree .chip{background:rgba(46,232,160,.10);color:var(--green);border-color:rgba(46,232,160,.35);}
-.pc-shadow-cmp.disagree .chip{background:rgba(240,179,65,.13);color:#f0b341;border-color:rgba(240,179,65,.45);}
-.pc-shadow-cmp.neutral .chip{background:rgba(140,150,170,.10);color:var(--muted);border-color:rgba(140,150,170,.30);}
+.pc-shadow-cmp .arrows{display:inline-flex;gap:2px;font-size:13px;line-height:1;letter-spacing:0;font-weight:700;}
+.pc-shadow-cmp .arrows .legacy,.pc-shadow-cmp .arrows .shadow{display:inline-block;}
+.pc-shadow-cmp.agree .arrows{color:var(--green);}
+.pc-shadow-cmp.disagree .arrows{color:#f0b341;}
+.pc-shadow-cmp.disagree .arrows .shadow{color:#f0b341;}
+.pc-shadow-cmp.neutral .arrows{color:var(--muted);}
+.pc-shadow-cmp .arrows .shadow.neutral{color:rgba(140,150,170,.55);}
+.pc-shadow-cmp .hint{color:var(--muted);font-size:9.5px;letter-spacing:.3px;}
 .pc-shadow-cmp.unavail{opacity:.55;}
-.pc-shadow-cmp.unavail .chip{background:transparent;color:var(--muted);border-color:rgba(140,150,170,.25);}
-.pc-shadow-cmp .arrow{color:var(--muted);font-size:10px;}
-.pc-shadow-cmp .tail{color:var(--muted);font-size:9.5px;}
 /* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
    Replaces L_FITNESS_MINICARDS_V1 / L_UNIFIED_MINICARDS_V1 /
    L_MINICARDS_ORIGIN_ACCENT_V1 / L_STRUCTURE_MINICARDS_COLLAPSE_V1.
@@ -265,11 +269,14 @@ input{font-family:var(--font-ui);}
 /* L_PIN_BUTTON_V1 — Upgrade 26.D Pin V1 (2026-05-28). Pin row sits above
    the Track row, single full-width button. Unpinned: neutral border.
    Pinned: gold/amber border + background tint for unmistakable state. */
-.pc-pin-row{grid-template-columns:1fr;}
-.pc-pin-btn{font-family:var(--font-mono);font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:6px 10px;border-radius:5px;border:1px solid var(--border2);background:var(--s2);color:var(--muted);cursor:pointer;transition:all .15s;text-align:center;}
-.pc-pin-btn:hover{color:var(--hi);border-color:rgba(240,200,80,.45);background:rgba(240,200,80,.06);}
-.pc-pin-btn.pinned{color:#f0c850;border-color:rgba(240,200,80,.60);background:rgba(240,200,80,.10);}
-.pc-pin-btn.pinned:hover{color:#f0c850;border-color:rgba(240,200,80,.85);background:rgba(240,200,80,.16);}
+/* L_PIN_HEADER_RELOCATE_V1 — Card UI Restructure Pass 5 (2026-05-28).
+   Old .pc-pin-row / .pc-pin-btn (full-width row above Track) replaced
+   by .pc-pin-emoji rendered inline in pc-score-wrap. Emoji-sized hit
+   target; gold tint when pinned. */
+.pc-pin-emoji{cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;border-radius:4px;opacity:.45;transition:all .15s;user-select:none;}
+.pc-pin-emoji:hover{opacity:1;background:rgba(240,200,80,.10);}
+.pc-pin-emoji.pinned{opacity:1;filter:drop-shadow(0 0 4px rgba(240,200,80,.6));background:rgba(240,200,80,.14);}
+.pc-pin-emoji.pinned:hover{background:rgba(240,200,80,.22);}
 /* L_PINNED_SECTION_V1 — gold/amber left-border accent on pinned cards
    so they are visually distinct from main-feed cards. Specificity
    needs the `body` prefix to beat the later-injected
@@ -391,7 +398,11 @@ body.acress-budget-footer-on{padding-bottom:42px;}
 .pc-disc-fit-green {color:#34d690;}
 .pc-disc-fit-yellow{color:#f0b441;}
 .pc-disc-fit-red   {color:#ff6b78;}
-.pc-score-wrap{display:flex;align-items:baseline;gap:5px;flex-shrink:0;}
+/* L_PIN_HEADER_RELOCATE_V1 + L_COUNTDOWN_HEADER_RELOCATE_V1 — Pass 5:
+   pc-score-wrap now holds Pin emoji + countdown + score + tier label,
+   so the layout shifts from baseline-align to center-align (Pin emoji
+   doesn't share a baseline with the score's larger font). */
+.pc-score-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;}
 .pc-score{font-family:var(--font-mono);font-size:16px;font-weight:900;line-height:1;letter-spacing:-.5px;}
 .pc-score.surgical{color:var(--cyan);}
 .pc-score.high{color:var(--green);}
@@ -3288,8 +3299,26 @@ function gradeExecution(signal, sizing, direction){
   return { grade: grade, detail: detail };
 }
 
+/* L_SMART_MONEY_COMPOSITE_V1 + L_CARD_CASE_AUDIT_V1 — Card UI Restructure
+   Pass 5 (2026-05-28). Smart money now surfaces the retail-divergence
+   context that was previously exclusive to the Top traders dimension
+   (✨ on DIVERGENT_RETAIL — smart money diverges from retail in your
+   favor; ⚠️ on DIVERGENT_RISK — retail crowded into your side, smart
+   money against you). Detail strings also normalized to lowercase
+   ("aligned with tops" / "against tops" / "balanced" / etc) so the
+   prose reads naturally instead of as SCREAMING_SNAKE tokens. */
+function _posStateLabel(state){
+  switch (state) {
+    case 'ALIGNED_WITH_TOPS': return 'aligned with tops';
+    case 'DIVERGENT_RETAIL':  return 'divergent retail';
+    case 'AGAINST_TOPS':      return 'against tops';
+    case 'DIVERGENT_RISK':    return 'divergent risk';
+    case 'BALANCED':          return 'balanced';
+    default:                  return state ? String(state).toLowerCase() : 'unknown';
+  }
+}
 function gradeSophisticatedFlow(signal, direction){
-  // Dimension 2 — top-trader alignment + taker flow direction
+  // Dimension 2 — top-trader alignment + taker flow direction + retail divergence
   if (!signal) return { grade: 'YELLOW', detail: 'incomplete data' };
   var pos = signal.positioning;
   var dir = direction || signal.dir;
@@ -3311,13 +3340,18 @@ function gradeSophisticatedFlow(signal, direction){
   }
   var greenPos = (posState === 'ALIGNED_WITH_TOPS' || posState === 'DIVERGENT_RETAIL');
   var redPos   = (posState === 'AGAINST_TOPS' || posState === 'DIVERGENT_RISK');
+  /* L_SMART_MONEY_COMPOSITE_V1 — retail-divergence emoji tail. */
+  var divTail = '';
+  if (posState === 'DIVERGENT_RETAIL') divTail = ' ✨';
+  else if (posState === 'DIVERGENT_RISK') divTail = ' ⚠️';
+  var topsTxt = (topMaxPct != null) ? Math.round(topMaxPct) + '% ' + (topLong > topShort ? 'long' : 'short') : '';
   if (redPos || takerAligned === false) {
-    return { grade: 'RED', detail: 'tops ' + (topMaxPct != null ? Math.round(topMaxPct) + '% ' + (topLong > topShort ? 'long' : 'short') + ' · ' : '') + 'positioning AGAINST your direction' };
+    return { grade: 'RED', detail: (topsTxt ? 'tops ' + topsTxt + ' · ' : '') + _posStateLabel(posState) + divTail };
   }
   if (greenPos && takerAligned !== false) {
-    return { grade: 'GREEN', detail: 'tops ' + (topMaxPct != null ? Math.round(topMaxPct) + '% ' + (topLong > topShort ? 'long' : 'short') + ' · ' : '') + posState };
+    return { grade: 'GREEN', detail: (topsTxt ? 'tops ' + topsTxt + ' · ' : '') + _posStateLabel(posState) + divTail };
   }
-  return { grade: 'YELLOW', detail: 'positioning ' + (posState || 'unknown') + ' · taker ' + (takerAligned == null ? 'mixed' : (takerAligned ? 'aligned' : 'opposed')) };
+  return { grade: 'YELLOW', detail: 'positioning ' + _posStateLabel(posState) + ' · taker ' + (takerAligned == null ? 'mixed' : (takerAligned ? 'aligned' : 'opposed')) + divTail };
 }
 
 function gradeBoundary(signal, sizing, direction){
@@ -6337,21 +6371,24 @@ function classifySpotPerpDrive(perpK5, spotK5){
            spot_change_15m: spotChg, perp_change_15m: perpChg, m3: 0 };
 }
 
-/* L_SPOT_PERP_DRIVE_CARD_V1 — card render line between Positioning and ForcedFlow. */
+/* L_SPOT_PERP_DRIVE_CARD_V1 — card render line between Positioning and ForcedFlow.
+   L_CARD_CASE_AUDIT_V1 — Pass 5: drive state labels normalized to
+   lowercase ("spot-led" / "perp-led" / "balanced") so prose reads
+   naturally instead of as SCREAMING_SNAKE tokens. */
 function buildSpotPerpDriveHtml(drive, opts){
   opts = opts || {};
   var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
   if (!drive || drive.state === 'SPOT_UNAVAILABLE') {
-    return '<div class="vel-line vel-gray"' + style + '>Drive: spot unavailable (no Binance spot pair)</div>';
+    return '<div class="vel-line vel-gray"' + style + '>Drive: spot unavailable</div>';
   }
   if (drive.state === 'SPOT_LED') {
-    return '<div class="vel-line vel-green"' + style + '>🟢 Drive: <b>SPOT_LED</b> · real demand · sustainable</div>';
+    return '<div class="vel-line vel-green"' + style + '>🟢 Drive: <b>spot-led</b> · real demand · sustainable</div>';
   }
   if (drive.state === 'PERP_LED') {
-    return '<div class="vel-line vel-red"' + style + '>🔴 Drive: <b>PERP_LED</b> · leveraged · fragile ⚠️</div>';
+    return '<div class="vel-line vel-red"' + style + '>🔴 Drive: <b>perp-led</b> · leveraged · fragile ⚠️</div>';
   }
   // BALANCED
-  return '<div class="vel-line vel-amber"' + style + '>🟡 Drive: <b>BALANCED</b> · no clear lead</div>';
+  return '<div class="vel-line vel-amber"' + style + '>🟡 Drive: <b>balanced</b> · no clear lead</div>';
 }
 
 /* L_DISCIPLINE_CARD_V1 — Upgrade 19.0a Position-Level Discipline Surface V1.
@@ -6380,31 +6417,42 @@ function shadowComparisonEnabled() {
     return v === null ? true : v === '1';   // default ON
   } catch (e) { return true; }
 }
+/* L_SHADOW_BADGE_COMPACT_V1 — Card UI Restructure Pass 5 (2026-05-28).
+   Replaces verbose "legacy LONG ↔ shadow LONG · HIGH · EXHAUSTION_FADE ✓"
+   with compact "↗↗" / "↗↘" / "↗⋯" two-arrow glyph format. Full detail
+   moves to the title attribute (hover) so the operator can drill into
+   conviction + state class when needed without consuming a full line. */
+function _shadowArrow(dir){
+  if (dir === 'LONG')  return '↗';
+  if (dir === 'SHORT') return '↘';
+  return '⋯';   // NEUTRAL / unknown
+}
 function buildShadowComparisonHtml(s) {
   if (!shadowComparisonEnabled()) return '';
   var sh = s && s.shadow;
   if (!sh) {
-    return '<div class="pc-shadow-cmp unavail">'
+    var dArr = _shadowArrow(s && s.dir);
+    return '<div class="pc-shadow-cmp unavail" title="Shadow engine unavailable for this signal">'
          +   '<span class="lbl">Shadow</span>'
-         +   '<span class="chip">legacy ' + (s && s.dir ? s.dir : '?') + '</span>'
-         +   '<span class="arrow">↔</span>'
-         +   '<span class="chip">unavailable</span>'
+         +   '<span class="arrows"><span class="legacy">' + dArr + '</span><span class="shadow neutral">⋯</span></span>'
+         +   '<span class="hint">unavail</span>'
          + '</div>';
   }
-  var legacyDir = sh.legacy_direction || (s && s.dir) || '?';
+  var legacyDir = sh.legacy_direction || (s && s.dir) || null;
   var emDir     = sh.emergent_direction || 'NEUTRAL';
   var conv      = sh.state_conviction   || 'ZERO';
   var cls       = sh.structural_state_class || '—';
   var rowClass  = 'agree';
-  var tail      = '✓';
-  if (emDir === 'NEUTRAL') { rowClass = 'neutral'; tail = ''; }
-  else if (sh.direction_disagreement) { rowClass = 'disagree'; tail = '⚠'; }
-  return '<div class="pc-shadow-cmp ' + rowClass + '">'
+  if (emDir === 'NEUTRAL') rowClass = 'neutral';
+  else if (sh.direction_disagreement) rowClass = 'disagree';
+  var legacyArr = _shadowArrow(legacyDir);
+  var shadowArr = _shadowArrow(emDir);
+  var shadowCls = (emDir === 'NEUTRAL') ? 'shadow neutral' : 'shadow';
+  var tip = 'legacy ' + (legacyDir || '?') + ' · shadow ' + emDir
+          + (emDir !== 'NEUTRAL' ? ' · ' + conv + ' · ' + cls : '');
+  return '<div class="pc-shadow-cmp ' + rowClass + '" title="' + tip + '">'
        +   '<span class="lbl">Shadow</span>'
-       +   '<span class="chip">legacy ' + legacyDir + '</span>'
-       +   '<span class="arrow">↔</span>'
-       +   '<span class="chip">shadow ' + emDir + ' · ' + conv + ' · ' + cls + '</span>'
-       +   (tail ? '<span class="tail">' + tail + '</span>' : '')
+       +   '<span class="arrows"><span class="legacy">' + legacyArr + '</span><span class="' + shadowCls + '">' + shadowArr + '</span></span>'
        + '</div>';
 }
 function toggleShadowComparisonSetting(checked) {
@@ -6743,18 +6791,10 @@ function buildTrackExecuteRows(s) {
   var fbB = getOperatorOutcomeClass(s.id, 'BOTH', 'track');
   var fbExL = getOperatorOutcomeClass(s.id, 'LONG', 'execute');
   var fbExS = getOperatorOutcomeClass(s.id, 'SHORT', 'execute');
-    /* L_PIN_BUTTON_V1 — Upgrade 26.D Pin V1 (2026-05-28). Standalone full-
-     width row above the Track row. Toggle button: "📌 Pin" when not in
-     pinned list, "📌 Pinned" when present. Click runs togglePin(base)
-     which mutates acress_pinned_symbols localStorage and triggers a
-     pinned-section re-render. Pin is conceptually distinct from
-     direction-specific Track/Execute actions, so it gets its own row. */
-  var __pinned = (typeof isSymbolPinned === 'function') && isSymbolPinned(s.base);
-  var pinRow = '<div class="pc-action-row pc-pin-row">'
-    + '<button class="pc-pin-btn' + (__pinned ? ' pinned' : '') + '" onclick="togglePin(\'' + s.base + '\')" title="' + (__pinned ? 'Unpin · stop live monitoring' : 'Pin · live-monitor at 30s cadence regardless of signal lifecycle') + '">'
-    +   (__pinned ? '📌 Pinned' : '📌 Pin')
-    + '</button>'
-    + '</div>';
+    /* L_PIN_HEADER_RELOCATE_V1 — Card UI Restructure Pass 5 (2026-05-28).
+     Pin button row REMOVED. Pin emoji now lives in pc-head's right zone
+     (see pc-score-wrap render below). Saves ~32-40px of vertical space
+     per card. togglePin(base) handler unchanged. */
   var trackRow;
   if (showBoth) {
     trackRow = '<div class="pc-action-row' + rowCls + ' three-col">'
@@ -6824,8 +6864,9 @@ function buildTrackExecuteRows(s) {
       +   '<span class="ex-detail">Entry ' + sh.entry + ' · SL ' + sh.sl + ' · TP ' + sh.tp + '</span>'
       + '</a>';
   var execRow = '<div class="pc-action-row' + rowCls + '">' + execLongHtml + execShortHtml + '</div>';
-  /* L_PIN_BUTTON_V1 — pinRow rendered above Track row. */
-  return hint + pinRow + trackRow + execRow;
+  /* L_PIN_HEADER_RELOCATE_V1 — Pass 5: pinRow removed; Pin emoji now
+     lives in pc-head. Action zone is just hint + trackRow + execRow. */
+  return hint + trackRow + execRow;
 }
 
 /* L_PINNED_PERSISTENCE_V1 — Upgrade 26.D Pin V1 (2026-05-28).
@@ -9894,11 +9935,12 @@ function entryZoneStatus(s){
 // ════════════════════════════════════════════════════════════════════
 function oiStageBadge(s){
   if(!s)return '';
+  /* L_CARD_CASE_AUDIT_V1 — Pass 5: early/late labels normalized to lowercase. */
   if(s.lateStageOI){
-    return '<span class="pc-oi-stage late" title="OI velocity is DECELERATING — this continuation is maturing. Peaks typically happen earlier (~18-20 min). Hold time auto-shortens to 20 min if you Log this signal.">⚠ LATE</span>';
+    return '<span class="pc-oi-stage late" title="OI velocity is decelerating — this continuation is maturing. Peaks typically happen earlier (~18-20 min). Hold time auto-shortens to 20 min if you Log this signal.">⚠ late</span>';
   }
   if(s.earlyStageOI){
-    return '<span class="pc-oi-stage early" title="OI velocity is ACCELERATING — this continuation has fuel left. Peaks typically happen later (~25 min). Use full hold time.">✓ EARLY</span>';
+    return '<span class="pc-oi-stage early" title="OI velocity is accelerating — this continuation has fuel left. Peaks typically happen later (~25 min). Use full hold time.">✓ early</span>';
   }
   return '';
 }
@@ -10028,22 +10070,25 @@ function computeMechanismStats(){
 }
 function mechStatsBadge(mechName){
   if(!mechName) return '';
+  /* L_CARD_CASE_AUDIT_V1 — Pass 5: category prefix normalized to
+     lowercase ("discovery" / "losing" / "winning" / "neutral") so the
+     badge reads as a status label, not a typographic shout. */
   var cfg = (typeof mechCfg!=='undefined' && mechCfg) ? mechCfg : {rollingDays:90,discoveryMinN:10};
   var st = getMechanismStats();
   var s = st[mechName];
   if(!s){
-    // Mechanism never seen before — true DISCOVERY
-    return '<span class="pc-mech-stats discovery" title="No historical trades on this mechanism within the last '+cfg.rollingDays+' days. Treat as an unsampled bet.">DISCOVERY · n=0</span>';
+    // Mechanism never seen before — true discovery
+    return '<span class="pc-mech-stats discovery" title="No historical trades on this mechanism within the last '+cfg.rollingDays+' days. Treat as an unsampled bet.">discovery · n=0</span>';
   }
   var pnlStr = (s.totalPnl>=0?'+$':'-$') + Math.abs(s.totalPnl).toFixed(0);
   var wrStr = (s.winRate*100).toFixed(0) + '%';
   var meanStr = (s.meanPnl>=0?'+$':'-$') + Math.abs(s.meanPnl).toFixed(2);
   var catCls = s.category.toLowerCase();
   var tip = 'Last '+cfg.rollingDays+'d · '+s.n+' trades · '+wrStr+' wins · '+pnlStr+' net · '+meanStr+'/trade';
-  if(s.category==='LOSING') tip += ' · BLOCKED from Log All Visible (manual log still works)';
+  if(s.category==='LOSING') tip += ' · blocked from Log All Visible (manual log still works)';
   if(s.category==='DISCOVERY') tip += ' · need '+(cfg.discoveryMinN-s.n)+' more trades to graduate';
   return '<span class="pc-mech-stats '+catCls+'" title="'+tip+'">'
-    + s.category + ' · n=' + s.n + ' · ' + wrStr + ' · ' + pnlStr
+    + catCls + ' · n=' + s.n + ' · ' + wrStr + ' · ' + pnlStr
     + '</span>';
 }
 function toggleExcludeLosing(){
@@ -10577,15 +10622,19 @@ function buildCard(s, moodKey){
     var bep = s.break_even_pct;
     var lines = [];
     if(bep == null){
-      lines.push('<div class="be-verdict be-warn">🟡 COST DATA MISSING — caution</div>');
+      /* L_CARD_CASE_AUDIT_V1 — Pass 5: BE verdict labels normalized to
+         sentence case. Tier identification is operator-canonical even
+         in lowercase; "Cheap entry" / "Ok entry" / "Expensive" read as
+         a natural prose label rather than a typographic shout. */
+      lines.push('<div class="be-verdict be-warn">🟡 Cost data missing — caution</div>');
     }else{
       var bepStr = bep.toFixed(2);
       if(bep < BE_THRESHOLD_CHEAP){
-        lines.push('<div class="be-verdict be-good">🟢 CHEAP ENTRY — needs only '+bepStr+'% to profit</div>');
+        lines.push('<div class="be-verdict be-good">🟢 Cheap entry — needs only '+bepStr+'% to profit</div>');
       }else if(bep <= BE_THRESHOLD_EXPENSIVE){
-        lines.push('<div class="be-verdict be-warn">🟡 OK ENTRY — needs '+bepStr+'% to profit</div>');
+        lines.push('<div class="be-verdict be-warn">🟡 Ok entry — needs '+bepStr+'% to profit</div>');
       }else{
-        lines.push('<div class="be-verdict be-bad">🔴 EXPENSIVE — needs '+bepStr+'% to profit, consider skipping</div>');
+        lines.push('<div class="be-verdict be-bad">🔴 Expensive — needs '+bepStr+'% to profit, consider skipping</div>');
       }
     }
     if(s.funding_applies === 1 && s.funding_cost_bps != null && s.minutes_to_funding != null){
@@ -10608,7 +10657,11 @@ function buildCard(s, moodKey){
     var v = s.velocity;
     if(!v){ return; }
     if(v.insufficient){
-      velocityHtml = '<div class="vel-line vel-gray">⚪ Velocity — insufficient data (n_1m_klines='+v.n_1m_klines+', avg='+(v.avg_1m_bps!=null?v.avg_1m_bps.toFixed(1):'—')+'bps)</div>';
+      /* L_CARD_CASE_AUDIT_V1 — Pass 5: compact placeholder matching
+         the Top traders / Efficiency / Drive gathering pattern.
+         Verbose diagnostic moved to the title attribute (hover). */
+      var __velTip = 'n_1m_klines=' + v.n_1m_klines + ' · avg=' + (v.avg_1m_bps != null ? v.avg_1m_bps.toFixed(1) : '—') + 'bps';
+      velocityHtml = '<div class="vel-line vel-gray" title="' + __velTip + '">⚪ Velocity: gathering data</div>';
       return;
     }
     var emoji = velocityColorEmoji(v.decile);
@@ -10619,6 +10672,18 @@ function buildCard(s, moodKey){
     var spreadTxt = (v.spread_bps != null) ? (v.spread_bps.toFixed(1) + ' bps spread') : 'spread —';
     velocityHtml = '<div class="vel-line '+colorCls+'">'+emoji+' Velocity <b>'+scoreTxt+'</b> ('+decileTxt+') · '+mfeTxt+' · '+spreadTxt+'</div>';
   })();
+  /* L_PIN_HEADER_RELOCATE_V1 — Pass 5: Pin emoji rendered in pc-score-wrap. */
+  var __pinned = (typeof isSymbolPinned === 'function') && isSymbolPinned(s.base);
+  var pinEmojiHtml = '<span class="pc-pin-emoji' + (__pinned ? ' pinned' : '') + '" onclick="togglePin(\'' + s.base + '\')" role="button" tabindex="0" title="' + (__pinned ? 'Unpin — stop live monitoring' : 'Pin — live-monitor at 30s cadence') + '">📌</span>';
+  /* L_COUNTDOWN_HEADER_RELOCATE_V1 — Pass 5: countdown timer rendered
+     in pc-score-wrap. Keeps the .pc-timer class + data-expires attr so
+     startCardTimers() update loop continues unchanged. */
+  var __rem = s.validUntil - Date.now();
+  var __remTier = __rem < 300000 ? 'tm-exp' : (__rem < 600000 ? 'tm-warn' : 'tm-ok');
+  var __remTxt;
+  if (__rem <= 0) __remTxt = 'expired';
+  else { var __sec = Math.floor((__rem % 60000) / 1000), __m = Math.floor(__rem / 60000); __remTxt = (__m > 0 ? __m + 'm ' : '') + String(__sec).padStart(2,'0') + 's'; }
+  var countdownHtml = '<span class="pc-timer ' + __remTier + '" data-expires="' + s.validUntil + '">⏱ ' + __remTxt + '</span>';
   return '<div class="'+cardCls+'">'
     +'<div class="pc-head">'
       +'<div class="pc-sym-wrap">'
@@ -10629,6 +10694,8 @@ function buildCard(s, moodKey){
         +chipsHtml /* L_PRIME_CARD_TAG_V1 + L_HIGH_CONFIDENCE_CARD_CHIP_V1 */
       +'</div>'
       +'<div class="pc-score-wrap">'
+        +pinEmojiHtml /* L_PIN_HEADER_RELOCATE_V1 — Pass 5 */
+        +countdownHtml /* L_COUNTDOWN_HEADER_RELOCATE_V1 — Pass 5 */
         +'<span class="pc-score '+scoreCls+'">'+s.score+'</span>'
         +'<span class="pc-score-lbl">'+tierLbl+'</span>'
       +'</div>'
@@ -10643,10 +10710,16 @@ function buildCard(s, moodKey){
        sorted by contribution to suggested_direction) → shadow comparison →
        Track row → Execute row → expandable details (full drill-down still
        available) → countdown. */
+    /* L_DISCOVERY_RELOCATE_V1 — Card UI Restructure Pass 5 (2026-05-28).
+       mechStatsBadge (discovery / losing / winning / neutral) moved from
+       its own pc-mech-stats-row to live INLINE with the early/late
+       oiStageBadge on the mech-type row. Operationally they pair:
+       early/late indicates timing; discovery/losing/etc indicates
+       historical profitability. Together they tell the operator
+       whether the signal is worth acting on now. Saves one row. */
     +'<div class="pc-mech">'
-      +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+oiStageBadge(s)+'</div>'
-      +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+'</div>'
-      +'<div class="pc-mech-stats-row">'+mechStatsBadge(s.mechanism.name)+'</div>'
+      +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+'</div>'
+      +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+oiStageBadge(s)+mechStatsBadge(s.mechanism.name)+'</div>'
     +'</div>'
     /* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
        Canonical fixed ordering applied to every card. 12 dimensions plus
@@ -10665,12 +10738,25 @@ function buildCard(s, moodKey){
        Pinned cards override the collapse via CSS so they always show
        full detail (L_PINNED_ALWAYS_EXPANDED_V1). */
     +'<div class="pc-prose-body' + ((typeof isSymbolExpanded === 'function' && isSymbolExpanded(s.base)) ? ' card-expanded' : '') + '">'
-      /* === Always-visible cluster: fitness verdicts + Top traders + Drive === */
+      /* L_CANONICAL_REORDER_V3 + L_SMART_MONEY_COMPOSITE_V1 + L_EFFICIENCY_PROMOTE_V1
+         — Card UI Restructure Pass 5 (2026-05-28). Above-demarcation
+         cluster now reads:
+           Smart money → Structural pull → Forced exit → Trap risk →
+           Efficiency → Velocity → Drive
+         Velocity + Efficiency promoted from collapsed cluster to
+         always-visible (Velocity is decision-driving; Efficiency reads
+         at fitness-tier alongside Smart money / Structural pull).
+         Top traders REMOVED — its data was redundant with Smart money
+         (same source field, same classifier); the retail-divergence
+         signal it carried is now absorbed into Smart money's detail
+         string (✨ / ⚠️ tail). buildPositioningHtml stays callable but
+         no longer invoked from the main render. */
       +renderFitnessProse(s, 'sophisticated_flow', 'Smart money')
       +renderFitnessProse(s, 'structural_pull',   'Structural pull')
       +(typeof buildForcedFlowHtml === 'function' ? buildForcedFlowHtml(s.forcedFlow) : '')
       +renderFitnessProse(s, 'trap_risk',         'Trap risk')
-      +(typeof buildPositioningHtml === 'function' ? buildPositioningHtml(s.positioning, s.dir) : '')
+      +(typeof buildEfficiencyHtml === 'function' ? buildEfficiencyHtml(s.efficiency) : '')
+      +velocityHtml /* L_CANONICAL_REORDER_V3 — Velocity promoted to always-visible */
       +(typeof buildSpotPerpDriveHtml === 'function' ? buildSpotPerpDriveHtml(s.spotDrive) : '')
       /* L_DEMARCATION_BREAK_V1 + L_CARD_COLLAPSE_PER_SYMBOL_V1 — the
          demarcation now doubles as the collapse-toggle control. The
@@ -10684,26 +10770,24 @@ function buildCard(s, moodKey){
           +   '<span class="pc-prose-demarc-chev">' + (__exp ? '▴ Hide details' : '▾ Show details') + '</span>'
           +   '</div>';
       })(s.base)
-      /* === Collapsible cluster: entry detail + remaining structural === */
+      /* === Collapsible cluster: entry detail + remaining items ===
+         L_CANONICAL_REORDER_V3 — Pass 5: Velocity + Efficiency removed
+         from this cluster (promoted to always-visible above). Remaining
+         5 items: entry zone, BE verdict, Boundary, Execution, Spread. */
       +'<div class="pc-prose-collapse">'
       +ezHtml /* L_PROSE_LAYOUT_RESTORE_V1 — entry zone inlined */
       +verdictHtml /* L_PROSE_LAYOUT_RESTORE_V1 — BE verdict inlined */
       +renderFitnessProse(s, 'boundary',          'Boundary')
-      +(typeof buildEfficiencyHtml === 'function' ? buildEfficiencyHtml(s.efficiency) : '')
-      +velocityHtml /* L_PROSE_LAYOUT_RESTORE_V1 — Velocity inlined */
       +renderFitnessProse(s, 'execution',         'Execution')
       +buildSpreadProseLine(s) /* L_SPREAD_DIMENSION_V1 */
       +'</div>'
     +'</div>'
     +buildShadowComparisonHtml(s) /* L_SHADOW_LINE_REPOSITION_V1 — just-before-buttons */
     +buildTrackExecuteRows(s) /* L_BUTTON_CONSENSUS_EMPHASIS_V1 */
-    +'<div class="pc-foot">'
-      /* L_COUNTDOWN_FLICKER_FIX_V1 — compute the real m:ss text inline from
-         validUntil at render time instead of hard-coding "⏱ 30m" placeholder.
-         setInterval at startCardTimers() still updates every 1s, but the
-         initial render now matches the real value exactly — no 30 flash. */
-      +'<div class="pc-foot-row"><span class="pc-timer '+(function(){var rem=s.validUntil-Date.now();return rem<300000?'tm-exp':rem<600000?'tm-warn':'tm-ok';})()+'" data-expires="'+s.validUntil+'">'+(function(){var rem=s.validUntil-Date.now();if(rem<=0)return 'Window Closed';var sec=Math.floor((rem%60000)/1000),m=Math.floor(rem/60000);return '⏱ '+(m>0?m+'m ':'')+String(sec).padStart(2,'0')+'s';})()+'</span></div>'
-    +'</div>'
+    /* L_COUNTDOWN_HEADER_RELOCATE_V1 — Pass 5: pc-foot removed; countdown
+       relocated into pc-head's pc-score-wrap above. The startCardTimers()
+       update loop continues unchanged because the .pc-timer + data-expires
+       contract is preserved on the relocated element. */
   +'</div>';
 }
 
