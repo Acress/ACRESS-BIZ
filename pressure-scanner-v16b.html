@@ -261,6 +261,12 @@ input{font-family:var(--font-ui);}
    become read-only stats (no cursor pointer, no hover effect). */
 .cross-summary .seg.seg-static{cursor:default;}
 .cross-summary .seg.seg-static:hover{background:transparent;}
+/* L_MOOD_BANNER_PERSISTENT_V1 — chevron indicator for inline-collapse pattern.
+   Sits at the right side of the persistent header (margin-left:auto on flex
+   parents pushes it to the end). Replaces the now-unused wrap-everything
+   pattern for mood banner / top movers / risk / pulse filters. */
+.acress-inline-chevron{margin-left:auto;font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);padding:0 4px;transition:transform .15s,color .15s;flex-shrink:0;user-select:none;}
+[data-acress-expanded="1"] .acress-inline-chevron{color:rgba(255,255,255,0.85);}
 /* L_CARD_EXPANDED_DETAILS_V2 — collapsed-by-default details section housing
    the original entry zone, BE verdict, velocity, efficiency, positioning,
    drive, FFC, level proximity, and pulse widget. Toggle affects all cards
@@ -6194,73 +6200,104 @@ function buildExpandableDetails(s, ezHtml, verdictHtml, velocityHtml) {
   return '<div class="' + sectClass + '">' + head + body + '</div>';
 }
 
-/* L_HEADER_COLLAPSIBLE_V1 — Upgrade 26.B Fix Pass 1.7 UI Restructure.
-   Collapsible scaffolding for the scanner header widgets (mood, top movers,
-   risk, pulse filters) and for tracker/analysis summary blocks. Each
-   collapsible has its own localStorage key for state persistence. The wrap
-   function is idempotent — safe to call repeatedly (after each scan, after
-   each widget injection, etc.). */
-function wrapInCollapsible(elementId, lsKey, label) {
+/* L_MOOD_BANNER_PERSISTENT_V1 — Upgrade 26.B Fix Pass 1.7 UI Restructure
+   (corrected). Operator confirmed the previous "wrap whole widget" pattern
+   collapsed too aggressively — the mood banner / top-movers bar / risk
+   label / pulse-filters label need to STAY VISIBLE as the persistent click
+   target. Only the DETAIL content collapses behind a click.
+
+   Two patterns:
+   - External collapse: trigger and detail are separate elements (mood banner
+     is the trigger; top-combos-widget is the separate detail element)
+   - Internal collapse: header child stays visible inside its parent widget;
+     all sibling children get display:none when collapsed (top-movers .tm-label
+     stays, .tm-pill+.tm-asof collapse). */
+function unwrapCollapsible(elementId) {
   var el = document.getElementById(elementId);
-  if (!el) return false;
-  // Idempotent: if already wrapped, no-op.
-  if (el.parentElement && el.parentElement.classList && el.parentElement.classList.contains('acress-collapsible-body')) return true;
-  var expanded = false;
-  try { expanded = localStorage.getItem(lsKey) === '1'; } catch (_) {}
-  // Build wrapper
-  var wrap = document.createElement('div');
-  wrap.className = 'acress-collapsible' + (expanded ? ' expanded' : '');
-  wrap.setAttribute('data-ls-key', lsKey);
-  var head = document.createElement('div');
-  head.className = 'acress-collapsible-head';
-  head.setAttribute('onclick', "toggleHeaderCollapsible(this)");
-  head.innerHTML = '<span class="acress-collapsible-toggle">' + (expanded ? '▾' : '▸') + '</span>'
-                 + '<span class="acress-collapsible-label">' + label + '</span>'
-                 + '<span class="acress-collapsible-summary" data-summary-for="' + elementId + '"></span>';
-  var body = document.createElement('div');
-  body.className = 'acress-collapsible-body';
-  // Move the element into the body, preserving its position in the DOM
-  var parent = el.parentNode;
-  var nextSibling = el.nextSibling;
-  wrap.appendChild(head);
-  wrap.appendChild(body);
-  body.appendChild(el);
-  if (nextSibling) parent.insertBefore(wrap, nextSibling);
-  else parent.appendChild(wrap);
+  if (!el) return;
+  var parent = el.parentElement;
+  if (!parent || !parent.classList || !parent.classList.contains('acress-collapsible-body')) return;
+  var wrap = parent.parentElement;
+  if (!wrap || !wrap.classList || !wrap.classList.contains('acress-collapsible')) return;
+  var hostParent = wrap.parentNode;
+  if (hostParent) {
+    hostParent.insertBefore(el, wrap);
+    hostParent.removeChild(wrap);
+  }
+}
+function attachExternalCollapse(triggerEl, detailSel, lsKey, chevronTarget) {
+  if (!triggerEl) return false;
+  if (triggerEl.dataset.acressExtAttached === '1') return true;
+  triggerEl.dataset.acressExtAttached = '1';
+  // Add chevron indicator
+  var chevHost = chevronTarget || triggerEl;
+  if (!chevHost.querySelector('.acress-inline-chevron')) {
+    var chev = document.createElement('span');
+    chev.className = 'acress-inline-chevron';
+    chev.textContent = '▶';
+    chevHost.appendChild(chev);
+  }
+  triggerEl.style.cursor = 'pointer';
+  function applyState(expanded) {
+    var detailEls = document.querySelectorAll(detailSel);
+    for (var i = 0; i < detailEls.length; i++) {
+      detailEls[i].style.display = expanded ? '' : 'none';
+    }
+    var chevEl = chevHost.querySelector('.acress-inline-chevron');
+    if (chevEl) chevEl.textContent = expanded ? '▼' : '▶';
+    triggerEl.dataset.acressExpanded = expanded ? '1' : '0';
+  }
+  var initExpanded = false;
+  try { initExpanded = localStorage.getItem(lsKey) === '1'; } catch (_) {}
+  applyState(initExpanded);
+  triggerEl.addEventListener('click', function(e) {
+    // Don't toggle when the click is on something interactive inside the
+    // trigger (e.g. the rs-val edit spans, which have their own click handlers).
+    if (e.target && e.target.classList && (e.target.classList.contains('rs-val') || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+    var expanded = triggerEl.dataset.acressExpanded === '1';
+    var nowExpanded = !expanded;
+    applyState(nowExpanded);
+    try { localStorage.setItem(lsKey, nowExpanded ? '1' : '0'); } catch (_) {}
+  });
   return true;
 }
-function toggleHeaderCollapsible(headEl) {
-  var sect = headEl.closest('.acress-collapsible');
-  if (!sect) return;
-  var nowExpanded = !sect.classList.contains('expanded');
-  sect.classList.toggle('expanded', nowExpanded);
-  var tog = sect.querySelector('.acress-collapsible-toggle');
-  if (tog) tog.textContent = nowExpanded ? '▾' : '▸';
-  var lsKey = sect.getAttribute('data-ls-key');
-  if (lsKey) {
-    try { localStorage.setItem(lsKey, nowExpanded ? '1' : '0'); } catch (_) {}
-  }
+function attachInternalCollapse(widgetSel, headerSel, detailSels, lsKey) {
+  var widget = document.querySelector(widgetSel);
+  if (!widget) return false;
+  var header = widget.querySelector(headerSel);
+  if (!header) return false;
+  return attachExternalCollapse(widget, detailSels.join(','), lsKey, header);
 }
-/* L_HEADER_COLLAPSIBLE_V1 — registry of widgets to wrap. Each entry is
-   [elementId, localStorage key, collapsed-label]. Idempotent init runs at
-   page load + after every renderResults / scan complete (since widgets are
-   dynamically injected, they may not exist at first init). */
-var ACRESS_COLLAPSIBLE_REGISTRY = [
-  // Scanner-tab widgets
-  ['market-mood-banner', 'acress_mood_gauge_expanded',    'Market mood'],
-  ['top-movers-widget',  'acress_top_movers_expanded',     'Top movers'],
-  ['risk-settings-widget','acress_risk_block_expanded',    'Risk settings'],
-  ['pulse-filters',      'acress_pulse_filters_expanded',  'Pulse filters'],
-  // Tracker-tab widgets
-  ['tk-summary',         'acress_tracker_summary_expanded', 'Performance summary'],
-  // Analysis-tab widgets
-  ['analysis-summary',   'acress_analysis_summary_expanded','Analysis summary'],
-];
 function initHeaderCollapsibles() {
-  for (var i = 0; i < ACRESS_COLLAPSIBLE_REGISTRY.length; i++) {
-    var t = ACRESS_COLLAPSIBLE_REGISTRY[i];
-    try { wrapInCollapsible(t[0], t[1], t[2]); } catch (e) {}
-  }
+  /* L_MOOD_BANNER_PERSISTENT_V1 — first unwrap any leftover .acress-collapsible
+     containers from the previous (overly-aggressive) wrap pattern. Idempotent. */
+  ['market-mood-banner','top-movers-widget','risk-settings-widget','pulse-filters',
+   'tk-summary','analysis-summary'].forEach(unwrapCollapsible);
+  /* Apply per-widget collapse:
+     - mood-banner: trigger (the banner itself) toggles the SEPARATE top-combos-widget
+     - top-movers-widget: .tm-label is the persistent header; .tm-pill + .tm-asof collapse
+     - risk-settings-widget: .rs-label persistent; all other span children collapse
+     - pulse-filters: .pf-label persistent; label children + .pf-active-count collapse
+     tk-summary + analysis-summary: NOT collapsed — purely informational stat blocks. */
+  try {
+    var banner = document.getElementById('market-mood-banner');
+    if (banner) attachExternalCollapse(banner, '#top-combos-widget', 'acress_mood_combos_expanded', null);
+  } catch (_) {}
+  try {
+    attachInternalCollapse('#top-movers-widget', '.tm-label',
+      ['#top-movers-widget .tm-pill', '#top-movers-widget .tm-asof'],
+      'acress_top_movers_expanded');
+  } catch (_) {}
+  try {
+    attachInternalCollapse('#risk-settings-widget', '.rs-label',
+      ['#risk-settings-widget > span:not(.rs-label)'],
+      'acress_risk_block_expanded');
+  } catch (_) {}
+  try {
+    attachInternalCollapse('#pulse-filters', '.pf-label',
+      ['#pulse-filters label', '#pulse-filters .pf-active-count'],
+      'acress_pulse_filters_expanded');
+  } catch (_) {}
 }
 // L_CROSS_SUMMARY_DEACTIVATE_NAV_V1 — strip navigation behavior from cross-summary
 // so the segments become purely informational. Top dark header tabs continue to
