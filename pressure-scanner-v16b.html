@@ -1301,6 +1301,27 @@ function velocityDecileFor(maxFive_bps){
   }
   return 10;
 }
+/* L_VOLUME_TIERED_BY_DECILE_V1 — Upgrade 27.3 (2026-05-28). Volume-floor
+   tiering as a function of the decile selection. As the operator widens
+   the velocity catchment (lower decile), volume requirement tightens to
+   compensate for the thinner mid-cap names that would otherwise pass.
+   Mapping anchored to operator-confirmed 2026-05-28 calibration. */
+function getVolumeFloorForDecile(decileSel){
+  var map = {
+    'all': 500000,
+    '10':  500000,
+    '9':   750000,
+    '8':  1000000,
+    '7':  1500000,
+    '6':  2000000,
+    '5':  3000000,
+    '4':  4000000,
+    '3':  5000000,
+    '2':  7000000,
+    '1': 10000000
+  };
+  return (map[String(decileSel)] != null) ? map[String(decileSel)] : 500000;
+}
 function velocityColorClass(decile){
   if(decile == null) return 'vel-gray';
   if(decile >= 9) return 'vel-green';
@@ -1828,30 +1849,35 @@ function buildPositioningHtml(pos, signalDir, opts){
   opts = opts || {};
   var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
   var c = classifyPositioning(pos, signalDir);
-  if (c.state === 'gathering')    return '<div class="vel-line vel-gray"' + style + '>Positioning: gathering data</div>';
-  if (c.state === 'unavailable')  return '<div class="vel-line vel-gray"' + style + '>Positioning: data unavailable</div>';
-  if (c.state === 'stale')        return '<div class="vel-line vel-gray"' + style + '>Positioning: data stale (last update ' + c.last_min + ' min ago)</div>';
+  if (c.state === 'gathering')    return '<div class="vel-line vel-gray"' + style + '>Top traders: gathering data</div>';
+  if (c.state === 'unavailable')  return '<div class="vel-line vel-gray"' + style + '>Top traders: data unavailable</div>';
+  if (c.state === 'stale')        return '<div class="vel-line vel-gray"' + style + '>Top traders: stale (' + c.last_min + ' min)</div>';
   var tlong  = Math.round(c.top_long);
   var tshort = Math.round(c.top_short);
   var rlong  = c.have_retail ? Math.round(c.retail_long) : null;
   var topSide = tlong > tshort ? 'long' : 'short';
   var topMax  = Math.max(tlong, tshort);
+  /* L_PROSE_WORDING_AUDIT_V1 — Upgrade 27.3 (2026-05-28). Compacted from
+     verbose phrasings to fit on one line at standard widths. Always
+     labels the slot as "Top traders" for consistency (formerly used
+     "Positioning" on gathering/unavailable/stale states, breaking
+     vertical alignment with the canonical Pass 3 ordering). */
   var html, cls;
   if (c.state === 'DIVERGENT_RETAIL') {
     cls = 'vel-green';
-    html = '🟢 Top traders: <b>' + topMax + '% ' + topSide + '</b> · retail: <b>' + rlong + '% long</b> ✨ smart money divergent from retail (strong signal)';
+    html = '🟢 Top traders <b>' + topMax + '% ' + topSide + '</b> · retail <b>' + rlong + '% long</b> · divergent ✨';
   } else if (c.state === 'ALIGNED_WITH_TOPS') {
     cls = 'vel-green';
-    html = '🟢 Top traders: <b>' + topMax + '% ' + topSide + '</b> · positioning aligned with signal';
+    html = '🟢 Top traders <b>' + topMax + '% ' + topSide + '</b> · aligned';
   } else if (c.state === 'AGAINST_TOPS') {
     cls = 'vel-red';
-    html = '🔴 Top traders: <b>' + topMax + '% ' + topSide + '</b> · betting against smart money ⚠️';
+    html = '🔴 Top traders <b>' + topMax + '% ' + topSide + '</b> · against ⚠️';
   } else if (c.state === 'DIVERGENT_RISK') {
     cls = 'vel-red';
-    html = '🔴 Retail: <b>' + rlong + '% long</b> · top traders: <b>' + topMax + '% ' + topSide + '</b> — you\'d be exit liquidity ⚠️';
+    html = '🔴 Retail <b>' + rlong + '% long</b> · traders <b>' + topMax + '% ' + topSide + '</b> · exit liq ⚠️';
   } else { // BALANCED
     cls = 'vel-amber';
-    html = '🟡 Top traders: <b>' + topMax + '% ' + topSide + '</b> · no clear positioning edge';
+    html = '🟡 Top traders <b>' + topMax + '% ' + topSide + '</b> · no edge';
   }
   return '<div class="vel-line ' + cls + '"' + style + '>' + html + '</div>';
 }
@@ -2154,27 +2180,29 @@ function buildForcedFlowHtml(ffc, opts){
   opts = opts || {};
   var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
   if (!ffc || ffc.status === 'unavailable') {
-    return '<div class="vel-line vel-gray"' + style + '>Forced exit pressure: cannot compute (insufficient data)</div>';
+    return '<div class="vel-line vel-gray"' + style + '>Forced exit: insufficient data</div>';
   }
   if (ffc.score == null) return '';
   var s = ffc.score;
   var absS = Math.abs(s);
   var rel = ffc.reliability;
-  var relSuffix = ' · ' + rel + ' reliability';
-  /* V1 honesty badging: append "(primary inputs offline)" on LOW so the
-     user reads exactly why the magnitude is capped. */
-  if (rel === 'LOW') relSuffix += ' (primary inputs offline)';
+  /* L_PROSE_WORDING_AUDIT_V1 — compacted "MEDIUM reliability (primary
+     inputs offline)" → "MED · primaries off"; descriptors shortened to
+     fit on one line at standard widths. */
+  var relTag = (rel === 'HIGH') ? 'HIGH' : (rel === 'MEDIUM' ? 'MED' : 'LOW');
+  var relSuffix = ' · ' + relTag;
+  if (rel === 'LOW') relSuffix += ' · primaries off';
   var emoji, cls, descriptor;
-  if (s <= -60)      { emoji = '🔻'; cls = 'vel-red';   descriptor = 'heavy downside cascade setup'; }
-  else if (s <= -30) { emoji = '🔻'; cls = 'vel-red';   descriptor = 'downside cascade forming'; }
-  else if (s <= -10) { emoji = '🟡'; cls = 'vel-amber'; descriptor = 'weak downside bias'; }
-  else if (s >=  60) { emoji = '🔺'; cls = 'vel-green'; descriptor = 'heavy upside cascade setup'; }
-  else if (s >=  30) { emoji = '🔺'; cls = 'vel-green'; descriptor = 'upside squeeze setup'; }
-  else if (s >=  10) { emoji = '🟡'; cls = 'vel-amber'; descriptor = 'weak upside bias'; }
-  else               { emoji = '⟷'; cls = 'vel-gray';  descriptor = 'no loaded cascade setup'; }
+  if (s <= -60)      { emoji = '🔻'; cls = 'vel-red';   descriptor = 'heavy down cascade'; }
+  else if (s <= -30) { emoji = '🔻'; cls = 'vel-red';   descriptor = 'down cascade forming'; }
+  else if (s <= -10) { emoji = '🟡'; cls = 'vel-amber'; descriptor = 'weak down'; }
+  else if (s >=  60) { emoji = '🔺'; cls = 'vel-green'; descriptor = 'heavy up squeeze'; }
+  else if (s >=  30) { emoji = '🔺'; cls = 'vel-green'; descriptor = 'up squeeze setup'; }
+  else if (s >=  10) { emoji = '🟡'; cls = 'vel-amber'; descriptor = 'weak up'; }
+  else               { emoji = '⟷'; cls = 'vel-gray';  descriptor = 'no cascade'; }
   var sign = s >= 0 ? '+' : '';
   return '<div class="vel-line ' + cls + '"' + style + '>' +
-    emoji + ' Forced exit pressure: <b>' + sign + s + '</b> · ' + descriptor + relSuffix +
+    emoji + ' Forced exit <b>' + sign + s + '</b> · ' + descriptor + relSuffix +
     '</div>';
 }
 
@@ -3055,6 +3083,17 @@ function computePositionSize(signal, direction){
   var slPct = computeSlDistancePct(signal, dir);
   var maxLossUsd = acct * (riskPct / 100);
   var notionalRisk = (slPct > 0) ? (maxLossUsd / (slPct / 100)) : 0;
+  /* L_NOTIONAL_MATH_UNCHANGED_RATIONALE_V1 — Upgrade 27.3 (2026-05-28).
+     The 1% liquidity participation cap (liqPct default) is intentionally
+     LEFT AS-IS. Under L_VOLUME_TIERED_BY_DECILE_V1, the volume floor scales
+     up as the operator widens the decile catchment (decile 10 → $500K,
+     decile 9 → $750K, ... decile 1 → $10M). That tiered floor IS the
+     slippage protection: it ensures only symbols with enough depth to
+     absorb the operator's risk-cap notional at 1% participation pass the
+     display filter in the first place. Raising liqPct here (e.g. to 2%
+     or 5%) would defeat the compensation by letting larger orders punch
+     through thinner books on the loosened decile tiers. Future-Claude:
+     do NOT raise liqPct without revisiting the decile→volume mapping. */
   // Liquidity participation cap: position notional capped at liqPct of 5-min quote volume
   var notionalLiqCap = Infinity;
   if (signal && signal._medianVol5m && signal._medianVol5m > 0) {
@@ -3157,9 +3196,11 @@ function gradeExecution(signal, sizing, direction){
   var liqPctTxt = isFinite(liqRatio) ? (liqRatio * 100).toFixed(1) + '%' : 'n/a';
   var atrTxt = (atrRatio != null) ? (atrRatio.toFixed(2) + '× SL') : 'ATR n/a';
   var detail;
-  if (grade === 'GREEN')      detail = '$' + Math.round(notional) + ' fits ' + liqPctTxt + ' of 5-min vol · ATR safe vs SL (' + atrTxt + ')';
-  else if (grade === 'YELLOW') detail = '$' + Math.round(notional) + ' at ' + liqPctTxt + ' of 5-min vol · ATR ' + atrTxt;
-  else                        detail = '$' + Math.round(notional) + ' is ' + liqPctTxt + ' of 5-min vol — slippage likely · ATR ' + atrTxt;
+  /* L_PROSE_WORDING_AUDIT_V1 — compacted "fits X% of 5-min vol · ATR safe vs SL"
+     → "$N (X% vol) · ATR Yx"; explicit "slippage likely" tag on RED. */
+  if (grade === 'GREEN')      detail = '$' + Math.round(notional) + ' (' + liqPctTxt + ' vol) · ATR ' + atrTxt;
+  else if (grade === 'YELLOW') detail = '$' + Math.round(notional) + ' (' + liqPctTxt + ' vol) · ATR ' + atrTxt;
+  else                        detail = '$' + Math.round(notional) + ' (' + liqPctTxt + ' vol · slippage risk) · ATR ' + atrTxt;
   return { grade: grade, detail: detail };
 }
 
@@ -9465,31 +9506,47 @@ function renderResults(){invalidateMechanismStats();
   var _velMode = _velManual ? 'manual' : 'auto';
   var _velMoodCode = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
   /* L_VELOCITY_FLOOR_OPTIONAL_V1 — new parent toggle (default OFF) gating
-     only the absolute % check. Decile 9 still applied via _velFilterActive. */
+     only the absolute % check. Decile gate still applied via _velFilterActive. */
   var _velAbsFloorActive = (localStorage.getItem('acress_velocity_floor_enabled') === 'true') && (_velMinPct > 0);
-  if (_velFilterActive) {
+  /* L_DECILE_SELECTOR_V1 — Upgrade 27.3 (2026-05-28). Decile floor is now a
+     Settings dropdown writing acress_velocity_decile_min ∈ {'all','1'..'10'}.
+     Default '9' (top 20%). When 'all', the decile filter is skipped entirely
+     and only the volume gate applies. Verified semantic via velocityDecileFor:
+     D10 = top 10% (fastest), D9 = next 10% (so D≥9 = top 20% cumulative),
+     formula (11 - N) * 10 = cumulative top % covered. */
+  var _decileSel = localStorage.getItem('acress_velocity_decile_min');
+  if (_decileSel == null) _decileSel = '9';
+  var _decileMin = null;   // null = no decile filter
+  if (_decileSel !== 'all') {
+    var __dN = parseInt(_decileSel, 10);
+    if (isFinite(__dN) && __dN >= 1 && __dN <= 10) _decileMin = __dN;
+  }
+  var _decileTopPct = (_decileMin == null) ? 100 : (11 - _decileMin) * 10;
+  if (_velFilterActive && _decileMin != null) {
     filtered = filtered.filter(function(s){
-      if (!(s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9)) return false;
+      if (!(s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= _decileMin)) return false;
       if (_velAbsFloorActive) {
         var pct = Math.abs(s.velocity.pct_change_5min || 0);
         if (pct < _velMinPct) return false;
       }
       return true;
     });
+  } else if (_velFilterActive && _velAbsFloorActive) {
+    /* "all deciles" but absolute floor still active — rare but valid. */
+    filtered = filtered.filter(function(s){
+      if (!s.velocity || typeof s.velocity.pct_change_5min !== 'number') return false;
+      return Math.abs(s.velocity.pct_change_5min || 0) >= _velMinPct;
+    });
   }
-  /* L_MIN_VOLUME_FILTER_V1 — Card Restructure / threshold tightening
-     2026-05-28. Replaces L_MIN_NOTIONAL_FILTER_V1. Direct expression of
-     the operator's actual concern: deep 5-min liquidity. The previous
-     "max notional < $1,000" check implied $100K 5-min volume at 1%
-     participation — same idea but indirect. New filter checks
-     signal._medianVol5m (median per-bar quote volume across the recent
-     5m kline buffer) against a configurable $500K floor. Tune via
-     Settings → Position Discipline → "Min 5-min volume (USD)" (key
-     acress_min_volume_5min, default 500000, range 0-5000000; 0 disables).
-     Display-layer only — scanner still computes + logs these signals. */
-  var _minVolPref = localStorage.getItem('acress_min_volume_5min');
-  var _minVolUsd = parseFloat(_minVolPref);
-  if (!isFinite(_minVolUsd) || _minVolUsd < 0) _minVolUsd = 500000;
+  /* L_VOLUME_TIERED_BY_DECILE_V1 — Upgrade 27.3 (2026-05-28). Volume
+     floor is now DERIVED from the decile selection, not user-editable.
+     Tiered mapping: as the operator widens the velocity catchment by
+     selecting a lower decile, the volume floor tightens to compensate
+     for the thinner mid-cap names that would otherwise dilute liquidity
+     quality. The legacy acress_min_volume_5min localStorage key is no
+     longer consulted — volume always derives from acress_velocity_decile_min.
+     Display-layer only — scanner still computes + logs filtered signals. */
+  var _minVolUsd = (typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(_decileSel) : 500000;
   var _minVolActive = (_minVolUsd > 0);
   var _preMinVolCount = filtered.length;
   if (_minVolActive) {
@@ -9534,17 +9591,21 @@ function renderResults(){invalidateMechanismStats();
        knows what to toggle. Extended copy lists every active display filter. */
     if ((_velFilterActive || _minVolActive) && (_preVelocityCount > 0 || _preMinVolCount > 0)) {
       var activeFilters = [];
-      /* L_VELOCITY_FLOOR_OPTIONAL_V1 (Upgrade 27.2) — abs % is now opt-in.
-         When disabled (default), copy mentions only the decile gate. When
-         enabled, copy includes the abs % threshold + mode (auto/manual). */
+      /* L_VELOCITY_FLOOR_OPTIONAL_V1 + L_DECILE_SELECTOR_V1 (Upgrade 27.3) —
+         abs % is opt-in; decile is dropdown-selectable. Copy reflects both
+         the current decile selection and (when enabled) the abs % threshold
+         + mode (auto/manual). */
       if (_velFilterActive) {
+        var __decilePhrase = (_decileMin == null)
+          ? 'All deciles (no velocity filter)'
+          : 'Velocity ≥ decile ' + _decileMin + ' (top ' + _decileTopPct + '%)';
         if (_velAbsFloorActive) {
           var __floorMode = (_velMode === 'auto')
             ? '(auto-adapted to ' + _velMoodCode + ' regime)'
             : '(manual)';
-          activeFilters.push('Velocity ≥ green decile 9 AND 5-min price change ≥ ' + _velMinPct + '% ' + __floorMode);
+          activeFilters.push(__decilePhrase + ' AND 5-min price change ≥ ' + _velMinPct + '% ' + __floorMode);
         } else {
-          activeFilters.push('Velocity ≥ green decile 9');
+          activeFilters.push(__decilePhrase);
         }
       }
       if (_minVolActive) activeFilters.push('5-min volume ≥ ' + _formatVolLabel(_minVolUsd));
@@ -9554,7 +9615,10 @@ function renderResults(){invalidateMechanismStats();
          is irrelevant in default state. */
       var regimeContextHtml = '';
       if (_velFilterActive && _velAbsFloorActive) {
-        var greenDecile = live.filter(function(s){ return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9; });
+        /* L_DECILE_SELECTOR_V1 — diagnostic walks the currently-selected
+           decile band (or all signals when 'all'). */
+        var __decGate = (_decileMin == null) ? 1 : _decileMin;
+        var greenDecile = live.filter(function(s){ return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= __decGate; });
         var topPct = 0;
         for (var __i = 0; __i < greenDecile.length; __i++) {
           var __v = Math.abs(greenDecile[__i].velocity.pct_change_5min || 0);
@@ -9572,15 +9636,18 @@ function renderResults(){invalidateMechanismStats();
             + '</div>';
         }
       }
-      /* L_VELOCITY_FLOOR_OPTIONAL_V1 — when zero cards remain under the
-         default config (abs floor disabled), the binding gate is most
-         likely the volume floor. Surface that explicitly so the operator
-         doesn't have to guess which knob to relax. */
+      /* L_VELOCITY_FLOOR_OPTIONAL_V1 + L_DECILE_SELECTOR_V1 — when zero
+         cards remain under the default config (abs floor disabled), the
+         binding gate is the combination of decile + derived volume.
+         Surface both so the operator knows which lever to pull. */
       var defaultEmptyHintHtml = '';
       if (!_velAbsFloorActive && _minVolActive && _preVelocityCount > 0) {
+        var __velTierPhrase = (_decileMin == null)
+          ? 'meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold'
+          : 'in the top ' + _decileTopPct + '% velocity tier <b>AND</b> meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold';
         defaultEmptyHintHtml = '<div style="margin-top:14px;padding:10px 12px;background:rgba(65,209,255,0.08);border-left:3px solid rgba(65,209,255,0.55);border-radius:4px;text-align:left;display:inline-block;max-width:560px;">'
-          + 'No symbols in the universe are in the top 10% velocity tier <b>AND</b> meet the ' + _formatVolLabel(_minVolUsd) + ' 5-min volume threshold. '
-          + 'Try reducing the volume requirement in Settings → Position Discipline.'
+          + 'No symbols in the universe are ' + __velTierPhrase + '. '
+          + 'Loosen the velocity decile in Settings → Position Discipline (volume floor follows automatically).'
           + '</div>';
       }
       msgTitle = '0 cards meet active filters';
@@ -12192,6 +12259,21 @@ function onVelocityFilterToggle(enabled){
   }
 }
 
+/* L_DECILE_SELECTOR_V1 — Upgrade 27.3 (2026-05-28). Decile dropdown handler.
+   Stores selection, updates the live "Auto volume floor: $X" info text
+   beside the dropdown, and triggers renderResults() to immediately
+   re-apply the filter chain (decile + derived volume). */
+function onDecileSelectChange(value){
+  try { localStorage.setItem('acress_velocity_decile_min', String(value)); } catch (e) {}
+  var dinfo = document.getElementById('disc-velocity-decile-info');
+  if (dinfo) {
+    var floorUsd = (typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(value) : 500000;
+    var floorTxt = (typeof _formatVolLabel === 'function') ? _formatVolLabel(floorUsd) : ('$' + floorUsd);
+    dinfo.innerHTML = 'Auto volume floor: <b style="color:var(--hi);">' + floorTxt + '</b> (based on selected decile)';
+  }
+  if (typeof renderResults === 'function') { try { renderResults(); } catch (e) {} }
+}
+
 /* L_VELOCITY_FLOOR_OPTIONAL_V1 — Upgrade 27.2 (2026-05-28). Parent toggle
    for the absolute % gate. When OFF (default), the gate is bypassed
    entirely and velocity becomes the within-section sort. When ON, the
@@ -13602,6 +13684,30 @@ function openDrilldownByHourFromVPS(hour){
             <input type="checkbox" id="disc-hide-non-green-vel" onchange="onVelocityFilterToggle(this.checked)" />
             <span><b>Hide non-green velocity signals</b> from card display (DB logging continues — only visual filtering)</span>
           </label>
+          <!-- L_DECILE_SELECTOR_V1 — Upgrade 27.3 (2026-05-28). Dropdown
+               selecting the velocity decile floor (or "All" for no filter).
+               Volume floor below is DERIVED from this selection via
+               getVolumeFloorForDecile() — no separate volume input. -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:10px;">
+            <span style="min-width:0;flex:1;"><b>Velocity decile floor</b>
+              <span id="disc-velocity-decile-info" style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
+                Auto volume floor: $500K (based on selected decile)
+              </span>
+            </span>
+            <select id="disc-velocity-decile-min" onchange="onDecileSelectChange(this.value)" style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:var(--font-mono);font-size:11px;">
+              <option value="all">All deciles (no filter)</option>
+              <option value="10">Decile 10 (top 10%)</option>
+              <option value="9" selected>Decile 9 (top 20%)</option>
+              <option value="8">Decile 8 (top 30%)</option>
+              <option value="7">Decile 7 (top 40%)</option>
+              <option value="6">Decile 6 (top 50%)</option>
+              <option value="5">Decile 5 (top 60%)</option>
+              <option value="4">Decile 4 (top 70%)</option>
+              <option value="3">Decile 3 (top 80%)</option>
+              <option value="2">Decile 2 (top 90%)</option>
+              <option value="1">Decile 1 (all 100%)</option>
+            </select>
+          </label>
           <!-- L_VELOCITY_FLOOR_OPTIONAL_V1 — Upgrade 27.2 (2026-05-28).
                Parent toggle gating the absolute % gate. Default OFF: the
                scanner shows everything in the top-10% velocity tier
@@ -13644,18 +13750,12 @@ function openDrilldownByHourFromVPS(hour){
                    onchange="onVelocityPctMinManualChange(this.value)" />
           </label>
           </div>
-          <!-- L_MIN_VOLUME_FILTER_V1 — direct expression of liquidity floor.
-               Replaces L_MIN_NOTIONAL_FILTER_V1 checkbox. Filter checks
-               signal._medianVol5m >= this value. 0 disables. Default $500K. -->
-          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;">
-            <span style="min-width:0;flex:1;"><b>Min 5-min volume (USD)</b> for display
-              <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
-                Hide cards whose median 5-min quote volume falls below this floor. Direct liquidity gate; thin-volume symbols cluttered the dashboard. Set to 0 to disable. Default $500,000.
-              </span>
-            </span>
-            <input type="number" id="disc-min-volume-5min" min="0" max="5000000" step="50000" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);width:110px;"
-                   onchange="(function(v){var n=parseFloat(v);if(!isFinite(n)||n<0)n=0;if(n>5000000)n=5000000;try{localStorage.setItem('acress_min_volume_5min',String(n));}catch(e){};if(typeof renderResults==='function')renderResults();})(this.value)" />
-          </label>
+          <!-- L_VOLUME_TIERED_BY_DECILE_V1 — Upgrade 27.3 — the manual
+               Min 5-min volume input has been REMOVED. Volume floor is
+               now derived from the selected decile via the tiered mapping
+               in getVolumeFloorForDecile(). The live floor value is shown
+               in the #disc-velocity-decile-info span above. The legacy
+               acress_min_volume_5min localStorage key is no longer read. -->
           <script>
             (function(){
               try {
@@ -13691,10 +13791,19 @@ function openDrilldownByHourFromVPS(hour){
                     if (suffix) suffix.innerHTML = 'Manual override active. Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable.';
                   }
                 }
-                var vin = document.getElementById('disc-min-volume-5min');
-                if (vin) {
-                  var vraw = parseFloat(localStorage.getItem('acress_min_volume_5min'));
-                  vin.value = (isFinite(vraw) && vraw >= 0) ? vraw : 500000;
+                /* L_DECILE_SELECTOR_V1 — initialize decile dropdown +
+                   auto-volume-floor info text from current localStorage. */
+                var dsel = document.getElementById('disc-velocity-decile-min');
+                var dinfo = document.getElementById('disc-velocity-decile-info');
+                if (dsel) {
+                  var stored = localStorage.getItem('acress_velocity_decile_min');
+                  if (stored == null) stored = '9';   // default top 20%
+                  dsel.value = stored;
+                  if (dinfo) {
+                    var floorUsd = (typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(stored) : 500000;
+                    var floorTxt = (typeof _formatVolLabel === 'function') ? _formatVolLabel(floorUsd) : ('$' + floorUsd);
+                    dinfo.innerHTML = 'Auto volume floor: <b style="color:var(--hi);">' + floorTxt + '</b> (based on selected decile)';
+                  }
                 }
               } catch (e) {}
             })();
