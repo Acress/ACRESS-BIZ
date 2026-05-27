@@ -2351,7 +2351,59 @@ function injectMarketMoodCSS(){
     '.market-mood-banner .mood-stats{font-size:11px;opacity:0.65;white-space:nowrap;}';
   document.head.appendChild(s);
 }
+/* L_REGIME_ADAPTIVE_VELOCITY_V1 — Upgrade 27.0 (2026-05-28).
+   Single source of truth for market-mood classification. Reads
+   pulseCache (in-memory, refreshed async every 3s by the mood-banner
+   poll loop). Synchronous, sub-microsecond access — safe to call from
+   the velocity-filter hot path inside renderResults.
+   Returns one of: 'HOT' | 'MIXED' | 'HOSTILE' | 'DEAD' | 'UNKNOWN'.
+   UNKNOWN covers the disconnected / pulse-not-yet-loaded states. */
+function getCurrentMarketMood(){
+  if (typeof pulseCache === 'undefined' || !pulseCache || !pulseCache.byMechDir) return 'UNKNOWN';
+  var counts = { tradeIt:0, wait:0, skip:0, total:0 };
+  for (var k in pulseCache.byMechDir){
+    var v = pulseCache.byMechDir[k].verdict;
+    counts.total++;
+    if (v === 'TRADE IT') counts.tradeIt++;
+    else if (v === 'WAIT') counts.wait++;
+    else if (v === 'SKIP') counts.skip++;
+  }
+  if (counts.total === 0) return 'UNKNOWN';
+  var populated = counts.tradeIt + counts.wait + counts.skip;
+  var populatedRatio = populated / counts.total;
+  if (populatedRatio < 0.3) return 'DEAD';
+  var tradeItPct = populated > 0 ? counts.tradeIt / populated * 100 : 0;
+  var waitSkipPct = populated > 0 ? (counts.wait + counts.skip) / populated * 100 : 0;
+  if (tradeItPct >= 25) return 'HOT';
+  if (tradeItPct < 10 && waitSkipPct >= 60) return 'HOSTILE';
+  return 'MIXED';
+}
+
+/* L_REGIME_ADAPTIVE_VELOCITY_V1 — maps current market mood to the
+   appropriate velocity-pct floor. Per-regime overrides via localStorage
+   keys (acress_velocity_floor_hot|mixed|hostile|dead). Calibration
+   anchored to 2026-05-28 morning empirical observation: HOSTILE regime
+   top decile-10 mover was 1.28% in 5min, so a 1.0% HOSTILE floor
+   surfaces 2-3 cards while still filtering the genuinely flat ones. */
+function getRegimeAdaptiveFloor(){
+  var defaults = { HOT: 2.5, MIXED: 1.5, HOSTILE: 1.0, DEAD: 0.5, UNKNOWN: 1.5 };
+  var keys = {
+    HOT:     'acress_velocity_floor_hot',
+    MIXED:   'acress_velocity_floor_mixed',
+    HOSTILE: 'acress_velocity_floor_hostile',
+    DEAD:    'acress_velocity_floor_dead'
+  };
+  var mood = getCurrentMarketMood();
+  if (mood === 'UNKNOWN') return defaults.UNKNOWN;
+  var raw = parseFloat(localStorage.getItem(keys[mood]));
+  return (isFinite(raw) && raw >= 0) ? raw : defaults[mood];
+}
+
 function buildMarketMoodBanner(){
+  /* L_REGIME_ADAPTIVE_VELOCITY_V1 — banner now reads its classification
+     from getCurrentMarketMood() to share the single source of truth with
+     the regime-adaptive velocity floor. Stats counts are still computed
+     here for the display chip. */
   var counts={tradeIt:0,wait:0,skip:0,notEnoughData:0,total:0};
   if(pulseCache&&pulseCache.byMechDir){
     for(var k in pulseCache.byMechDir){
@@ -2365,8 +2417,6 @@ function buildMarketMoodBanner(){
     }
   }
   if(counts.total===0){
-    /* Disconnected message — mirrors the Analysis-tab disconnected banner.
-       Replaces silent empty render with an actionable "VPS not connected" notice. */
     if(window.VPS && !window.VPS.isActive()){
       return '<div class="market-mood-banner mood-dead">'+
         '<span class="mood-label">⚠ VPS DISCONNECTED</span>'+
@@ -2376,20 +2426,20 @@ function buildMarketMoodBanner(){
     return '';
   }
   var populated=counts.tradeIt+counts.wait+counts.skip;
-  var populatedRatio=populated/counts.total;
-  var tradeItPct=populated>0?counts.tradeIt/populated*100:0;
-  var waitSkipPct=populated>0?(counts.wait+counts.skip)/populated*100:0;
-  var mood,moodCls,msg;
-  if(populatedRatio<0.3){
+  /* Use shared mood resolver so banner + filter never disagree. Map
+     the short mood codes back to the user-visible label strings. */
+  var moodCode = getCurrentMarketMood();
+  var mood, moodCls, msg;
+  if (moodCode === 'DEAD') {
     mood='MARKET DEAD';moodCls='mood-dead';
     msg='Too few recent trades to read the market — high uncertainty, sit out';
-  }else if(tradeItPct>=25){
+  } else if (moodCode === 'HOT') {
     mood='MARKET HOT';moodCls='mood-hot';
     msg='Multiple mechanisms paying — selective trading favorable';
-  }else if(tradeItPct<10&&waitSkipPct>=60){
+  } else if (moodCode === 'HOSTILE') {
     mood='MARKET HOSTILE';moodCls='mood-hostile';
     msg='Most setups not paying — consider sitting out';
-  }else{
+  } else {
     mood='MIXED';moodCls='mood-mixed';
     msg='Some mechanisms working, many not — trade only TRADE IT verdicts';
   }
@@ -9415,17 +9465,25 @@ function renderResults(){invalidateMechanismStats();
   if (_hideNonGreen == null) _hideNonGreen = 'true';   // default ON at first scan
   var _velFilterActive = (_hideNonGreen === 'true');
   var _preVelocityCount = filtered.length;
-  /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — compound velocity filter: percentile
-     (decile >= 9) AND absolute 5-min movement floor. Configurable via
-     localStorage acress_velocity_pct_min (default 2.5%, range 0-5; 0
-     disables the absolute floor, leaving percentile-only behavior).
-     Default raised from 1.5% to 2.5% on 2026-05-28: post-2026-05-28 deploy
-     review showed 1.5% floor still let through "fastest 10% of a slow
-     market" cases — top decile in a slow regime can be slow in absolute
-     terms. 2.5% in 5 min is a more meaningful "genuinely moving"
-     threshold. Operator can tune up/down via Settings. */
+  /* L_VELOCITY_ABSOLUTE_FLOOR_V1 + L_REGIME_ADAPTIVE_VELOCITY_V1 (Upgrade 27.0
+     2026-05-28). Compound velocity filter: percentile (decile >= 9) AND
+     absolute 5-min movement floor. The absolute floor resolves via:
+       - manual override (acress_velocity_pct_manual === 'true'):
+         use acress_velocity_pct_min (fallback 2.5%)
+       - auto (default): getRegimeAdaptiveFloor() reads the current mood
+         from pulseCache and returns the per-regime floor (HOT 2.5%,
+         MIXED 1.5%, HOSTILE 1.0%, DEAD 0.5%, UNKNOWN 1.5%).
+     0 disables the absolute floor, leaving percentile-only behavior. */
+  var _velManual = (localStorage.getItem('acress_velocity_pct_manual') === 'true');
   var _velMinPctRaw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
-  var _velMinPct = (isFinite(_velMinPctRaw) && _velMinPctRaw >= 0) ? _velMinPctRaw : 2.5;
+  var _velMinPct;
+  if (_velManual) {
+    _velMinPct = (isFinite(_velMinPctRaw) && _velMinPctRaw >= 0) ? _velMinPctRaw : 2.5;
+  } else {
+    _velMinPct = (typeof getRegimeAdaptiveFloor === 'function') ? getRegimeAdaptiveFloor() : 2.5;
+  }
+  var _velMode = _velManual ? 'manual' : 'auto';
+  var _velMoodCode = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
   if (_velFilterActive) {
     filtered = filtered.filter(function(s){
       if (!(s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9)) return false;
@@ -9495,22 +9553,26 @@ function renderResults(){invalidateMechanismStats();
       var activeFilters = [];
       /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — empty-state copy reflects both the
          decile and absolute-pct conditions when the absolute floor is active. */
+      /* L_REGIME_ADAPTIVE_VELOCITY_V1 — surface the floor mode (auto vs manual)
+         + the detected regime so the operator knows whether the threshold
+         they're hitting was their own setting or the system's adaptive call. */
       if (_velFilterActive) {
         if (_velMinPct > 0) {
-          activeFilters.push('Velocity ≥ green decile 9 AND 5-min price change ≥ ' + _velMinPct + '%');
+          var __floorMode = (_velMode === 'auto')
+            ? '(auto-adapted to ' + _velMoodCode + ' regime)'
+            : '(manual)';
+          activeFilters.push('Velocity ≥ green decile 9 AND 5-min price change ≥ ' + _velMinPct + '% ' + __floorMode);
         } else {
           activeFilters.push('Velocity ≥ green decile 9');
         }
       }
       if (_minVolActive) activeFilters.push('5-min volume ≥ ' + _formatVolLabel(_minVolUsd));
       /* L_FILTER_EMPTY_STATE_EXTENDED_V1 + L_EMPTY_STATE_REGIME_CONTEXT_V1
-         (2026-05-28) — when zero signals pass and a velocity floor is the
-         binding gate, compute the top observed |pct_change_5min| across
-         green-decile signals in the current scan and surface it as regime
-         context. Converts "mysterious silence" into "the market itself is
-         slow today." Diagnostic-grade information at the empty-state
-         surface. Computed from `live` (pre-display-filter signals) so the
-         number reflects the actual scan, not just whatever scraped through. */
+         + L_REGIME_ADAPTIVE_VELOCITY_V1 (Upgrade 27.0) — when zero signals pass
+         and a velocity floor is the binding gate, compute the top observed
+         |pct_change_5min| across green-decile signals in the current scan and
+         surface it as regime context. The note now mentions whether the floor
+         is auto-adapted or manual so the operator knows the lever to pull. */
       var regimeContextHtml = '';
       if (_velFilterActive && _velMinPct > 0) {
         var greenDecile = live.filter(function(s){ return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9; });
@@ -9521,10 +9583,13 @@ function renderResults(){invalidateMechanismStats();
         }
         if (greenDecile.length > 0) {
           var topPctTxt = topPct.toFixed(2);
+          var __modeSuffix = (_velMode === 'auto')
+            ? ' The floor is auto-adapted to the current ' + _velMoodCode + ' regime; if the regime tightens further, the floor will drop automatically. You can also override in Settings.'
+            : ' The floor is set manually; loosen it in Settings or switch to auto-adapt to let the system follow the regime.';
           regimeContextHtml = '<div style="margin-top:14px;padding:10px 12px;background:rgba(240,179,65,0.08);border-left:3px solid rgba(240,179,65,0.55);border-radius:4px;text-align:left;display:inline-block;max-width:560px;">'
             + '<b style="color:#f0b341;">Market regime check:</b> top mover in current scan is moving <b>' + topPctTxt + '%</b> in 5 min '
-            + '(below the ' + _velMinPct + '% threshold). This may indicate a slow regime. '
-            + 'Reduce velocity floor in Settings → Position Discipline to see available signals, or sit out until market activity increases.'
+            + '(below the ' + _velMinPct + '% threshold).'
+            + __modeSuffix
             + '</div>';
         }
       }
@@ -12105,6 +12170,50 @@ function onVelocityFilterToggle(enabled){
   }
 }
 
+/* L_REGIME_ADAPTIVE_VELOCITY_V1 — auto-adapt toggle handler.
+   Checked (default) → clear the manual flag; numeric input goes read-only
+   and shows live regime-resolved value. Unchecked → set manual flag true;
+   numeric input becomes editable with the operator's stored value. */
+function onVelocityAutoAdaptToggle(autoOn){
+  try { localStorage.setItem('acress_velocity_pct_manual', autoOn ? 'false' : 'true'); } catch (e) {}
+  var inp = document.getElementById('disc-velocity-pct-min');
+  var suffix = document.getElementById('disc-velocity-pct-min-suffix');
+  if (inp) {
+    if (autoOn) {
+      var live = (typeof getRegimeAdaptiveFloor === 'function') ? getRegimeAdaptiveFloor() : 2.5;
+      var mood = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
+      inp.value = live;
+      inp.disabled = true;
+      if (suffix) suffix.innerHTML = 'Auto-adapted to <b style="color:var(--hi);">' + mood + '</b> regime · current floor <b style="color:var(--hi);">' + live + '%</b>. Uncheck the toggle to override.';
+    } else {
+      var raw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
+      inp.value = (isFinite(raw) && raw >= 0) ? raw : 2.5;
+      inp.disabled = false;
+      if (suffix) suffix.innerHTML = 'Manual override active. Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable.';
+    }
+  }
+  if (typeof renderResults === 'function') { try { renderResults(); } catch(e) {} }
+}
+
+/* L_REGIME_ADAPTIVE_VELOCITY_V1 — numeric input handler. Editing the input
+   stores the value AND flips the manual flag to 'true' (operator action
+   implies they want manual control). To return to auto-adapt, they re-check
+   the toggle. */
+function onVelocityPctMinManualChange(v){
+  var n = parseFloat(v);
+  if (!isFinite(n) || n < 0) n = 0;
+  if (n > 5) n = 5;
+  try {
+    localStorage.setItem('acress_velocity_pct_min', String(n));
+    localStorage.setItem('acress_velocity_pct_manual', 'true');
+  } catch (e) {}
+  var cb = document.getElementById('disc-velocity-auto-adapt');
+  if (cb) cb.checked = false;
+  var suffix = document.getElementById('disc-velocity-pct-min-suffix');
+  if (suffix) suffix.innerHTML = 'Manual override active. Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable.';
+  if (typeof renderResults === 'function') { try { renderResults(); } catch(e) {} }
+}
+
 function openSettingsModal(){
   var bg=document.getElementById('settings-modal-bg');
   if(bg){ bg.classList.add('open'); renderSettingsModal(); populateDisciplineSettings(); }
@@ -13457,18 +13566,33 @@ function openDrilldownByHourFromVPS(hour){
             <input type="checkbox" id="disc-hide-non-green-vel" onchange="onVelocityFilterToggle(this.checked)" />
             <span><b>Hide non-green velocity signals</b> from card display (DB logging continues — only visual filtering)</span>
           </label>
+          <!-- L_REGIME_ADAPTIVE_VELOCITY_V1 — auto-adapt toggle. Default ON
+               (checkbox checked). When ON, the numeric input below shows the
+               live regime-resolved value with the regime label and is read-only.
+               When OFF, the numeric input becomes editable; the flag
+               acress_velocity_pct_manual flips to 'true'. -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;cursor:pointer;">
+            <input type="checkbox" id="disc-velocity-auto-adapt" checked onchange="onVelocityAutoAdaptToggle(this.checked)" />
+            <span><b>Auto-adapt velocity floor to market regime</b>
+              <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
+                When checked, the floor tracks the current regime (HOT 2.5% · MIXED 1.5% · HOSTILE 1.0% · DEAD 0.5%). Uncheck to set a fixed value below.
+              </span>
+            </span>
+          </label>
           <!-- L_VELOCITY_PCT_SETTING_V1 — configurable absolute movement floor.
                Compound velocity filter: decile >= 9 AND |5-min pct change| >= this value.
                0 disables the absolute floor (percentile-only). Default 2.5%
-               (raised from 1.5% on 2026-05-28 after operator review). -->
+               (raised from 1.5% on 2026-05-28 after operator review).
+               L_REGIME_ADAPTIVE_VELOCITY_V1 — disabled when auto-adapt is on;
+               shows the live regime-resolved value with a "(auto, REGIME)" suffix. -->
           <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;">
             <span style="min-width:0;flex:1;"><b>Min 5min price change (%)</b> for velocity-green display
-              <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
+              <span id="disc-velocity-pct-min-suffix" style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
                 Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable the floor (percentile-only behavior). Default 2.5%.
               </span>
             </span>
             <input type="number" id="disc-velocity-pct-min" min="0" max="5" step="0.1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);width:70px;"
-                   onchange="(function(v){var n=parseFloat(v);if(!isFinite(n)||n<0)n=0;if(n>5)n=5;try{localStorage.setItem('acress_velocity_pct_min',String(n));}catch(e){};if(typeof renderResults==='function')renderResults();})(this.value)" />
+                   onchange="onVelocityPctMinManualChange(this.value)" />
           </label>
           <!-- L_MIN_VOLUME_FILTER_V1 — direct expression of liquidity floor.
                Replaces L_MIN_NOTIONAL_FILTER_V1 checkbox. Filter checks
@@ -13485,10 +13609,27 @@ function openDrilldownByHourFromVPS(hour){
           <script>
             (function(){
               try {
+                /* L_REGIME_ADAPTIVE_VELOCITY_V1 — initialize auto-adapt
+                   checkbox + numeric input from current localStorage state. */
+                var manual = (localStorage.getItem('acress_velocity_pct_manual') === 'true');
+                var auto = !manual;
+                var cb = document.getElementById('disc-velocity-auto-adapt');
+                if (cb) cb.checked = auto;
                 var inp = document.getElementById('disc-velocity-pct-min');
+                var suffix = document.getElementById('disc-velocity-pct-min-suffix');
                 if (inp) {
-                  var raw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
-                  inp.value = (isFinite(raw) && raw >= 0) ? raw : 2.5;
+                  if (auto) {
+                    var live = (typeof getRegimeAdaptiveFloor === 'function') ? getRegimeAdaptiveFloor() : 2.5;
+                    var mood = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
+                    inp.value = live;
+                    inp.disabled = true;
+                    if (suffix) suffix.innerHTML = 'Auto-adapted to <b style="color:var(--hi);">' + mood + '</b> regime · current floor <b style="color:var(--hi);">' + live + '%</b>. Uncheck the toggle to override.';
+                  } else {
+                    var raw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
+                    inp.value = (isFinite(raw) && raw >= 0) ? raw : 2.5;
+                    inp.disabled = false;
+                    if (suffix) suffix.innerHTML = 'Manual override active. Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable.';
+                  }
                 }
                 var vin = document.getElementById('disc-min-volume-5min');
                 if (vin) {
