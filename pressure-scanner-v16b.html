@@ -307,11 +307,22 @@ input{font-family:var(--font-ui);}
 .pc-action-row.consensus-hint{background:linear-gradient(90deg,rgba(120,150,200,0) 0%,rgba(120,150,200,0.04) 50%,rgba(120,150,200,0) 100%);}
 .pc-consensus-chip{font-family:var(--font-mono);font-size:8.5px;font-weight:700;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:rgba(120,150,200,.10);border:1px solid var(--border2);display:inline-block;margin:0 11px 4px;}
 /* L_DAILY_BUDGET_HEADER_V1 — single header element near the top of scanner */
-.acress-budget-header{font-family:var(--font-mono);font-size:11px;color:var(--body);padding:6px 12px;background:var(--s2);border:1px solid var(--border);border-radius:5px;margin:6px 0;display:inline-flex;align-items:center;gap:10px;letter-spacing:.3px;}
-.acress-budget-header.danger{border-color:rgba(255,90,107,.5);background:rgba(255,90,107,.05);}
-.acress-budget-header.warn{border-color:rgba(240,179,65,.5);background:rgba(240,179,65,.05);}
+/* L_DAILY_BUDGET_FOOTER_STICKY_V1 — Header Scroll-Away (2026-05-28).
+   Daily-budget header pinned to the bottom of the viewport as a persistent
+   footer when the operator enables the toggle in Settings. The element
+   already toggles display:inline-flex (when on) / display:none (when off);
+   we add position:fixed + bottom:0 so it stays visible regardless of
+   scroll. Width spans full viewport with a backdrop-blur to read cleanly
+   over card content. */
+.acress-budget-header{position:fixed;left:0;right:0;bottom:0;z-index:490;font-family:var(--font-mono);font-size:11px;color:var(--body);padding:8px 18px;background:rgba(11,15,26,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--border);margin:0;display:inline-flex;align-items:center;justify-content:center;gap:14px;letter-spacing:.3px;}
+.acress-budget-header.danger{border-top-color:rgba(255,90,107,.5);background:rgba(40,15,22,0.94);}
+.acress-budget-header.warn{border-top-color:rgba(240,179,65,.5);background:rgba(40,30,15,0.94);}
 .acress-budget-header .lbl{color:var(--muted);font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;}
 .acress-budget-header .val{color:var(--hi);font-weight:800;}
+/* Body padding-bottom so the last card isn't covered by the footer. Applied
+   only when the budget header is visible (via the .acress-budget-footer-on body class
+   we add in renderDailyBudgetHeader). */
+body.acress-budget-footer-on{padding-bottom:42px;}
 .pc-disc-block{margin-top:8px;}
 .pc-disc-block:first-child{margin-top:0;}
 .pc-disc-block-title{font-size:9.5px; font-weight:800; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; margin-bottom:3px;}
@@ -552,14 +563,20 @@ input{font-family:var(--font-ui);}
    the sum of the heights above it. Sticky elements need a `top` value
    to know where to dock when scrolled. */
 :root{
+  /* L_HEADER_SCROLL_AWAY_V1 — --sticky-cfg-panel-h removed (cfg-panel
+     no longer sticky on the scanner page). --sticky-nav-h and
+     --sticky-summary-h retained because the Performance Tracker page
+     still uses them on .tk-summary and .tk-filters. */
   --sticky-nav-h:46px;
   --sticky-summary-h:78px;
-  --sticky-cfg-panel-h:130px;
 }
 .page-nav{position:sticky;top:0;z-index:50;background:#0b0f1a;border-bottom:1px solid var(--border);}
 .tk-summary{position:sticky;top:var(--sticky-nav-h);z-index:45;background:#0b0f1a;border-bottom:1px solid var(--border);}
 .tk-filters{position:sticky;top:calc(var(--sticky-nav-h) + var(--sticky-summary-h));z-index:40;background:#0b0f1a;padding:10px 24px;border-bottom:1px solid var(--border);}
-.cfg-panel{position:sticky;top:var(--sticky-nav-h);z-index:45;background:#0b0f1a;border-bottom:1px solid var(--border);}
+/* L_HEADER_SCROLL_AWAY_V1 — .cfg-panel sticky removed. Filter selects +
+   Scan Now now scroll with the page. If operator finds themselves
+   scrolling back frequently to change filters mid-session, revisit. */
+.cfg-panel{z-index:45;background:#0b0f1a;border-bottom:1px solid var(--border);}
 
 /* v16ab — Show-all toggle + Log-all button + Sort dropdown */
 .scan-toggle{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.4px;color:var(--muted);padding:5px 10px;border-radius:var(--r-pill);background:var(--s2);border:1px solid var(--border);cursor:pointer;text-transform:uppercase;}
@@ -688,7 +705,9 @@ input{font-family:var(--font-ui);}
 
 /* v16ab — Cross-page summary band. Sticky line under the nav showing both
    scanner and tracker stats so you don't have to switch pages. */
-.cross-summary{position:sticky;top:48px;z-index:48;background:#0b0f1a;border-bottom:1px solid var(--border);padding:7px 16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px;}
+/* L_HEADER_SCROLL_AWAY_V1 — .cross-summary sticky removed; element is
+   also hidden under topbar mode (L_NAV_DOUBLING_FIX_V1). */
+.cross-summary{z-index:48;background:#0b0f1a;border-bottom:1px solid var(--border);padding:7px 16px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;font-family:var(--font-mono);font-size:12px;}
 .cross-summary .seg{display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:3px 9px;border-radius:5px;border:1px solid transparent;transition:all .15s;}
 .cross-summary .seg:hover{background:var(--s2);border-color:var(--border);}
 .cross-summary .seg .icon{font-size:14px;}
@@ -755,7 +774,10 @@ input{font-family:var(--font-ui);}
 .hdr-tabs .page-tab{padding:14px 14px;font-size:11px;border-bottom-width:2px;}
 .hdr-tabs .page-tab .badge{font-size:9px;padding:1px 5px;margin-left:6px;}
 .hdr-right{flex-shrink:0;}
-.cross-summary{top:48px!important;z-index:90!important;}
+/* L_HEADER_SCROLL_AWAY_V1 — top:48px / z-index:90 override no longer
+   needed once .cross-summary is non-sticky (and also hidden under
+   topbar mode). */
+.cross-summary{z-index:90!important;}
 /* If any rule still references the standalone page-nav, hide it defensively */
 .page-nav{display:none!important;}
 /* On narrower screens, wrap to multi-row but everything still sticky */
@@ -2319,7 +2341,10 @@ function injectMarketMoodCSS(){
   var s=document.createElement('style');
   s.id='mmb-css';
   s.textContent=
-    '#market-mood-banner{position:sticky;top:0;z-index:200;width:100%;}'+
+    /* L_HEADER_SCROLL_AWAY_V1 — formerly position:sticky;top:0;z-index:200.
+       Banner now scrolls naturally in normal document flow. Width stays
+       100% via flex parent. */
+    '#market-mood-banner{width:100%;}'+
     '.market-mood-banner{padding:10px 20px;display:flex;gap:16px;align-items:center;font-family:var(--font-mono);font-size:13px;border-bottom:2px solid;backdrop-filter:blur(8px);flex-wrap:wrap;}'+
     '.market-mood-banner.mood-hot{background:rgba(0,200,100,0.18);border-color:var(--green);color:var(--green);}'+
     '.market-mood-banner.mood-mixed{background:rgba(255,170,0,0.18);border-color:var(--amber);color:var(--amber);}'+
@@ -3930,7 +3955,9 @@ function injectTopbarCSS(){
     '#acress-topbar .tb-scan{padding:6px 14px;border-radius:8px;background:linear-gradient(135deg,#2ee8a0 0%,#22c990 100%);color:#000;border:none;font-family:var(--font-mono);font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;transition:filter 0.15s;}'+
     '#acress-topbar .tb-scan:hover{filter:brightness(1.12);}'+
     'body.with-acress-topbar #liveness-indicator,body.with-acress-topbar #mode-badge{display:none !important;}'+
-    'body.with-acress-topbar #market-mood-banner{top:54px;}'+
+    /* L_HEADER_SCROLL_AWAY_V1 — removed: body.with-acress-topbar
+       #market-mood-banner{top:54px;} no longer applicable since the
+       banner is no longer fixed/sticky. */
     '.acress-hidden-by-topbar-LEGACY-DISABLED{}';
   document.head.appendChild(s);
 }
@@ -4068,9 +4095,21 @@ function injectUIPolishCSS(){
     // Topbar: switch to fixed for reliability
     '#acress-topbar{position:fixed !important;}'+
     'body.with-acress-topbar{padding-top:54px !important;}'+
-    // Mood banner: stop being sticky (was overlapping content)
-    'body.with-acress-topbar #market-mood-banner{position:relative !important;top:auto !important;z-index:auto !important;}'+
-    // Original brand+tabs row: demote visually but KEEP CLICKABLE (so topbar tab forwarding works)
+    /* L_NAV_DOUBLING_FIX_V1 — Header Scroll-Away (2026-05-28). The legacy
+       header.hdr + .cross-summary were rendering simultaneously with the
+       post-26.B #acress-topbar, doubling top nav to 108px. tbHideOriginals()
+       was originally responsible but was disabled long ago. Hide them via
+       CSS instead. The originals stay in the DOM so the topbar's tab-
+       forwarding (synthetic click dispatch on .page-tab buttons) keeps
+       working — synthetic clicks fire regardless of display:none. */
+    'body.with-acress-topbar header.hdr{display:none !important;}'+
+    'body.with-acress-topbar .cross-summary{display:none !important;}'+
+    /* L_HEADER_SCROLL_AWAY_V1 — removed two competing !important rules
+       on #market-mood-banner position (formerly position:relative here at
+       L_UI_POLISH and position:fixed in L_TOP_MOVERS_CSS). Banner now
+       scrolls naturally with normal document flow per operator preference.
+       Do not recreate sticky positioning unless explicitly requested. */
+    // Original brand+tabs row: residual class kept for any orphan refs
     '.acress-hidden-by-topbar{opacity:1 !important;}'+
     '.acress-hidden-by-topbar:hover{opacity:1 !important;}'+
     // Scanner results: 2-column grid
@@ -4183,10 +4222,11 @@ function injectTopMoversCSS(){
   var s=document.createElement('style');
   s.id='top-movers-css';
   s.textContent=
-    // Pin mood + top combos + top movers as fixed below topbar
-    'body.with-acress-topbar #market-mood-banner{position:fixed !important;top:54px !important;left:0 !important;right:0 !important;z-index:480 !important;margin:0 !important;}'+
-    'body.with-acress-topbar #top-combos-widget{position:fixed !important;top:var(--combos-top,86px) !important;left:0 !important;right:0 !important;z-index:470 !important;margin:0 !important;}'+
-    'body.with-acress-topbar #top-movers-widget{position:fixed !important;top:var(--movers-top,226px) !important;left:0 !important;right:0 !important;z-index:460 !important;margin:0 !important;}'+
+    /* L_HEADER_SCROLL_AWAY_V1 — formerly pinned mood / top-combos /
+       top-movers as position:fixed below the topbar (lines deleted).
+       Per operator preference these are informational widgets that should
+       scroll away with the page so cards get more viewport. Layout offset
+       vars --combos-top / --movers-top no longer needed. */
     // Top movers strip
     '#top-movers-widget{padding:7px 16px;background:rgba(11,15,26,0.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,0.06);font-family:var(--font-mono);display:flex;align-items:center;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:thin;}'+
     '#top-movers-widget::-webkit-scrollbar{height:4px;}'+
@@ -4314,21 +4354,17 @@ document.addEventListener('click',function(e){
   }
 },false);
 
-// Dynamically position sticky panels (heights vary based on content)
+/* L_HEADER_SCROLL_AWAY_V1 — Header Scroll-Away (2026-05-28). This
+   function used to dynamically compute top: offsets for the formerly-
+   fixed mood banner, top-combos widget, and top-movers widget, and set
+   body padding-top to clear the entire fixed stack. Now that those
+   widgets scroll naturally in normal document flow, only the topbar
+   itself needs the 54px body padding-top — which is already declared
+   statically in injectUIPolishCSS (`body.with-acress-topbar{padding-top:
+   54px !important}`). Function kept as a no-op so its many call sites
+   (init + 500ms heartbeat + 30s top-movers refresh) don't need editing. */
 function positionStickyPanels(){
-  var topbar=document.getElementById('acress-topbar');
-  if(!topbar)return;
-  var topbarH=topbar.offsetHeight;
-  var moodH=0,combosH=0,moversH=0;
-  var mood=document.getElementById('market-mood-banner');
-  if(mood)moodH=mood.offsetHeight;
-  var combos=document.getElementById('top-combos-widget');
-  if(combos)combosH=combos.offsetHeight;
-  var movers=document.getElementById('top-movers-widget');
-  if(movers)moversH=movers.offsetHeight;
-  document.body.style.setProperty('--combos-top',(topbarH+moodH)+'px');
-  document.body.style.setProperty('--movers-top',(topbarH+moodH+combosH)+'px');
-  document.body.style.setProperty('padding-top',(topbarH+moodH+combosH+moversH)+'px','important');
+  /* intentional no-op — see L_HEADER_SCROLL_AWAY_V1 */
 }
 
 
@@ -6325,22 +6361,32 @@ function deactivateCrossSummaryNav() {
 function renderDailyBudgetHeader() {
   var el = document.getElementById('acress-daily-budget-header');
   if (!el) return;
+  /* L_DAILY_BUDGET_FOOTER_STICKY_V1 — toggle body class so the padding-
+     bottom only applies when the footer actually renders. Without this,
+     a 42px ghost gap would appear under the last card whenever the
+     toggle is off. */
+  function hide(){
+    el.style.display = 'none';
+    el.innerHTML = '';
+    document.body.classList.remove('acress-budget-footer-on');
+  }
   var enabled = true;
   try {
     var v = localStorage.getItem('acress_show_daily_budget_header');
     enabled = (v === null) ? true : (v === '1');
   } catch (_) {}
-  if (!enabled) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  if (typeof computeDailyBudget !== 'function') { el.style.display = 'none'; return; }
+  if (!enabled) { hide(); return; }
+  if (typeof computeDailyBudget !== 'function') { hide(); return; }
   var b;
-  try { b = computeDailyBudget(); } catch (e) { el.style.display = 'none'; return; }
-  if (!b) { el.style.display = 'none'; return; }
+  try { b = computeDailyBudget(); } catch (e) { hide(); return; }
+  if (!b) { hide(); return; }
   var pct = b.remaining_pct;
   var tier = (pct < 20) ? 'danger' : (pct < 50) ? 'warn' : '';
   var rem = Math.round(b.remaining_usd);
   var lim = Math.round(b.limit_usd);
   el.className = 'acress-budget-header' + (tier ? ' ' + tier : '');
   el.style.display = 'inline-flex';
+  document.body.classList.add('acress-budget-footer-on');
   el.innerHTML = '<span class="lbl">Daily budget</span>'
                + '<span class="val">$' + rem.toLocaleString() + '</span>'
                + '<span class="lbl">of</span>'
