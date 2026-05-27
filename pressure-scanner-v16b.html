@@ -1322,6 +1322,21 @@ function getVolumeFloorForDecile(decileSel){
   };
   return (map[String(decileSel)] != null) ? map[String(decileSel)] : 500000;
 }
+/* L_VOLUME_TIERED_BY_DECILE_V1 — module-level USD formatter so the Settings
+   handler + init script can read "$X" labels too. Previously was nested
+   inside renderResults; hoisted for cross-call accessibility. The original
+   nested version is removed to avoid two definitions. */
+function _formatVolLabel(usd){
+  if (usd >= 1000000) {
+    var m = usd / 1000000;
+    return '$' + (m === Math.floor(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
+  }
+  if (usd >= 1000) {
+    var k = usd / 1000;
+    return '$' + (k === Math.floor(k) ? k.toFixed(0) : k.toFixed(1)) + 'K';
+  }
+  return '$' + usd;
+}
 function velocityColorClass(decile){
   if(decile == null) return 'vel-gray';
   if(decile >= 9) return 'vel-green';
@@ -9556,18 +9571,8 @@ function renderResults(){invalidateMechanismStats();
       return v >= _minVolUsd;
     });
   }
-  /* Compact USD formatter for filter labels: "$500K", "$1M", "$2.5M". */
-  function _formatVolLabel(usd){
-    if (usd >= 1000000) {
-      var m = usd / 1000000;
-      return '$' + (m === Math.floor(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
-    }
-    if (usd >= 1000) {
-      var k = usd / 1000;
-      return '$' + (k === Math.floor(k) ? k.toFixed(0) : k.toFixed(1)) + 'K';
-    }
-    return '$' + usd;
-  }
+  /* L_VOLUME_TIERED_BY_DECILE_V1 — _formatVolLabel hoisted to module-level
+     so Settings handlers can read "$X" labels. Local definition removed. */
   /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — apply the new filters. For OI stage,
      'untagged' matches signals where s.oiStage is null/undefined (the DB
      stores those as NULL and the endpoint surfaces them via
