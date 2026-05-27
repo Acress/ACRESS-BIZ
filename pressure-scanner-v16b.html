@@ -1042,7 +1042,7 @@ body.acress-budget-footer-on{padding-bottom:42px;}
       <!-- L_VOLUME_FLOOR_INLINE_DISPLAY_V1 — compact derived-vol display
            updated whenever the decile dropdown changes. Reuses
            getVolumeFloorForDecile + _formatVolLabel from 27.3. -->
-      <span id="cfg-volume-floor-display" class="cfg-aux-display" title="Auto-derived from selected decile">Vol: $750K auto</span>
+      <span id="cfg-volume-floor-display" class="cfg-aux-display" title="Auto-derived from selected decile">Vol: $300K auto</span>
     </div>
     <div class="cfg-group">
       <span>Mechanism</span>
@@ -1393,22 +1393,25 @@ function velocityDecileFor(maxFive_bps){
    tiering as a function of the decile selection. As the operator widens
    the velocity catchment (lower decile), volume requirement tightens to
    compensate for the thinner mid-cap names that would otherwise pass.
-   Mapping anchored to operator-confirmed 2026-05-28 calibration. */
+   Mapping table values reduced 2026-05-28 — proportional shift to ~40%
+   of the original anchors. Anchor at $200K for decile 10/all (was $500K).
+   Operator decision to see more coins; accepts smaller position sizing on
+   the thinnest volume names. */
 function getVolumeFloorForDecile(decileSel){
   var map = {
-    'all': 500000,
-    '10':  500000,
-    '9':   750000,
-    '8':  1000000,
-    '7':  1500000,
-    '6':  2000000,
-    '5':  3000000,
-    '4':  4000000,
-    '3':  5000000,
-    '2':  7000000,
-    '1': 10000000
+    'all': 200000,
+    '10':  200000,
+    '9':   300000,
+    '8':   400000,
+    '7':   600000,
+    '6':   800000,
+    '5':  1200000,
+    '4':  1600000,
+    '3':  2000000,
+    '2':  2800000,
+    '1':  4000000
   };
-  return (map[String(decileSel)] != null) ? map[String(decileSel)] : 500000;
+  return (map[String(decileSel)] != null) ? map[String(decileSel)] : 200000;
 }
 /* L_VOLUME_TIERED_BY_DECILE_V1 — module-level USD formatter so the Settings
    handler + init script can read "$X" labels too. Previously was nested
@@ -3430,14 +3433,18 @@ function computePositionSize(signal, direction){
   /* L_NOTIONAL_MATH_UNCHANGED_RATIONALE_V1 — Upgrade 27.3 (2026-05-28).
      The 1% liquidity participation cap (liqPct default) is intentionally
      LEFT AS-IS. Under L_VOLUME_TIERED_BY_DECILE_V1, the volume floor scales
-     up as the operator widens the decile catchment (decile 10 → $500K,
-     decile 9 → $750K, ... decile 1 → $10M). That tiered floor IS the
-     slippage protection: it ensures only symbols with enough depth to
-     absorb the operator's risk-cap notional at 1% participation pass the
-     display filter in the first place. Raising liqPct here (e.g. to 2%
-     or 5%) would defeat the compensation by letting larger orders punch
-     through thinner books on the loosened decile tiers. Future-Claude:
-     do NOT raise liqPct without revisiting the decile→volume mapping. */
+     up as the operator widens the decile catchment (decile 10 → $200K,
+     decile 9 → $300K, ... decile 1 → $4M, post-2026-05-28 reduction).
+     That tiered floor IS the slippage protection: it ensures only symbols
+     with enough depth to absorb the operator's risk-cap notional at 1%
+     participation pass the display filter in the first place. Raising
+     liqPct here (e.g. to 2% or 5%) would defeat the compensation by
+     letting larger orders punch through thinner books on the loosened
+     decile tiers. Future-Claude: do NOT raise liqPct without revisiting
+     the decile→volume mapping. With the post-2026-05-28 anchors, max
+     notional from liquidity at the strictest filter (decile 10 → $200K,
+     1% cap) is $2K — positions on the thinnest pairs will be small by
+     design. Operator accepts this tradeoff for "see more coins". */
   // Liquidity participation cap: position notional capped at liqPct of 5-min quote volume
   var notionalLiqCap = Infinity;
   if (signal && signal._medianVol5m && signal._medianVol5m > 0) {
@@ -14286,7 +14293,7 @@ function openDrilldownByHourFromVPS(hour){
           <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:10px;">
             <span style="min-width:0;flex:1;"><b>Forward velocity floor</b>
               <span id="disc-velocity-decile-info" style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
-                Auto volume floor: $500K (based on selected decile)
+                Auto volume floor: $300K (based on selected decile)
               </span>
             </span>
             <select id="disc-velocity-decile-min" onchange="onDecileSelectChange(this.value)" title="Estimated probability of continued movement built from OI behavior, FFC, sweep state, drive, positioning, taker flow, and efficiency. Cross-sectional ranking within the current scan. Calibration placeholder weights — refined empirically as 26.F historical persistence data accumulates." style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:var(--font-mono);font-size:11px;">
