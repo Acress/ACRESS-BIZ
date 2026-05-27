@@ -1774,6 +1774,740 @@ function recomputeProspectiveDeciles(arr){
 }
 
 
+/* ====================================================================
+   L_LIFECYCLE_CALIBRATION_DOC_V1 — Upgrade 26.F Phase 1 (2026-05-28)
+
+   26.F CASCADE LIFECYCLE ENGINE — CALIBRATION_PLACEHOLDER VALUES
+
+   Phase 1 (this deploy): theory-derived constants based on the four
+   expert reviews that produced the lifecycle framing. NOT empirically
+   validated. The numerical values below are starting points chosen
+   from structural reasoning, not historical distributions.
+
+   Phase 2 (next 1-2 sessions, deferred work): query analysis_log +
+   shadow_analysis_log for empirical distributions:
+     - |FFC| magnitude at 80/90/95th percentiles per regime
+     - OI velocity range per regime
+     - sweep-state freshness decay rate from observed last_tested_at
+     - phase transition persistence requirements per transition
+   Refine the PRESSURE_*_Z / MOMENTUM_*_Z / FRESHNESS_* / PERSISTENCE_*
+   constants from these empirical distributions.
+
+   Phase 3 (production observation, deferred): tune hysteresis N values
+   based on observed phase-oscillation behavior. Currently N=3 at T1,
+   N=2 at T2/T4/T5/T6, N=1 at T3 (aging counter already provides
+   hysteresis). Adjust per-transition if specific transitions oscillate
+   noisily in production.
+
+   Per-symbol calibration deferred to V2 entirely — all V1 thresholds
+   are universal across symbols. V2 may stratify by symbol cohort
+   once cohort-distribution data accumulates.
+
+   Architecture summary:
+     - Six lifecycle dimensions computed per scan per pinned symbol:
+         Compression Pressure, Release Momentum, Exhaustion Risk,
+         Structural Freshness, Regime Stability, Liquidity Vulnerability
+     - Ring buffer of last 20 scans per pinned symbol holds raw values
+       + z-scores + computed phase per engine
+     - Direction-conditional dimensions computed twice per scan (one
+       value per engine perspective: legacy + shadow)
+     - Phase derivation is forward-only sequential cycle:
+         Compression Building → Compression Mature → Release Active →
+         Expansion Extended → Exhaustion Emerging → Post-Release →
+         (cycle reset to Compression Building)
+     - Each transition requires N consecutive scans of evidence
+       (current scan + N-1 prior). Inclusive convention.
+     - Per-engine phase computed independently; shadow may render
+       'no shadow direction' when shadow.emergent_direction is null
+       or NEUTRAL.
+
+   Refer to ACRESS-upgrades.md Upgrade 26.F entry for the full
+   architectural rationale and Phase 2/3 deferral notes.
+   ==================================================================== */
+
+/* L_LIFECYCLE_CALIBRATION_DOC_V1 — Phase 1 PLACEHOLDER constants.
+   Each value tagged below is a CALIBRATION_PLACEHOLDER. Phase 2 will
+   replace these with empirical distribution-anchored numbers. */
+
+// Six-phase transition thresholds — all PLACEHOLDER.
+var PRESSURE_MATURE_Z       = 1.5;   // T1: Compression Building → Mature
+var MOMENTUM_RELEASE_Z      = 1.0;   // T2: Mature → Release Active
+var FRESHNESS_RELEASE       = 0.5;   // T2: structural freshness floor
+var RELEASE_AGE_FLOOR       = 5;     // T3: scans-in-release for Expansion
+var EXHAUSTION_EMERGING_Z   = 0.5;   // T3: exhaustion z-score start
+var EXHAUSTION_MATURE_Z     = 1.5;   // T4: Expansion → Exhaustion Emerging
+var MOMENTUM_POST_Z         = 0;     // T5: momentum falling below 0
+var FRESHNESS_POST          = 0.3;   // T5: structural freshness ceiling
+var PRESSURE_RESET_Z        = 1.0;   // T6: Post-Release → reset cycle
+
+// Per-transition persistence (consecutive scans of evidence required).
+// Inclusive convention — current scan counts as one of N (Q7 resolved).
+var PERSISTENCE_T1 = 3;
+var PERSISTENCE_T2 = 2;
+var PERSISTENCE_T3 = 1;
+var PERSISTENCE_T4 = 2;
+var PERSISTENCE_T5 = 2;
+var PERSISTENCE_T6 = 2;
+
+// Structural-freshness exponential decay half-life for sweep state
+// recency. Half-life in scans (one scan = 30s pin cadence). 6 scans = 3 min.
+var FRESHNESS_HALFLIFE_SCANS = 6;
+
+// Buffer-bootstrap guard — minimum scans before dimensions/phase emit.
+// Q2 resolved: all-or-nothing gating, not per-dimension.
+var LIFECYCLE_BOOTSTRAP_N    = 5;
+
+// Liquidity pool detection — equal-level threshold (proximity %).
+var POOL_EQUAL_LEVEL_PCT     = 0.1;   // 0.1% of price counts as "equal"
+var POOL_LOOKBACK_CANDLES    = 100;   // last N 5m candles scanned
+var POOL_SWING_FLANK         = 2;     // candles each side for swing-high/low
+var POOL_SATURATION_PCT      = 3.0;   // pool farther than 3% has zero vuln contribution
+var POOL_NEAR_PCT            = 0.5;   // pool within 0.5% has max vuln contribution
+
+// Funding rate saturation magnitude for Compression Pressure normalization.
+// 0.1% per 8h funding interval treated as max-extreme.
+var FUNDING_RATE_SATURATION  = 0.1;
+
+// Ring buffer depth (L_LIFECYCLE_RING_BUFFER_V1 — Change 1).
+var PHASE_BUFFER_DEPTH       = 20;
+
+// Unpin grace period (L_LIFECYCLE_RING_BUFFER_V1 — Change 1).
+// Re-pinning within this window restores buffer history.
+var UNPIN_GRACE_MS           = 5 * 60 * 1000;
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — z-score utility for trailing-buffer
+   normalization. Returns null when fewer than 3 finite samples; caller
+   treats null as "input absent" per 27.5 null-skip-and-rescale.
+   Returns 0 when variance is degenerate (all samples equal). */
+function _zScoreFromBuffer(values, currentValue) {
+  if (!Array.isArray(values) || values.length < 3) return null;
+  if (typeof currentValue !== 'number' || !isFinite(currentValue)) return null;
+  var sum = 0, n = 0;
+  for (var i = 0; i < values.length; i++) {
+    if (typeof values[i] === 'number' && isFinite(values[i])) { sum += values[i]; n++; }
+  }
+  if (n < 3) return null;
+  var mean = sum / n;
+  var sqSum = 0;
+  for (var j = 0; j < values.length; j++) {
+    if (typeof values[j] === 'number' && isFinite(values[j])) {
+      var d = values[j] - mean;
+      sqSum += d * d;
+    }
+  }
+  var std = Math.sqrt(sqSum / n);
+  if (std < 1e-9) return 0;
+  return (currentValue - mean) / std;
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — direction-aware sign helper. Returns +1
+   for LONG, -1 for SHORT, 0 otherwise (treat NEUTRAL/null as direction-free). */
+function _dirSign(dir) {
+  if (dir === 'LONG')  return +1;
+  if (dir === 'SHORT') return -1;
+  return 0;
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — read trailing buffer values for a
+   direction-neutral dimension by key path. Extracts the prior raw
+   values for z-scoring. */
+function _trailingRawValues(buffer, dimensionKey) {
+  if (!Array.isArray(buffer)) return [];
+  var out = [];
+  for (var i = 0; i < buffer.length; i++) {
+    var e = buffer[i];
+    var v = e && e._raw && e._raw[dimensionKey];
+    if (typeof v === 'number' && isFinite(v)) out.push(v);
+  }
+  return out;
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — read trailing buffer values for a
+   direction-conditional dimension keyed by engine perspective. */
+function _trailingRawValuesPerEngine(buffer, dimensionKey, perspective) {
+  if (!Array.isArray(buffer)) return [];
+  var key = String(perspective || '').toLowerCase();
+  var out = [];
+  for (var i = 0; i < buffer.length; i++) {
+    var e = buffer[i];
+    var dim = e && e._raw && e._raw[dimensionKey];
+    var v = dim && dim[key];
+    if (typeof v === 'number' && isFinite(v)) out.push(v);
+  }
+  return out;
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — Compression Pressure (direction-neutral).
+   Composite magnitude of |FFC|/100, |positioning skew|, |funding|/saturation.
+   Null-skip-and-rescale across the three sub-inputs. Returns { z, raw }. */
+function _dimCompressionPressure(signal, buffer) {
+  var ff = signal && signal.forcedFlow;
+  var pos = signal && signal.positioning;
+  var ffMag = (ff && typeof ff.score === 'number') ? Math.min(1, Math.abs(ff.score) / 100) : null;
+  var posSkewMag = (pos && typeof pos.top_long_pct === 'number' && typeof pos.top_short_pct === 'number')
+    ? Math.abs(pos.top_long_pct - pos.top_short_pct) / 100 : null;
+  var fundingMag = (signal && typeof signal.fundingRate === 'number')
+    ? Math.min(1, Math.abs(signal.fundingRate) / FUNDING_RATE_SATURATION) : null;
+  /* CALIBRATION_PLACEHOLDER: 0.5/0.3/0.2 sub-weights for FFC/positioning/funding.
+     Phase 2: empirical refit. */
+  var components = [];
+  var weights = [];
+  if (ffMag != null)      { components.push(ffMag);      weights.push(0.5); }
+  if (posSkewMag != null) { components.push(posSkewMag); weights.push(0.3); }
+  if (fundingMag != null) { components.push(fundingMag); weights.push(0.2); }
+  if (!components.length) return { z: null, raw: null };
+  var sumW = 0, sumWV = 0;
+  for (var i = 0; i < components.length; i++) { sumW += weights[i]; sumWV += weights[i] * components[i]; }
+  var raw = sumWV / sumW;
+  var trailing = _trailingRawValues(buffer, 'compressionPressure');
+  return { z: _zScoreFromBuffer(trailing, raw), raw: raw };
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — Release Momentum (direction-conditional).
+   Composite of ΔFFC, liquidation intensity signed by direction, and
+   velocity acceleration signed by direction. Returns { z, raw } where
+   positive means cascade aligned with `dir`. */
+function _dimReleaseMomentum(signal, buffer, dir) {
+  var sign = _dirSign(dir);
+  if (!sign) return { z: null, raw: null };
+  /* Δ FFC vs prior scan in buffer. */
+  var dFfc = null;
+  if (Array.isArray(buffer) && buffer.length > 0 && signal && signal.forcedFlow && typeof signal.forcedFlow.score === 'number') {
+    var priorFfc = null;
+    for (var i = buffer.length - 1; i >= 0; i--) {
+      var pe = buffer[i];
+      if (pe && pe._raw && typeof pe._raw.ffcScore === 'number') { priorFfc = pe._raw.ffcScore; break; }
+    }
+    if (priorFfc != null) {
+      /* dFfc sign means change in FFC score. Multiply by sign so positive means change-with-dir. */
+      dFfc = ((signal.forcedFlow.score - priorFfc) / 100) * sign;
+    }
+  }
+  /* Liquidation intensity from bridge-pushed __acressLiqStats. Aligned-flux interpretation:
+     positive when liquidation flow direction matches signal direction
+     (LONG signal with long-liquidations dominating = short-cover squeeze
+     up = aligned with LONG = positive). */
+  var liqFlux = null;
+  try {
+    var liq = (typeof window !== 'undefined' && window.__acressLiqStats && signal && signal.sym) ? window.__acressLiqStats[signal.sym] : null;
+    if (liq && liq.ready && typeof liq.intensityTotal === 'number') {
+      var net = 0;
+      var L = liq.fiveMinLong || 0, S = liq.fiveMinShort || 0;
+      var tot = L + S;
+      if (tot > 0) {
+        /* For LONG dir, short-liquidations dominating = aligned (positive).
+           For SHORT dir, long-liquidations dominating = aligned (positive). */
+        var rawNet = (S - L) / tot;        // +1 if all-shorts liquidated, -1 if all-longs
+        net = rawNet * sign;               // sign-correct: aligned with dir = positive
+      }
+      liqFlux = net * Math.min(1, liq.intensityTotal / 3);  /* CALIBRATION_PLACEHOLDER: intensity 3 = saturated */
+    }
+  } catch (e) {}
+  /* Velocity acceleration vs prior scan. */
+  var velAccel = null;
+  if (Array.isArray(buffer) && buffer.length > 0 && signal && signal.velocity && typeof signal.velocity.pct_change_5min === 'number') {
+    var priorVel = null;
+    for (var k = buffer.length - 1; k >= 0; k--) {
+      var be = buffer[k];
+      if (be && be._raw && typeof be._raw.pctChange5min === 'number') { priorVel = be._raw.pctChange5min; break; }
+    }
+    if (priorVel != null) {
+      var dvel = signal.velocity.pct_change_5min - priorVel;
+      /* CALIBRATION_PLACEHOLDER: scale by 1.0 (% per scan saturation) */
+      velAccel = Math.tanh(dvel / 1.0) * sign;
+    }
+  }
+  var parts = [], weights = [];
+  if (dFfc     != null) { parts.push(dFfc);     weights.push(0.4); }
+  if (liqFlux  != null) { parts.push(liqFlux);  weights.push(0.4); }
+  if (velAccel != null) { parts.push(velAccel); weights.push(0.2); }
+  if (!parts.length) return { z: null, raw: null };
+  var sw = 0, swv = 0;
+  for (var p = 0; p < parts.length; p++) { sw += weights[p]; swv += weights[p] * parts[p]; }
+  var raw = swv / sw;
+  /* Z-score against trailing raw values for THIS engine perspective. */
+  var perspKey = (sign > 0) ? 'long_proxy' : 'short_proxy';
+  var trailing = _trailingRawValuesPerEngine(buffer, 'releaseMomentum', perspKey);
+  return { z: _zScoreFromBuffer(trailing, raw), raw: raw };
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — Exhaustion Risk (direction-conditional).
+   Q1 asymmetric rule resolved at Checkpoint B:
+     LONG : exhaustion rises when velocity > 0 AND oiVelocity < 0
+            (price up without new positioning = thin tape)
+     SHORT: exhaustion rises when velocity < 0 AND oiVelocity < 0
+            (price down without new shorts = same logic)
+   Plus OI deceleration component (oiAcceleration < 0 = decelerating). */
+function _dimExhaustionRisk(signal, buffer, dir) {
+  var sign = _dirSign(dir);
+  if (!sign) return { z: null, raw: null };
+  var vel  = (signal && signal.velocity && typeof signal.velocity.pct_change_5min === 'number') ? signal.velocity.pct_change_5min : null;
+  var oiV  = (signal && typeof signal.oiVelocity === 'number') ? signal.oiVelocity : null;
+  var oiA  = (signal && typeof signal.oiAcceleration === 'number') ? signal.oiAcceleration : null;
+  var divergence = null;
+  if (vel != null && oiV != null) {
+    if (dir === 'LONG') {
+      /* LONG: vel > 0 and oiV < 0 means price up without OI building. Magnitude
+         scales with how positive vel is times how negative oiV is. */
+      divergence = (vel > 0 && oiV < 0) ? Math.min(1, vel / 1.0) * Math.min(1, -oiV / 5.0) : 0;
+    } else {
+      /* SHORT: vel < 0 and oiV < 0 means price down without OI building shorts. */
+      divergence = (vel < 0 && oiV < 0) ? Math.min(1, -vel / 1.0) * Math.min(1, -oiV / 5.0) : 0;
+    }
+  }
+  var decel = (oiA != null) ? (oiA < 0 ? Math.min(1, -oiA / 5.0) : 0) : null;   /* CALIBRATION_PLACEHOLDER: scale 5 for OI accel saturation */
+  var parts = [], weights = [];
+  if (divergence != null) { parts.push(divergence); weights.push(0.6); }
+  if (decel      != null) { parts.push(decel);      weights.push(0.4); }
+  if (!parts.length) return { z: null, raw: null };
+  var sw = 0, swv = 0;
+  for (var i = 0; i < parts.length; i++) { sw += weights[i]; swv += weights[i] * parts[i]; }
+  var raw = swv / sw;
+  var perspKey = (sign > 0) ? 'long_proxy' : 'short_proxy';
+  var trailing = _trailingRawValuesPerEngine(buffer, 'exhaustionRisk', perspKey);
+  return { z: _zScoreFromBuffer(trailing, raw), raw: raw };
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — Structural Freshness (direction-neutral).
+   Three components, null-skip-and-rescale:
+     - Sweep freshness: exp decay from last_tested_at via levelsState[base]
+     - Drive transition recency: scans since spotDrive.state last changed
+     - Liquidation intensity (proxy for liq-event freshness; the
+       L_LIFECYCLE_DIMENSIONS_V1 V2 catalog item upgrades to true
+       lastEventAgoMs once bridge exposes it)
+   Returns { value, raw } where value === raw (both 0-1, not z-scored). */
+function _dimStructuralFreshness(signal, buffer, base) {
+  var nowMs = Date.now();
+  var sweepFreshness = null;
+  if (base && typeof levelsState !== 'undefined' && levelsState[base] && levelsState[base].length) {
+    var maxTested = 0;
+    for (var i = 0; i < levelsState[base].length; i++) {
+      var lvl = levelsState[base][i];
+      if (lvl && lvl.last_tested_at > maxTested) maxTested = lvl.last_tested_at;
+    }
+    if (maxTested > 0) {
+      /* Exponential decay: freshness = 2 ^ (-scans_since / halflife).
+         One scan = 30s (pin cadence). */
+      var scansSince = (nowMs - maxTested) / (30 * 1000);
+      sweepFreshness = Math.pow(2, -(scansSince / FRESHNESS_HALFLIFE_SCANS));
+    }
+  }
+  var driveFreshness = null;
+  if (Array.isArray(buffer) && buffer.length > 0 && signal && signal.spotDrive && signal.spotDrive.state) {
+    var curDrive = signal.spotDrive.state;
+    if (curDrive !== 'SPOT_UNAVAILABLE') {
+      var scansSinceChange = 0;
+      for (var j = buffer.length - 1; j >= 0; j--) {
+        var be = buffer[j];
+        var prev = be && be._raw && be._raw.spotDriveState;
+        if (prev == null) { scansSinceChange++; continue; }
+        if (prev === curDrive) { scansSinceChange++; continue; }
+        break;  /* state changed at this point */
+      }
+      driveFreshness = Math.pow(2, -(scansSinceChange / FRESHNESS_HALFLIFE_SCANS));
+    }
+  }
+  var liqFreshness = null;
+  try {
+    var liq = (typeof window !== 'undefined' && window.__acressLiqStats && signal && signal.sym) ? window.__acressLiqStats[signal.sym] : null;
+    if (liq && liq.ready && typeof liq.intensityTotal === 'number') {
+      /* CALIBRATION_PLACEHOLDER: intensity 3 = saturated freshness.
+         V2 swap-in: lastEventAgoMs from bridge. */
+      liqFreshness = Math.min(1, liq.intensityTotal / 3);
+    }
+  } catch (e) {}
+  var parts = [], weights = [];
+  if (sweepFreshness != null) { parts.push(sweepFreshness); weights.push(0.5); }
+  if (driveFreshness != null) { parts.push(driveFreshness); weights.push(0.3); }
+  if (liqFreshness   != null) { parts.push(liqFreshness);   weights.push(0.2); }
+  if (!parts.length) return { value: null, raw: null };
+  var sw = 0, swv = 0;
+  for (var k = 0; k < parts.length; k++) { sw += weights[k]; swv += weights[k] * parts[k]; }
+  var v = swv / sw;
+  return { value: v, raw: v };
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — Regime Stability (direction-neutral).
+   Combines (a) mood persistence (consecutive scans of same mood),
+   (b) ATR-percent volatility bucket (lower ATR-pct = more stable),
+   (c) transition damping (reduce stability if mood changed in last
+       REGIME_TRANSITION_DAMPING_SCANS scans).
+   Returns { z, raw } where raw is a 0-1 stability score, z is the
+   per-symbol trailing z-score. */
+function _dimRegimeStability(signal, buffer, currentMood) {
+  /* Mood persistence: count consecutive scans of same mood in buffer. */
+  var moodPersist = 0;
+  if (Array.isArray(buffer) && currentMood) {
+    for (var i = buffer.length - 1; i >= 0; i--) {
+      if (buffer[i] && buffer[i].mood === currentMood) moodPersist++; else break;
+    }
+  }
+  /* Mood persistence component: saturates at 10 consecutive scans = 1.0. */
+  var moodPart = Math.min(1, moodPersist / 10);   /* CALIBRATION_PLACEHOLDER */
+  /* ATR-percent bucket. Lower ATR = more stable. */
+  var atrPart = null;
+  if (signal && typeof signal.atr5m === 'number' && signal.atr5m > 0 &&
+      typeof signal.entryPrice === 'number' && signal.entryPrice > 0) {
+    var atrPct = (signal.atr5m / signal.entryPrice) * 100;
+    /* CALIBRATION_PLACEHOLDER: 0.5% ATR = high stability, 3% ATR = low stability */
+    atrPart = Math.max(0, Math.min(1, 1 - (atrPct - 0.5) / (3.0 - 0.5)));
+  }
+  /* Transition damping: subtract if mood changed in recent window. */
+  var damping = 0;
+  if (Array.isArray(buffer) && currentMood) {
+    var lookback = Math.min(buffer.length, 4);   /* CALIBRATION_PLACEHOLDER: 4-scan damping window */
+    for (var j = buffer.length - 1; j >= buffer.length - lookback && j >= 0; j--) {
+      if (buffer[j] && buffer[j].mood && buffer[j].mood !== currentMood) { damping = 0.3; break; }
+    }
+  }
+  var parts = [], weights = [];
+  parts.push(moodPart);  weights.push(0.5);
+  if (atrPart != null) { parts.push(atrPart); weights.push(0.5); }
+  var sw = 0, swv = 0;
+  for (var p = 0; p < parts.length; p++) { sw += weights[p]; swv += weights[p] * parts[p]; }
+  var raw = Math.max(0, (swv / sw) - damping);
+  var trailing = _trailingRawValues(buffer, 'regimeStability');
+  return { z: _zScoreFromBuffer(trailing, raw), raw: raw };
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — Liquidity Vulnerability (direction-conditional).
+   Composite of:
+     - Direction-aware crowding (AGAINST_TOPS/DIVERGENT_RISK = vulnerable;
+       ALIGNED_WITH_TOPS/DIVERGENT_RETAIL = less vulnerable)
+     - Pool proximity from signal.liquidityPool (closer pool above for
+       LONG / below for SHORT = more vulnerable)
+     - Absorption proxy via sweepState.for_signal.nearest_level_tier
+       ('near_breakthrough' / 'wearing_thin' = more vulnerable)
+   Null-skip-and-rescale. Returns { z, raw } where positive = more vulnerable. */
+function _dimLiquidityVulnerability(signal, buffer, dir) {
+  var sign = _dirSign(dir);
+  if (!sign) return { z: null, raw: null };
+  var crowding = null;
+  if (signal && signal.positioning && typeof classifyPositioning === 'function') {
+    var c = classifyPositioning(signal.positioning, dir);
+    if (c && c.state) {
+      switch (c.state) {
+        case 'AGAINST_TOPS':       crowding = +0.7; break;
+        case 'DIVERGENT_RISK':     crowding = +0.7; break;
+        case 'ALIGNED_WITH_TOPS':  crowding = -0.5; break;
+        case 'DIVERGENT_RETAIL':   crowding = -0.5; break;
+        case 'BALANCED':           crowding = 0;    break;
+        default:                   crowding = null; break;
+      }
+    }
+  }
+  var poolProximity = null;
+  if (signal && signal.liquidityPool) {
+    var lp = signal.liquidityPool;
+    /* LONG worries about pools ABOVE (stop-sweep target). SHORT worries
+       about pools BELOW. */
+    var distPct = (dir === 'LONG') ? lp.nearest_above_pct : lp.nearest_below_pct;
+    var strength = (dir === 'LONG') ? (lp.level_strength_above || 0) : (lp.level_strength_below || 0);
+    if (typeof distPct === 'number' && isFinite(distPct) && distPct >= 0) {
+      /* Closer = more vulnerable. Saturate: distance <= POOL_NEAR_PCT → 1.0;
+         distance >= POOL_SATURATION_PCT → 0. */
+      var proximityScore;
+      if (distPct <= POOL_NEAR_PCT) proximityScore = 1.0;
+      else if (distPct >= POOL_SATURATION_PCT) proximityScore = 0;
+      else proximityScore = 1.0 - (distPct - POOL_NEAR_PCT) / (POOL_SATURATION_PCT - POOL_NEAR_PCT);
+      /* Multiply by strength factor (touches), saturate at 3+ touches. */
+      var strengthFactor = Math.min(1, (strength || 1) / 3);
+      poolProximity = proximityScore * strengthFactor;
+    }
+  }
+  var absorptionProxy = null;
+  if (signal && signal.sweepState && signal.sweepState.for_signal) {
+    var tier = signal.sweepState.for_signal.nearest_level_tier;
+    switch (tier) {
+      case 'near_breakthrough': absorptionProxy = +0.8; break;
+      case 'wearing_thin':      absorptionProxy = +0.5; break;
+      case 'tested':            absorptionProxy = +0.2; break;
+      case 'fresh':             absorptionProxy = 0;    break;
+      default:                  absorptionProxy = null; break;
+    }
+  }
+  var parts = [], weights = [];
+  if (crowding        != null) { parts.push(crowding);        weights.push(0.4); }
+  if (poolProximity   != null) { parts.push(poolProximity);   weights.push(0.35); }
+  if (absorptionProxy != null) { parts.push(absorptionProxy); weights.push(0.25); }
+  if (!parts.length) return { z: null, raw: null };
+  var sw = 0, swv = 0;
+  for (var i = 0; i < parts.length; i++) { sw += weights[i]; swv += weights[i] * parts[i]; }
+  var raw = swv / sw;
+  var perspKey = (sign > 0) ? 'long_proxy' : 'short_proxy';
+  var trailing = _trailingRawValuesPerEngine(buffer, 'liquidityVulnerability', perspKey);
+  return { z: _zScoreFromBuffer(trailing, raw), raw: raw };
+}
+
+/* L_LIFECYCLE_DIMENSIONS_V1 — assembler. Computes all six dimensions
+   for a signal against its ring buffer. Direction-conditional ones
+   computed twice (legacy + shadow perspectives). */
+function computeLifecycleDimensions(signal, currentMood, buffer) {
+  if (!signal) return null;
+  var base = signal.base;
+  var legacy_dir = signal.dir;
+  var shadow_dir = null;
+  if (signal.shadow && signal.shadow.emergent_direction && signal.shadow.emergent_direction !== 'NEUTRAL') {
+    shadow_dir = signal.shadow.emergent_direction;
+  }
+  var cp = _dimCompressionPressure(signal, buffer);
+  var sf = _dimStructuralFreshness(signal, buffer, base);
+  var rs = _dimRegimeStability(signal, buffer, currentMood);
+  var rmL = _dimReleaseMomentum(signal, buffer, legacy_dir);
+  var rmS = shadow_dir ? _dimReleaseMomentum(signal, buffer, shadow_dir) : { z: null, raw: null };
+  var erL = _dimExhaustionRisk(signal, buffer, legacy_dir);
+  var erS = shadow_dir ? _dimExhaustionRisk(signal, buffer, shadow_dir) : { z: null, raw: null };
+  var lvL = _dimLiquidityVulnerability(signal, buffer, legacy_dir);
+  var lvS = shadow_dir ? _dimLiquidityVulnerability(signal, buffer, shadow_dir) : { z: null, raw: null };
+  /* perspKey mapping: legacy_dir's sign determines which raw-trailing
+     pool feeds the z-score. To preserve consistency across perspectives,
+     store raw with explicit 'legacy'/'shadow' keys; the z-score helpers
+     above translate to long_proxy/short_proxy for trailing reads. */
+  return {
+    /* z-scored dimensions consumed by phase derivation + UI */
+    compressionPressure:  cp.z,
+    structuralFreshness:  sf.value,    /* 0-1 directly, not z-scored */
+    regimeStability:      rs.z,
+    releaseMomentum:      { legacy: rmL.z, shadow: rmS.z },
+    exhaustionRisk:       { legacy: erL.z, shadow: erS.z },
+    liquidityVulnerability: { legacy: lvL.z, shadow: lvS.z },
+    /* raw values for next-scan z-scoring + UI debug */
+    _raw: {
+      compressionPressure: cp.raw,
+      structuralFreshness: sf.raw,
+      regimeStability:     rs.raw,
+      releaseMomentum:      { long_proxy: legacy_dir === 'LONG' ? rmL.raw : (shadow_dir === 'LONG' ? rmS.raw : null),
+                              short_proxy: legacy_dir === 'SHORT' ? rmL.raw : (shadow_dir === 'SHORT' ? rmS.raw : null),
+                              legacy: rmL.raw, shadow: rmS.raw },
+      exhaustionRisk:       { long_proxy: legacy_dir === 'LONG' ? erL.raw : (shadow_dir === 'LONG' ? erS.raw : null),
+                              short_proxy: legacy_dir === 'SHORT' ? erL.raw : (shadow_dir === 'SHORT' ? erS.raw : null),
+                              legacy: erL.raw, shadow: erS.raw },
+      liquidityVulnerability: { long_proxy: legacy_dir === 'LONG' ? lvL.raw : (shadow_dir === 'LONG' ? lvS.raw : null),
+                              short_proxy: legacy_dir === 'SHORT' ? lvL.raw : (shadow_dir === 'SHORT' ? lvS.raw : null),
+                              legacy: lvL.raw, shadow: lvS.raw },
+      ffcScore: (signal.forcedFlow && typeof signal.forcedFlow.score === 'number') ? signal.forcedFlow.score : null,
+      pctChange5min: (signal.velocity && typeof signal.velocity.pct_change_5min === 'number') ? signal.velocity.pct_change_5min : null,
+      spotDriveState: (signal.spotDrive && signal.spotDrive.state) ? signal.spotDrive.state : null
+    }
+  };
+}
+
+/* L_LIFECYCLE_PHASE_DERIVATION_V1 — count consecutive evidence walking
+   buffer backward. Predicate receives (bufferEntry, perspective). Stops
+   at the first failure. Returns the count of consecutive successes. */
+function countConsecutiveEvidence(buffer, predicate, engine_perspective) {
+  if (!Array.isArray(buffer) || !buffer.length) return 0;
+  var count = 0;
+  for (var i = buffer.length - 1; i >= 0; i--) {
+    if (predicate(buffer[i], engine_perspective)) count++;
+    else break;
+  }
+  return count;
+}
+
+/* L_LIFECYCLE_PHASE_DERIVATION_V1 — count consecutive same-phase entries
+   walking buffer backward. Used for T3's RELEASE_AGE_FLOOR check. */
+function _countPhaseAge(buffer, phase, engine_perspective) {
+  if (!Array.isArray(buffer) || !buffer.length) return 0;
+  var key = (engine_perspective === 'SHADOW') ? 'shadow_phase' : 'legacy_phase';
+  var count = 0;
+  for (var i = buffer.length - 1; i >= 0; i--) {
+    if (buffer[i] && buffer[i][key] === phase) count++;
+    else break;
+  }
+  return count;
+}
+
+/* L_LIFECYCLE_PHASE_DERIVATION_V1 — read direction-conditional dim per engine. */
+function _perEngineDim(dimObj, engine_perspective) {
+  if (!dimObj) return null;
+  var key = (engine_perspective === 'SHADOW') ? 'shadow' : 'legacy';
+  var v = dimObj[key];
+  return (typeof v === 'number') ? v : null;
+}
+
+/* L_LIFECYCLE_PHASE_DERIVATION_V1 — phase derivation core.
+   Forward-only six-phase cycle. Sequential, no skip-forward (Q5).
+   No reverse transitions (Q6). One transition per scan per engine (Q8).
+   Bootstrap guard returns 'gathering data' until buffer.length >= 5. */
+function derivePhase(dimensions, buffer, engine_perspective) {
+  if (!dimensions) return 'gathering data';
+  /* Shadow null/NEUTRAL fast-path. */
+  if (engine_perspective === 'SHADOW') {
+    if (_perEngineDim(dimensions.releaseMomentum, 'SHADOW') == null
+        && _perEngineDim(dimensions.exhaustionRisk, 'SHADOW') == null) {
+      return 'no shadow direction';
+    }
+  }
+  /* Bootstrap guard. */
+  if (!Array.isArray(buffer) || buffer.length < LIFECYCLE_BOOTSTRAP_N) {
+    return 'gathering data';
+  }
+  /* Resolve current phase from most recent entry. */
+  var lastEntry = buffer[buffer.length - 1];
+  var phaseKey  = (engine_perspective === 'SHADOW') ? 'shadow_phase' : 'legacy_phase';
+  var currentPhase = (lastEntry && lastEntry[phaseKey]) ? lastEntry[phaseKey] : 'Compression Building';
+  /* Direction-conditional dimensions for THIS engine. */
+  var pressure   = dimensions.compressionPressure;
+  var momentum   = _perEngineDim(dimensions.releaseMomentum, engine_perspective);
+  var exhaustion = _perEngineDim(dimensions.exhaustionRisk, engine_perspective);
+  var freshness  = dimensions.structuralFreshness;
+  /* Transition check from currentPhase. Inclusive convention (Q7):
+     persistence N means the current scan + (N-1) prior must all satisfy. */
+  switch (currentPhase) {
+    case 'Compression Building': {
+      if (pressure != null && pressure > PRESSURE_MATURE_Z) {
+        var n1 = countConsecutiveEvidence(buffer, function(e){
+          var p = e && e.dimensions && e.dimensions.compressionPressure;
+          return p != null && p > PRESSURE_MATURE_Z;
+        });
+        if (n1 >= PERSISTENCE_T1 - 1) return 'Compression Mature';
+      }
+      return 'Compression Building';
+    }
+    case 'Compression Mature': {
+      if (momentum != null && momentum > MOMENTUM_RELEASE_Z &&
+          freshness != null && freshness > FRESHNESS_RELEASE) {
+        var n2 = countConsecutiveEvidence(buffer, function(e, persp){
+          var m = e && e.dimensions && _perEngineDim(e.dimensions.releaseMomentum, persp);
+          var f = e && e.dimensions && e.dimensions.structuralFreshness;
+          return m != null && m > MOMENTUM_RELEASE_Z && f != null && f > FRESHNESS_RELEASE;
+        }, engine_perspective);
+        if (n2 >= PERSISTENCE_T2 - 1) return 'Release Active';
+      }
+      return 'Compression Mature';
+    }
+    case 'Release Active': {
+      var age = _countPhaseAge(buffer, 'Release Active', engine_perspective);
+      if (age > RELEASE_AGE_FLOOR && exhaustion != null && exhaustion > EXHAUSTION_EMERGING_Z) {
+        return 'Expansion Extended';
+      }
+      return 'Release Active';
+    }
+    case 'Expansion Extended': {
+      if (exhaustion != null && exhaustion > EXHAUSTION_MATURE_Z) {
+        var n4 = countConsecutiveEvidence(buffer, function(e, persp){
+          var x = e && e.dimensions && _perEngineDim(e.dimensions.exhaustionRisk, persp);
+          return x != null && x > EXHAUSTION_MATURE_Z;
+        }, engine_perspective);
+        if (n4 >= PERSISTENCE_T4 - 1) return 'Exhaustion Emerging';
+      }
+      return 'Expansion Extended';
+    }
+    case 'Exhaustion Emerging': {
+      if (momentum != null && momentum < MOMENTUM_POST_Z &&
+          freshness != null && freshness < FRESHNESS_POST) {
+        var n5 = countConsecutiveEvidence(buffer, function(e, persp){
+          var m = e && e.dimensions && _perEngineDim(e.dimensions.releaseMomentum, persp);
+          var f = e && e.dimensions && e.dimensions.structuralFreshness;
+          return m != null && m < MOMENTUM_POST_Z && f != null && f < FRESHNESS_POST;
+        }, engine_perspective);
+        if (n5 >= PERSISTENCE_T5 - 1) return 'Post-Release';
+      }
+      return 'Exhaustion Emerging';
+    }
+    case 'Post-Release': {
+      if (pressure != null && Math.abs(pressure) > PRESSURE_RESET_Z) {
+        var n6 = countConsecutiveEvidence(buffer, function(e){
+          var p = e && e.dimensions && e.dimensions.compressionPressure;
+          return p != null && Math.abs(p) > PRESSURE_RESET_Z;
+        });
+        if (n6 >= PERSISTENCE_T6 - 1) return 'Compression Building';
+      }
+      return 'Post-Release';
+    }
+  }
+  return currentPhase;
+}
+
+/* L_LIQUIDITY_POOL_PROXIMITY_V1 — Upgrade 26.F Change 5 (2026-05-28).
+   Detect equal-highs / equal-lows within POOL_LOOKBACK_CANDLES of 5m klines.
+   Equal-level threshold POOL_EQUAL_LEVEL_PCT (0.1% of price). Swing-high
+   detection: local maxima with POOL_SWING_FLANK candles on each side.
+   Output: { nearest_above_pct, nearest_below_pct, level_strength_above,
+             level_strength_below } where strength = touch count at the
+   detected equal level. Pure function — no global state, no caching.
+   Called once per scan from analyzeCoinDiag (the cost is small vs the
+   already-expensive analyzer; not worth an inter-scan cache). */
+function computeLiquidityPoolProximity(k5, currentPrice) {
+  if (!Array.isArray(k5) || k5.length < (POOL_SWING_FLANK * 2 + 1)) return null;
+  if (typeof currentPrice !== 'number' || !isFinite(currentPrice) || currentPrice <= 0) return null;
+  /* Use last POOL_LOOKBACK_CANDLES bars (or whatever is available). */
+  var start = Math.max(0, k5.length - POOL_LOOKBACK_CANDLES);
+  var bars = k5.slice(start);
+  /* Find swing highs + lows. A bar i is a swing high if its high is
+     >= all highs within POOL_SWING_FLANK candles on each side. Symmetric for lows. */
+  var swingHighs = [];
+  var swingLows = [];
+  for (var i = POOL_SWING_FLANK; i < bars.length - POOL_SWING_FLANK; i++) {
+    var hi = parseFloat(bars[i][2]);
+    var lo = parseFloat(bars[i][3]);
+    if (!isFinite(hi) || !isFinite(lo)) continue;
+    var isHigh = true, isLow = true;
+    for (var k = i - POOL_SWING_FLANK; k <= i + POOL_SWING_FLANK; k++) {
+      if (k === i) continue;
+      var khi = parseFloat(bars[k][2]);
+      var klo = parseFloat(bars[k][3]);
+      if (isFinite(khi) && khi > hi) isHigh = false;
+      if (isFinite(klo) && klo < lo) isLow  = false;
+      if (!isHigh && !isLow) break;
+    }
+    if (isHigh) swingHighs.push(hi);
+    if (isLow)  swingLows.push(lo);
+  }
+  /* Cluster equal levels: two swings are "equal" if their prices are
+     within POOL_EQUAL_LEVEL_PCT of each other. Each cluster's centroid
+     is the level; cluster size is the strength (touch count). */
+  function clusterLevels(arr){
+    if (!arr.length) return [];
+    var sorted = arr.slice().sort(function(a,b){ return a-b; });
+    var clusters = [];
+    var cur = { price: sorted[0], touches: 1, members: [sorted[0]] };
+    for (var i = 1; i < sorted.length; i++) {
+      var v = sorted[i];
+      var pctDiff = (v - cur.price) / cur.price * 100;
+      if (pctDiff <= POOL_EQUAL_LEVEL_PCT) {
+        cur.members.push(v);
+        cur.touches++;
+        /* Recompute centroid as mean of members. */
+        var sum = 0; for (var m = 0; m < cur.members.length; m++) sum += cur.members[m];
+        cur.price = sum / cur.members.length;
+      } else {
+        clusters.push(cur);
+        cur = { price: v, touches: 1, members: [v] };
+      }
+    }
+    clusters.push(cur);
+    /* Only keep clusters with at least 2 touches (the "equal" criterion). */
+    return clusters.filter(function(c){ return c.touches >= 2; });
+  }
+  var highClusters = clusterLevels(swingHighs);
+  var lowClusters  = clusterLevels(swingLows);
+  /* Find nearest above + below current price. */
+  var nearestAbove = null, nearestBelow = null;
+  for (var h = 0; h < highClusters.length; h++) {
+    var hc = highClusters[h];
+    if (hc.price > currentPrice) {
+      if (!nearestAbove || hc.price < nearestAbove.price) nearestAbove = hc;
+    }
+  }
+  for (var lc = 0; lc < lowClusters.length; lc++) {
+    var lcl = lowClusters[lc];
+    if (lcl.price < currentPrice) {
+      if (!nearestBelow || lcl.price > nearestBelow.price) nearestBelow = lcl;
+    }
+  }
+  var nearestAbovePct = nearestAbove ? ((nearestAbove.price - currentPrice) / currentPrice * 100) : null;
+  var nearestBelowPct = nearestBelow ? ((currentPrice - nearestBelow.price) / currentPrice * 100) : null;
+  return {
+    nearest_above_pct: nearestAbovePct,
+    nearest_below_pct: nearestBelowPct,
+    level_strength_above: nearestAbove ? nearestAbove.touches : 0,
+    level_strength_below: nearestBelow ? nearestBelow.touches : 0
+  };
+}
+
+
 /* L_DISPLACEMENT_EFFICIENCY_V1 — Displacement Efficiency Metric.
    Healthy directional moves have efficient displacement (small effort, large
    price travel). Manipulative sweeps and absorption events have low efficiency
@@ -6634,6 +7368,74 @@ function classifySpotPerpDrive(perpK5, spotK5){
    L_CARD_CASE_AUDIT_V1 — Pass 5: drive state labels normalized to
    lowercase ("spot-led" / "perp-led" / "balanced") so prose reads
    naturally instead of as SCREAMING_SNAKE tokens. */
+/* L_LIFECYCLE_PINNED_UI_V1 — Upgrade 26.F Change 4 (2026-05-28). Renders
+   the Lifecycle prose section on pinned cards (gated by s._pinned + s.lifecycle).
+   Two engine lines when legacy and shadow phases diverge; single engine
+   line when they agree. Bootstrap placeholder "gathering data (X/5)" when
+   the per-symbol ring buffer hasn't accumulated enough history yet. */
+function buildLifecycleHtml(s){
+  if (!s || !s.lifecycle) return '';
+  var lc = s.lifecycle;
+  var bufN = lc.buffer_length || 0;
+  var bootN = lc.bootstrap_n || 5;
+  /* Buffer-bootstrap guard (Q2): all-or-nothing gating. */
+  if (bufN < bootN) {
+    return '<div class="vel-line vel-gray" style="margin:0;">'
+      + '⚪ Lifecycle: gathering data (' + bufN + '/' + bootN + ' scans)'
+      + '</div>';
+  }
+  function phaseClass(phase){
+    if (phase === 'Compression Mature' || phase === 'Expansion Extended') return 'vel-amber';
+    if (phase === 'Release Active') return 'vel-green';
+    if (phase === 'Exhaustion Emerging') return 'vel-red';
+    return 'vel-gray';
+  }
+  function fmtZ(v){
+    if (typeof v !== 'number' || !isFinite(v)) return '—';
+    return (v >= 0 ? '+' : '') + v.toFixed(1) + 'z';
+  }
+  function fmtFresh(v){
+    if (typeof v !== 'number' || !isFinite(v)) return '—';
+    return v.toFixed(2);
+  }
+  function dimsLine(perspective){
+    var dims = lc.dimensions;
+    if (!dims) return '—';
+    var key = perspective.toLowerCase();
+    var p = typeof dims.compressionPressure === 'number' ? dims.compressionPressure : null;
+    var m = (dims.releaseMomentum && typeof dims.releaseMomentum[key] === 'number') ? dims.releaseMomentum[key] : null;
+    var x = (dims.exhaustionRisk && typeof dims.exhaustionRisk[key] === 'number') ? dims.exhaustionRisk[key] : null;
+    var f = typeof dims.structuralFreshness === 'number' ? dims.structuralFreshness : null;
+    var v = (dims.liquidityVulnerability && typeof dims.liquidityVulnerability[key] === 'number') ? dims.liquidityVulnerability[key] : null;
+    return 'Pressure ' + fmtZ(p) + ' · Momentum ' + fmtZ(m) + ' · Exhaustion ' + fmtZ(x) + ' · Freshness ' + fmtFresh(f) + ' · Vulnerability ' + fmtZ(v);
+  }
+  var legacy_phase = lc.legacy_phase || 'Compression Building';
+  var shadow_phase = lc.shadow_phase || 'no shadow direction';
+  var legacyDir = s.dir || '?';
+  var shadowDir = (s.shadow && s.shadow.emergent_direction && s.shadow.emergent_direction !== 'NEUTRAL') ? s.shadow.emergent_direction : null;
+  var shadowAvailable = (shadow_phase !== 'no shadow direction' && shadow_phase !== 'gathering data');
+  var agree = shadowAvailable && (legacy_phase === shadow_phase);
+  var html = '';
+  if (!shadowAvailable || agree) {
+    /* Single engine line. */
+    html += '<div class="vel-line ' + phaseClass(legacy_phase) + '" style="margin:0;">'
+      + '<b>Lifecycle (' + legacyDir + '): ' + legacy_phase + '</b>'
+      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine('LEGACY') + '</span>'
+      + '</div>';
+  } else {
+    /* Two engine lines — phases diverged. */
+    html += '<div class="vel-line ' + phaseClass(legacy_phase) + '" style="margin:0;">'
+      + '<b>Legacy (' + legacyDir + '): ' + legacy_phase + '</b>'
+      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine('LEGACY') + '</span>'
+      + '</div>';
+    html += '<div class="vel-line ' + phaseClass(shadow_phase) + '" style="margin:0;">'
+      + '<b>Shadow (' + (shadowDir || '?') + '): ' + shadow_phase + '</b>'
+      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine('SHADOW') + '</span>'
+      + '</div>';
+  }
+  return html;
+}
+
 function buildSpotPerpDriveHtml(drive, opts){
   opts = opts || {};
   var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
@@ -7159,8 +7961,16 @@ function togglePin(base) {
   var idx = list.indexOf(base);
   if (idx >= 0) {
     list.splice(idx, 1);
+    /* L_LIFECYCLE_RING_BUFFER_V1 — Upgrade 26.F (2026-05-28). 5-min grace
+       period before wiping ring-buffer history. If operator re-pins within
+       UNPIN_GRACE_MS, the buffer is restored intact (no need to rebuild
+       the 5+ scan bootstrap). refreshPinned() prunes expired entries. */
+    if (phaseRingBuffer[base]) unpinGraceMap[base] = Date.now();
   } else {
     list.push(base);
+    /* If re-pinning during the grace window, clear the grace flag so
+       refreshPinned doesn't wipe the buffer on the next sweep. */
+    if (unpinGraceMap[base]) delete unpinGraceMap[base];
   }
   savePinnedSymbols(list);
   /* Trigger main render so all .pc-pin-btn instances repaint with the
@@ -7185,6 +7995,15 @@ var PIN_REFRESH_MS = 30 * 1000;
 var pinnedSignals = {};       // base → most-recent analyzed signal (or null)
 var pinnedRefreshAt = {};     // base → timestamp of last successful refresh
 var pinnedRefreshInflight = false;
+
+/* L_LIFECYCLE_RING_BUFFER_V1 — Upgrade 26.F (2026-05-28). Per-pinned-symbol
+   time-series ring buffer of the last 20 scan_state entries. Each entry
+   stores the six lifecycle dimensions (z-scores + raw values for next-scan
+   normalization) + per-engine phase. In-memory only — buffer rebuilds in
+   ~10 minutes if the page reloads. Unpinning a symbol queues it for 5-min
+   grace wipe via unpinGraceMap (accidental-toggle protection). */
+var phaseRingBuffer = {};     // base → [scan_state_0, scan_state_1, ...]
+var unpinGraceMap   = {};     // base → unpin_timestamp (ms)
 async function refreshPinned() {
   if (pinnedRefreshInflight) return;
   var bases = getPinnedSymbols();
@@ -7225,11 +8044,57 @@ async function refreshPinned() {
       }
       try {
         var sig = await analyzeCoinDiag(ticker, diag);
+        /* L_LIFECYCLE_RING_BUFFER_V1 — Upgrade 26.F (2026-05-28).
+           Compute six lifecycle dimensions + per-engine phase, push to
+           the per-symbol ring buffer, attach signal.lifecycle for the
+           UI render. The buffer is read BEFORE push so the current scan
+           sees only prior history (no self-reference in z-scoring). */
+        if (sig) {
+          try {
+            var currentMood = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
+            var existingBuffer = phaseRingBuffer[base] || [];
+            var dimensions = computeLifecycleDimensions(sig, currentMood, existingBuffer);
+            var legacy_phase = derivePhase(dimensions, existingBuffer, 'LEGACY');
+            var shadow_phase = derivePhase(dimensions, existingBuffer, 'SHADOW');
+            var scan_state = {
+              ts: Date.now(),
+              mood: currentMood,
+              legacy_dir: sig.dir || null,
+              shadow_dir: (sig.shadow && sig.shadow.emergent_direction) ? sig.shadow.emergent_direction : null,
+              dimensions: dimensions,
+              _raw: dimensions ? dimensions._raw : null,
+              legacy_phase: legacy_phase,
+              shadow_phase: shadow_phase
+            };
+            phaseRingBuffer[base] = existingBuffer.concat([scan_state]).slice(-PHASE_BUFFER_DEPTH);
+            sig.lifecycle = {
+              phase: legacy_phase,        /* primary engine = legacy */
+              dimensions: dimensions,
+              legacy_phase: legacy_phase,
+              shadow_phase: shadow_phase,
+              buffer_length: phaseRingBuffer[base].length,
+              bootstrap_n: LIFECYCLE_BOOTSTRAP_N
+            };
+          } catch (lifecycleErr) {
+            /* Lifecycle failure must not destroy the operator's pinned
+               card. Leave signal.lifecycle absent; UI renders without it. */
+          }
+        }
         nextSignals[base] = sig;
         nextRefreshAt[base] = Date.now();
       } catch (e) {
         nextSignals[base] = null;
         nextRefreshAt[base] = Date.now();
+      }
+    }
+    /* L_LIFECYCLE_RING_BUFFER_V1 — expired-grace cleanup. Walk
+       unpinGraceMap and wipe phaseRingBuffer entries for any
+       base that has been unpinned for longer than UNPIN_GRACE_MS. */
+    var graceNow = Date.now();
+    for (var gb in unpinGraceMap) {
+      if (graceNow - unpinGraceMap[gb] > UNPIN_GRACE_MS) {
+        delete phaseRingBuffer[gb];
+        delete unpinGraceMap[gb];
       }
     }
     pinnedSignals = nextSignals;
@@ -9162,6 +10027,10 @@ async function analyzeCoin(symObj){
       spotDrive: _spotDrive,
       /* L_FFC_P2_WIRING_V1 — sweep state bundle for card + DB + Telegram */
       sweepState: _sweepState,
+      /* L_LIQUIDITY_POOL_PROXIMITY_V1 — Upgrade 26.F Change 5 (2026-05-28).
+         Equal-highs/lows detection + nearest-pool distance/strength.
+         Consumed by Liquidity Vulnerability dimension in the lifecycle engine. */
+      liquidityPool: (typeof computeLiquidityPoolProximity === 'function') ? computeLiquidityPoolProximity(k5, price) : null,
       /* L_POSITION_SIZING_V1 + L_FITNESS_VERDICT_V1 — inputs the discipline
          bundle needs at compute time (carried alongside the signal so the
          bundle can be recomputed from a re-emitted signal during refresh). */
@@ -9609,6 +10478,10 @@ async function analyzeCoinDiag(symObj,diag){
       spotDrive: _spotDrive,
       /* L_FFC_P2_WIRING_V1 — sweep state bundle for card + DB + Telegram. */
       sweepState: _sweepState,
+      /* L_LIQUIDITY_POOL_PROXIMITY_V1 — Upgrade 26.F Change 5 (2026-05-28).
+         Equal-highs/lows + nearest-pool distance/strength for the lifecycle
+         engine's Liquidity Vulnerability dimension. Diag/emit path. */
+      liquidityPool: (typeof computeLiquidityPoolProximity === 'function') ? computeLiquidityPoolProximity(k5, price) : null,
       /* L_POSITION_SIZING_V1 + L_FITNESS_VERDICT_V1 — diag/emit path discipline inputs */
       _medianVol5m:   _medianVol,
       _takerRatio5m:  takerRatioFromLastBar(k5),
@@ -11018,6 +11891,12 @@ function buildCard(s, moodKey){
        Pinned cards override the collapse via CSS so they always show
        full detail (L_PINNED_ALWAYS_EXPANDED_V1). */
     +'<div class="pc-prose-body' + ((typeof isSymbolExpanded === 'function' && isSymbolExpanded(s.base)) ? ' card-expanded' : '') + '">'
+      /* L_LIFECYCLE_PINNED_UI_V1 — Upgrade 26.F Change 4 (2026-05-28).
+         Lifecycle prose section rendered ABOVE the standard prose
+         dimensions on pinned cards only. Main-feed cards have no
+         signal.lifecycle attached (set only inside refreshPinned), so
+         buildLifecycleHtml returns '' for them. */
+      +(s._pinned && s.lifecycle && typeof buildLifecycleHtml === 'function' ? buildLifecycleHtml(s) : '')
       /* L_CANONICAL_REORDER_V3 + L_SMART_MONEY_COMPOSITE_V1 + L_EFFICIENCY_PROMOTE_V1
          — Card UI Restructure Pass 5 (2026-05-28). Above-demarcation
          cluster now reads:
