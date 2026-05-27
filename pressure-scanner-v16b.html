@@ -6225,36 +6225,39 @@ function unwrapCollapsible(elementId) {
     hostParent.removeChild(wrap);
   }
 }
-function attachExternalCollapse(triggerEl, detailSel, lsKey, chevronTarget) {
+function attachExternalCollapse(triggerEl, detailSel, lsKey, chevronTargetSel) {
   if (!triggerEl) return false;
-  var chevHost = chevronTarget || triggerEl;
-  var alreadyAttached = (triggerEl.dataset.acressExtAttached === '1');
+  /* L_MOOD_BANNER_PERSISTENT_V1 — chevronTargetSel is a SELECTOR (string), not
+     a captured element reference. Widgets like #top-movers-widget and
+     #risk-settings-widget rewrite their innerHTML on every render (every few
+     seconds), wiping the chevron AND replacing the .tm-label / .rs-label.
+     Re-resolving the host via selector on every tick + re-creating the
+     chevron when missing keeps the indicator alive across re-renders. */
+  function resolveChevHost() {
+    return chevronTargetSel ? document.querySelector(chevronTargetSel) : triggerEl;
+  }
   function applyState(expanded) {
     var detailEls = document.querySelectorAll(detailSel);
     for (var i = 0; i < detailEls.length; i++) {
       detailEls[i].style.display = expanded ? '' : 'none';
     }
-    var chevEl = chevHost.querySelector('.acress-inline-chevron');
-    if (chevEl) chevEl.textContent = expanded ? '▼' : '▶';
+    var chevHost = resolveChevHost();
+    if (chevHost) {
+      var chevEl = chevHost.querySelector('.acress-inline-chevron');
+      if (!chevEl) {
+        chevEl = document.createElement('span');
+        chevEl.className = 'acress-inline-chevron';
+        chevHost.appendChild(chevEl);
+      }
+      chevEl.textContent = expanded ? '▼' : '▶';
+    }
     triggerEl.dataset.acressExpanded = expanded ? '1' : '0';
   }
-  /* L_MOOD_BANNER_PERSISTENT_V1 — always re-apply state from localStorage on
-     every tick, even when the click handler is already attached. Detail
-     elements (top-movers pills, pulse-filter checkboxes, etc.) may inject
-     AFTER the first init call, so the hide must be re-applied once they
-     exist. Only the click handler attachment is gated by the dataset flag. */
   var expanded = false;
   try { expanded = localStorage.getItem(lsKey) === '1'; } catch (_) {}
   applyState(expanded);
-  if (alreadyAttached) return true;
+  if (triggerEl.dataset.acressExtAttached === '1') return true;
   triggerEl.dataset.acressExtAttached = '1';
-  // Add chevron indicator (once)
-  if (!chevHost.querySelector('.acress-inline-chevron')) {
-    var chev = document.createElement('span');
-    chev.className = 'acress-inline-chevron';
-    chev.textContent = expanded ? '▼' : '▶';
-    chevHost.appendChild(chev);
-  }
   triggerEl.style.cursor = 'pointer';
   triggerEl.addEventListener('click', function(e) {
     // Don't toggle when the click is on something interactive inside the
@@ -6269,9 +6272,9 @@ function attachExternalCollapse(triggerEl, detailSel, lsKey, chevronTarget) {
 function attachInternalCollapse(widgetSel, headerSel, detailSels, lsKey) {
   var widget = document.querySelector(widgetSel);
   if (!widget) return false;
-  var header = widget.querySelector(headerSel);
-  if (!header) return false;
-  return attachExternalCollapse(widget, detailSels.join(','), lsKey, header);
+  // Pass the chevron host as a SELECTOR so it can be re-resolved on each
+  // tick (widgets that rewrite innerHTML wipe the chevron + replace headers).
+  return attachExternalCollapse(widget, detailSels.join(','), lsKey, widgetSel + ' ' + headerSel);
 }
 function initHeaderCollapsibles() {
   /* L_MOOD_BANNER_PERSISTENT_V1 — first unwrap any leftover .acress-collapsible
