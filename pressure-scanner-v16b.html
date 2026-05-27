@@ -2897,6 +2897,16 @@ function computeSlDistancePct(signal, direction){
 }
 
 function computePositionSize(signal, direction){
+  /* L_EXEC_QUALITY_5MIN_RATIONALE_V1 — the liquidity cap below uses 5-minute
+     quote volume (signal._medianVol5m), not 24-hour volume, because the
+     binding constraint here is "can the order book absorb my order without
+     walking up multiple price levels in the next few seconds." 5-min volume
+     is the correct measure for immediate execution slippage. The 24-hour
+     volume cap (footprint visibility) is a separate constraint per the
+     original 19.0 full design — operative at ~$50K+ account sizes when
+     notional approaches a noticeable fraction of daily flow. Deferred for
+     now per operator decision 2026-05-27; at the current $2K account size
+     the risk-percent cap and the 5-min liquidity cap are the binding ones. */
   var dir = direction || signal.dir;
   var acct = getAcctBalance();
   var riskPct = getMaxRiskPct();
@@ -2976,7 +2986,18 @@ function computePricing(signal, direction){
    agnostic in V1 — its input state (P1, efficiency, drive) is symmetric in
    the data; per-direction trap semantics warrants its own follow-up. */
 function gradeExecution(signal, sizing, direction){
-  // Dimension 1 — liquidity capacity + volatility regime
+  // Dimension 1 — liquidity capacity + volatility regime.
+  /* L_EXEC_QUALITY_5MIN_RATIONALE_V1 — Execution Quality uses 5-minute volume
+     (signal._medianVol5m) because the immediate risk is "will my entry fill
+     at the price I see right now." 5-min volume measures order book absorption
+     capacity at the moment of execution. 24-hour volume would be wrong here —
+     most of that volume happened hours ago and doesn't reflect what's
+     available to absorb the order in the next few seconds.
+     Footprint visibility risk (24-hour volume) is a separate concern operating
+     on a different timescale. At current account sizes the 24-hour cap doesn't
+     bind; the original 19.0 full design includes it as a third cap that
+     becomes operative at larger account sizes (~$50K+). Deferred per operator
+     confirmation 2026-05-27. */
   if (!signal || !sizing) return { grade: 'YELLOW', detail: 'incomplete data' };
   var medVol = signal._medianVol5m;
   var notional = sizing.notional_usd;
@@ -4915,19 +4936,19 @@ function buildReversalSummary(){
   return html;
 }
 
+/* L_TRACKER_REVERSAL_ANALYSIS_REMOVAL_V1 — Upgrade 26.B UI Restructure.
+   Removed entirely: the REVERSAL ANALYSIS section ate significant vertical
+   space on the Performance Tracker page while showing zero analytical value
+   at the current data volume (1 closed trade in audit window). Render
+   function now no-ops and removes any existing panel. Computation helpers
+   (computeReversedPnL, buildReversalSummary) are retained as dead-but-pure
+   utilities should we want to re-introduce reversal analysis at higher trade
+   volumes (planned Upgrade 26.E, ~50+ closed trades). */
 function renderReversalSummary(){
-  var body=document.getElementById('tracker-body');
-  if(!body||!body.parentElement)return;
-  var panel=document.getElementById('reversal-summary-panel');
-  if(!panel){
-    panel=document.createElement('div');
-    panel.id='reversal-summary-panel';
-    body.parentElement.insertBefore(panel,body);
-  }
-  var html=buildReversalSummary();
-  if(panel.dataset.lastHash===html.length+'|'+html.substring(0,50))return;
-  panel.dataset.lastHash=html.length+'|'+html.substring(0,50);
-  panel.innerHTML=html;
+  try {
+    var stale = document.getElementById('reversal-summary-panel');
+    if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+  } catch (_) {}
 }
 
 function injectReversalCSS(){
@@ -6419,12 +6440,22 @@ function buildTrackExecuteRows(s) {
   var consensus = s.discipline.suggested_direction;  // 'LONG' | 'SHORT' | null
   var longBundle  = s.discipline.long;
   var shortBundle = s.discipline.short;
+  /* L_MARGIN_DISPLAY_V1 — Upgrade 26.B Fix Pass 1.7. Operator wanted to see
+     both notional and margin on the same line so they don't have to divide
+     by leverage mentally. Compact form: "$6,667 / $667 @10x" — both values
+     visible without overflowing the button on smaller viewports. */
   function btnTxt(bundle) {
     if (!bundle || !bundle.sizing || !bundle.pricing) return '—';
     var n = Math.round(bundle.sizing.notional_usd);
+    var m = Math.round(bundle.sizing.margin_usd);
+    var lev = bundle.sizing.leverage || 1;
     var sl = (typeof fP === 'function') ? fP(bundle.sizing.sl_price) : bundle.sizing.sl_price.toFixed(4);
     var tp = (typeof fP === 'function') ? fP(bundle.pricing.tp_price) : bundle.pricing.tp_price.toFixed(4);
-    return { notional: '$' + n.toLocaleString(), sl: '$' + sl, tp: '$' + tp };
+    return {
+      notional: '$' + n.toLocaleString() + ' / $' + m.toLocaleString() + ' @' + lev + 'x',
+      sl: '$' + sl,
+      tp: '$' + tp
+    };
   }
   var l = btnTxt(longBundle);
   var sh = btnTxt(shortBundle);
