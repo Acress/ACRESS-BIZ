@@ -96,7 +96,12 @@ input{font-family:var(--font-ui);}
 .be-verdict.be-warn,.be-funding.be-warn{background:rgba(240,180,65,0.12);color:#f0b441;border:1px solid rgba(240,180,65,0.30);}
 .be-verdict.be-bad, .be-funding.be-bad {background:rgba(230,80,90,0.12);color:#ff6b78;border:1px solid rgba(230,80,90,0.30);}
 /* L_VELOCITY_CARD_DISPLAY_V1 — single-line velocity readout (score · decile · expected MFE/TTM · spread). */
-.vel-line{font-family:var(--font-mono);font-size:10.5px;font-weight:600;padding:5px 8px;border-radius:4px;margin-top:4px;line-height:1.3;}
+/* L_PROSE_FONT_REDUCTION_V2 — Pass 5.1 (2026-05-28). Reduced from
+   10.5px to 9px (~15%) per operator request. Each prose dimension
+   now fits more characters per line at the same card width, reducing
+   wrap-to-two-lines occurrences on the 2-column grid. line-height
+   stays 1.3 proportional; padding stays 5px 8px (already minimal). */
+.vel-line{font-family:var(--font-mono);font-size:9px;font-weight:600;padding:5px 8px;border-radius:4px;margin-top:4px;line-height:1.3;}
 .vel-line.vel-green{background:rgba(46,200,120,0.12);color:#34c97a;border:1px solid rgba(46,200,120,0.30);}
 .vel-line.vel-amber{background:rgba(240,180,65,0.12);color:#f0b441;border:1px solid rgba(240,180,65,0.30);}
 .vel-line.vel-red  {background:rgba(230,80,90,0.12);color:#ff6b78;border:1px solid rgba(230,80,90,0.30);}
@@ -212,20 +217,18 @@ input{font-family:var(--font-ui);}
 /* L_SHADOW_VISIBILITY_CARD_V1 — Upgrade 26.0 Part 3.5 — side-by-side display of
    legacy vs shadow direction. Slot sits between pc-head and pc-discipline.
    Vestigial display; planned removal in Upgrade 26.2 post-cutover. */
-/* L_SHADOW_BADGE_COMPACT_V1 — Card UI Restructure Pass 5 (2026-05-28).
-   Compact arrow-pair format. Legacy direction on the left, shadow on
-   the right. Color follows the agreement state (green/amber/gray). */
-.pc-shadow-cmp{padding:4px 11px;font-family:var(--font-mono);font-size:10px;line-height:1.3;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
-.pc-shadow-cmp .lbl{color:var(--muted);font-size:9.5px;letter-spacing:.4px;text-transform:uppercase;}
-.pc-shadow-cmp .arrows{display:inline-flex;gap:2px;font-size:13px;line-height:1;letter-spacing:0;font-weight:700;}
-.pc-shadow-cmp .arrows .legacy,.pc-shadow-cmp .arrows .shadow{display:inline-block;}
-.pc-shadow-cmp.agree .arrows{color:var(--green);}
-.pc-shadow-cmp.disagree .arrows{color:#f0b341;}
-.pc-shadow-cmp.disagree .arrows .shadow{color:#f0b341;}
-.pc-shadow-cmp.neutral .arrows{color:var(--muted);}
-.pc-shadow-cmp .arrows .shadow.neutral{color:rgba(140,150,170,.55);}
-.pc-shadow-cmp .hint{color:var(--muted);font-size:9.5px;letter-spacing:.3px;}
+/* L_SHADOW_BADGE_REWORK_V1 — Pass 5.1 (2026-05-28). Restored verbose-
+   direction format per operator spec: "Legacy LONG ↔ Shadow LONG".
+   No "Shadow:" prefix label. Color follows the agreement state. */
+.pc-shadow-cmp{padding:4px 11px;font-family:var(--font-mono);font-size:10.5px;line-height:1.3;background:var(--s2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;font-weight:700;letter-spacing:.3px;}
+.pc-shadow-cmp .legacy,.pc-shadow-cmp .shadow{display:inline-block;}
+.pc-shadow-cmp .arrow{color:var(--muted);font-size:12px;line-height:1;}
+.pc-shadow-cmp.agree .legacy,.pc-shadow-cmp.agree .shadow{color:var(--green);}
+.pc-shadow-cmp.disagree .legacy,.pc-shadow-cmp.disagree .shadow{color:#f0b341;}
+.pc-shadow-cmp.neutral .legacy{color:var(--muted);}
+.pc-shadow-cmp .shadow.neutral{color:rgba(140,150,170,.55);}
 .pc-shadow-cmp.unavail{opacity:.55;}
+.pc-shadow-cmp.unavail .legacy,.pc-shadow-cmp.unavail .shadow{color:var(--muted);}
 /* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
    Replaces L_FITNESS_MINICARDS_V1 / L_UNIFIED_MINICARDS_V1 /
    L_MINICARDS_ORIGIN_ACCENT_V1 / L_STRUCTURE_MINICARDS_COLLAPSE_V1.
@@ -4353,8 +4356,11 @@ function injectUIPolishCSS(){
     // Original brand+tabs row: residual class kept for any orphan refs
     '.acress-hidden-by-topbar{opacity:1 !important;}'+
     '.acress-hidden-by-topbar:hover{opacity:1 !important;}'+
-    // Scanner results: 2-column grid
-    '#results,.pcard-grid,.results-grid,[id*="results"]:not(#tracker-body):not(#analytics-table){gap:14px !important;}'+
+    /* L_PROSE_FONT_REDUCTION_V2 — Pass 5.1: grid gap reduced 14px → 10px
+       so each column gains ~2-4px of width. Combined with the 9px
+       .vel-line font, prose dimensions wrap to a second line much less
+       often on the 2-column grid at 1280-1440px viewports. */
+    '#results,.pcard-grid,.results-grid,[id*="results"]:not(#tracker-body):not(#analytics-table){gap:10px !important;}'+
     '#results{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;align-items:start !important;}'+
     '@media (max-width:820px){#results{grid-template-columns:1fr !important;}}'+
     // Card visual separation
@@ -6417,42 +6423,40 @@ function shadowComparisonEnabled() {
     return v === null ? true : v === '1';   // default ON
   } catch (e) { return true; }
 }
-/* L_SHADOW_BADGE_COMPACT_V1 — Card UI Restructure Pass 5 (2026-05-28).
-   Replaces verbose "legacy LONG ↔ shadow LONG · HIGH · EXHAUSTION_FADE ✓"
-   with compact "↗↗" / "↗↘" / "↗⋯" two-arrow glyph format. Full detail
-   moves to the title attribute (hover) so the operator can drill into
-   conviction + state class when needed without consuming a full line. */
-function _shadowArrow(dir){
-  if (dir === 'LONG')  return '↗';
-  if (dir === 'SHORT') return '↘';
-  return '⋯';   // NEUTRAL / unknown
-}
+/* L_SHADOW_BADGE_REWORK_V1 — Pass 5.1 (2026-05-28). Replaces the
+   compact arrow format (L_SHADOW_BADGE_COMPACT_V1) per operator spec.
+   New format:
+     Legacy LONG ↔ Shadow LONG   (when agree; default color)
+     Legacy LONG ↔ Shadow SHORT  (when disagree; warning color)
+     Legacy LONG ↔ Shadow NEUTRAL (shadow side grayed)
+   No "Shadow:" prefix label. Direction words spelled out (LONG/SHORT/
+   NEUTRAL). ↔ double-sided arrow separator. Conviction + event class
+   move to the title-attribute tooltip. */
 function buildShadowComparisonHtml(s) {
   if (!shadowComparisonEnabled()) return '';
   var sh = s && s.shadow;
   if (!sh) {
-    var dArr = _shadowArrow(s && s.dir);
+    var dStr = (s && s.dir) ? s.dir : '—';
     return '<div class="pc-shadow-cmp unavail" title="Shadow engine unavailable for this signal">'
-         +   '<span class="lbl">Shadow</span>'
-         +   '<span class="arrows"><span class="legacy">' + dArr + '</span><span class="shadow neutral">⋯</span></span>'
-         +   '<span class="hint">unavail</span>'
+         +   '<span class="legacy">Legacy ' + dStr + '</span>'
+         +   '<span class="arrow">↔</span>'
+         +   '<span class="shadow neutral">Shadow unavailable</span>'
          + '</div>';
   }
-  var legacyDir = sh.legacy_direction || (s && s.dir) || null;
+  var legacyDir = sh.legacy_direction || (s && s.dir) || '—';
   var emDir     = sh.emergent_direction || 'NEUTRAL';
   var conv      = sh.state_conviction   || 'ZERO';
   var cls       = sh.structural_state_class || '—';
   var rowClass  = 'agree';
   if (emDir === 'NEUTRAL') rowClass = 'neutral';
   else if (sh.direction_disagreement) rowClass = 'disagree';
-  var legacyArr = _shadowArrow(legacyDir);
-  var shadowArr = _shadowArrow(emDir);
   var shadowCls = (emDir === 'NEUTRAL') ? 'shadow neutral' : 'shadow';
-  var tip = 'legacy ' + (legacyDir || '?') + ' · shadow ' + emDir
+  var tip = 'Legacy ' + legacyDir + ' · Shadow ' + emDir
           + (emDir !== 'NEUTRAL' ? ' · ' + conv + ' · ' + cls : '');
   return '<div class="pc-shadow-cmp ' + rowClass + '" title="' + tip + '">'
-       +   '<span class="lbl">Shadow</span>'
-       +   '<span class="arrows"><span class="legacy">' + legacyArr + '</span><span class="' + shadowCls + '">' + shadowArr + '</span></span>'
+       +   '<span class="legacy">Legacy ' + legacyDir + '</span>'
+       +   '<span class="arrow">↔</span>'
+       +   '<span class="' + shadowCls + '">Shadow ' + emDir + '</span>'
        + '</div>';
 }
 function toggleShadowComparisonSetting(checked) {
@@ -10070,25 +10074,27 @@ function computeMechanismStats(){
 }
 function mechStatsBadge(mechName){
   if(!mechName) return '';
-  /* L_CARD_CASE_AUDIT_V1 — Pass 5: category prefix normalized to
-     lowercase ("discovery" / "losing" / "winning" / "neutral") so the
-     badge reads as a status label, not a typographic shout. */
+  /* L_DISCOVERY_RESTORE_V1 — Pass 5.1 (2026-05-28). Reverts the
+     L_CARD_CASE_AUDIT_V1 normalization on this helper only; restores
+     the pre-Pass-5 all-caps category prefix verbatim. Placement next
+     to oiStageBadge on the mech-type row (per L_DISCOVERY_RELOCATE_V1)
+     is preserved — only the character of the badge text changes back. */
   var cfg = (typeof mechCfg!=='undefined' && mechCfg) ? mechCfg : {rollingDays:90,discoveryMinN:10};
   var st = getMechanismStats();
   var s = st[mechName];
   if(!s){
-    // Mechanism never seen before — true discovery
-    return '<span class="pc-mech-stats discovery" title="No historical trades on this mechanism within the last '+cfg.rollingDays+' days. Treat as an unsampled bet.">discovery · n=0</span>';
+    // Mechanism never seen before — true DISCOVERY
+    return '<span class="pc-mech-stats discovery" title="No historical trades on this mechanism within the last '+cfg.rollingDays+' days. Treat as an unsampled bet.">DISCOVERY · n=0</span>';
   }
   var pnlStr = (s.totalPnl>=0?'+$':'-$') + Math.abs(s.totalPnl).toFixed(0);
   var wrStr = (s.winRate*100).toFixed(0) + '%';
   var meanStr = (s.meanPnl>=0?'+$':'-$') + Math.abs(s.meanPnl).toFixed(2);
   var catCls = s.category.toLowerCase();
   var tip = 'Last '+cfg.rollingDays+'d · '+s.n+' trades · '+wrStr+' wins · '+pnlStr+' net · '+meanStr+'/trade';
-  if(s.category==='LOSING') tip += ' · blocked from Log All Visible (manual log still works)';
+  if(s.category==='LOSING') tip += ' · BLOCKED from Log All Visible (manual log still works)';
   if(s.category==='DISCOVERY') tip += ' · need '+(cfg.discoveryMinN-s.n)+' more trades to graduate';
   return '<span class="pc-mech-stats '+catCls+'" title="'+tip+'">'
-    + catCls + ' · n=' + s.n + ' · ' + wrStr + ' · ' + pnlStr
+    + s.category + ' · n=' + s.n + ' · ' + wrStr + ' · ' + pnlStr
     + '</span>';
 }
 function toggleExcludeLosing(){
