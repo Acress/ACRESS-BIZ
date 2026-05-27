@@ -1279,6 +1279,20 @@ function computeLiveVelocity(k1, k5, spreadBps){
     }
     max5m = mx;
   }
+  /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — most-recent-5min pct change. Distinct from
+     max_5m_bps (which is the MAX |close-open| over the last 60 min of 5m
+     bars). pct_change_5min targets only the most recent 5-min interval as an
+     absolute-movement floor companion to the decile percentile filter.
+     k5 is Binance kline array format: index 4 is close. Fail-closed: if k5
+     has <2 bars or prev close is 0/invalid, returns 0 → filter hides card. */
+  var pct_change_5min = 0;
+  if (Array.isArray(k5) && k5.length >= 2) {
+    var __cur = parseFloat(k5[k5.length - 1][4]);
+    var __prev = parseFloat(k5[k5.length - 2][4]);
+    if (isFinite(__cur) && isFinite(__prev) && __prev > 0) {
+      pct_change_5min = ((__cur - __prev) / __prev) * 100;
+    }
+  }
   var insufficient = (nBars1m < VELOCITY_MIN_1M_KLINES) || (avg1m == null) || (avg1m < VELOCITY_HALTED_MIN_BPS);
   var decile = insufficient ? null : velocityDecileFor(max5m);
   var stats  = (decile != null) ? VELOCITY_DECILE_STATS[decile - 1] : null;
@@ -1292,6 +1306,9 @@ function computeLiveVelocity(k1, k5, spreadBps){
     expected_mfe_pct: stats ? stats.mfe : null,
     expected_ttm_min: stats ? stats.ttm : null,
     score: null,
+    /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — recent-5min absolute pct change for
+       compound velocity filter (decile >= 9 AND |pct_change_5min| >= floor). */
+    pct_change_5min: pct_change_5min,
   };
 }
 /* L_VELOCITY_SCORE_V1 — post-scan percentile-rank pass. Composite:
@@ -9166,9 +9183,20 @@ function renderResults(){invalidateMechanismStats();
   if (_hideNonGreen == null) _hideNonGreen = 'true';   // default ON at first scan
   var _velFilterActive = (_hideNonGreen === 'true');
   var _preVelocityCount = filtered.length;
+  /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — compound velocity filter: percentile
+     (decile >= 9) AND absolute 5-min movement floor. Configurable via
+     localStorage acress_velocity_pct_min (default 1.5%, range 0-5; 0
+     disables the absolute floor, leaving percentile-only behavior). */
+  var _velMinPctRaw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
+  var _velMinPct = (isFinite(_velMinPctRaw) && _velMinPctRaw >= 0) ? _velMinPctRaw : 1.5;
   if (_velFilterActive) {
     filtered = filtered.filter(function(s){
-      return s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9;
+      if (!(s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9)) return false;
+      if (_velMinPct > 0) {
+        var pct = Math.abs(s.velocity.pct_change_5min || 0);
+        if (pct < _velMinPct) return false;
+      }
+      return true;
     });
   }
   /* L_MIN_NOTIONAL_FILTER_V1 — Upgrade quick-fix 2026-05-28. Hide signals
@@ -9213,7 +9241,15 @@ function renderResults(){invalidateMechanismStats();
        knows what to toggle. Extended copy lists every active display filter. */
     if ((_velFilterActive || _minNotionalActive) && (_preVelocityCount > 0 || _preMinNotionalCount > 0)) {
       var activeFilters = [];
-      if (_velFilterActive) activeFilters.push('Velocity ≥ green decile 9');
+      /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — empty-state copy reflects both the
+         decile and absolute-pct conditions when the absolute floor is active. */
+      if (_velFilterActive) {
+        if (_velMinPct > 0) {
+          activeFilters.push('Velocity ≥ green decile 9 AND 5-min price change ≥ ' + _velMinPct + '%');
+        } else {
+          activeFilters.push('Velocity ≥ green decile 9');
+        }
+      }
       if (_minNotionalActive) activeFilters.push('Minimum $' + MIN_NOTIONAL_USD.toLocaleString() + ' notional achievable');
       msgTitle = '0 cards meet active filters';
       msgBody = '0 of ' + _preVelocityCount + ' signal' + (_preVelocityCount !== 1 ? 's' : '') +
@@ -10434,6 +10470,9 @@ function logToTracker(s, opts){
       expected_ttm_min: s.velocity.expected_ttm_min,
       n_1m_klines:      s.velocity.n_1m_klines,
       insufficient:     s.velocity.insufficient,
+      /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — freeze the recent-5min pct change at
+         log time so the tracker / analytics can later see what the floor saw. */
+      pct_change_5min:  s.velocity.pct_change_5min,
       logged_at:        Date.now(),
     } : null,
     /* L_DISPLACEMENT_EFFICIENCY_TRACKER_V1 — freeze efficiency at log time
@@ -13130,6 +13169,29 @@ function openDrilldownByHourFromVPS(hour){
             <input type="checkbox" id="disc-hide-non-green-vel" onchange="onVelocityFilterToggle(this.checked)" />
             <span><b>Hide non-green velocity signals</b> from card display (DB logging continues — only visual filtering)</span>
           </label>
+          <!-- L_VELOCITY_PCT_SETTING_V1 — configurable absolute movement floor.
+               Compound velocity filter: decile >= 9 AND |5-min pct change| >= this value.
+               0 disables the absolute floor (percentile-only). Default 1.5%. -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;">
+            <span style="min-width:0;flex:1;"><b>Min 5min price change (%)</b> for velocity-green display
+              <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
+                Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable the floor (percentile-only behavior).
+              </span>
+            </span>
+            <input type="number" id="disc-velocity-pct-min" min="0" max="5" step="0.1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);width:70px;"
+                   onchange="(function(v){var n=parseFloat(v);if(!isFinite(n)||n<0)n=0;if(n>5)n=5;try{localStorage.setItem('acress_velocity_pct_min',String(n));}catch(e){};if(typeof renderResults==='function')renderResults();})(this.value)" />
+          </label>
+          <script>
+            (function(){
+              try {
+                var inp = document.getElementById('disc-velocity-pct-min');
+                if (inp) {
+                  var raw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
+                  inp.value = (isFinite(raw) && raw >= 0) ? raw : 1.5;
+                }
+              } catch (e) {}
+            })();
+          </script>
         </div>
       </div>
 
