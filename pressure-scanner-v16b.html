@@ -6227,17 +6227,8 @@ function unwrapCollapsible(elementId) {
 }
 function attachExternalCollapse(triggerEl, detailSel, lsKey, chevronTarget) {
   if (!triggerEl) return false;
-  if (triggerEl.dataset.acressExtAttached === '1') return true;
-  triggerEl.dataset.acressExtAttached = '1';
-  // Add chevron indicator
   var chevHost = chevronTarget || triggerEl;
-  if (!chevHost.querySelector('.acress-inline-chevron')) {
-    var chev = document.createElement('span');
-    chev.className = 'acress-inline-chevron';
-    chev.textContent = '▶';
-    chevHost.appendChild(chev);
-  }
-  triggerEl.style.cursor = 'pointer';
+  var alreadyAttached = (triggerEl.dataset.acressExtAttached === '1');
   function applyState(expanded) {
     var detailEls = document.querySelectorAll(detailSel);
     for (var i = 0; i < detailEls.length; i++) {
@@ -6247,15 +6238,29 @@ function attachExternalCollapse(triggerEl, detailSel, lsKey, chevronTarget) {
     if (chevEl) chevEl.textContent = expanded ? '▼' : '▶';
     triggerEl.dataset.acressExpanded = expanded ? '1' : '0';
   }
-  var initExpanded = false;
-  try { initExpanded = localStorage.getItem(lsKey) === '1'; } catch (_) {}
-  applyState(initExpanded);
+  /* L_MOOD_BANNER_PERSISTENT_V1 — always re-apply state from localStorage on
+     every tick, even when the click handler is already attached. Detail
+     elements (top-movers pills, pulse-filter checkboxes, etc.) may inject
+     AFTER the first init call, so the hide must be re-applied once they
+     exist. Only the click handler attachment is gated by the dataset flag. */
+  var expanded = false;
+  try { expanded = localStorage.getItem(lsKey) === '1'; } catch (_) {}
+  applyState(expanded);
+  if (alreadyAttached) return true;
+  triggerEl.dataset.acressExtAttached = '1';
+  // Add chevron indicator (once)
+  if (!chevHost.querySelector('.acress-inline-chevron')) {
+    var chev = document.createElement('span');
+    chev.className = 'acress-inline-chevron';
+    chev.textContent = expanded ? '▼' : '▶';
+    chevHost.appendChild(chev);
+  }
+  triggerEl.style.cursor = 'pointer';
   triggerEl.addEventListener('click', function(e) {
     // Don't toggle when the click is on something interactive inside the
     // trigger (e.g. the rs-val edit spans, which have their own click handlers).
     if (e.target && e.target.classList && (e.target.classList.contains('rs-val') || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
-    var expanded = triggerEl.dataset.acressExpanded === '1';
-    var nowExpanded = !expanded;
+    var nowExpanded = !(triggerEl.dataset.acressExpanded === '1');
     applyState(nowExpanded);
     try { localStorage.setItem(lsKey, nowExpanded ? '1' : '0'); } catch (_) {}
   });
