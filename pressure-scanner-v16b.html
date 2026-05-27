@@ -9417,10 +9417,15 @@ function renderResults(){invalidateMechanismStats();
   var _preVelocityCount = filtered.length;
   /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — compound velocity filter: percentile
      (decile >= 9) AND absolute 5-min movement floor. Configurable via
-     localStorage acress_velocity_pct_min (default 1.5%, range 0-5; 0
-     disables the absolute floor, leaving percentile-only behavior). */
+     localStorage acress_velocity_pct_min (default 2.5%, range 0-5; 0
+     disables the absolute floor, leaving percentile-only behavior).
+     Default raised from 1.5% to 2.5% on 2026-05-28: post-2026-05-28 deploy
+     review showed 1.5% floor still let through "fastest 10% of a slow
+     market" cases — top decile in a slow regime can be slow in absolute
+     terms. 2.5% in 5 min is a more meaningful "genuinely moving"
+     threshold. Operator can tune up/down via Settings. */
   var _velMinPctRaw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
-  var _velMinPct = (isFinite(_velMinPctRaw) && _velMinPctRaw >= 0) ? _velMinPctRaw : 1.5;
+  var _velMinPct = (isFinite(_velMinPctRaw) && _velMinPctRaw >= 0) ? _velMinPctRaw : 2.5;
   if (_velFilterActive) {
     filtered = filtered.filter(function(s){
       if (!(s.velocity && typeof s.velocity.decile === 'number' && s.velocity.decile >= 9)) return false;
@@ -9431,25 +9436,39 @@ function renderResults(){invalidateMechanismStats();
       return true;
     });
   }
-  /* L_MIN_NOTIONAL_FILTER_V1 — Upgrade quick-fix 2026-05-28. Hide signals
-     where the max-achievable notional across either direction is below
-     the $1,000 floor (operator's minimum tradeable position at $100 margin
-     × 10x leverage). When 5-min liquidity binds the notional low on a
-     thin-volume symbol, the operator can't actually take the trade at
-     their minimum margin, so the card is clutter. Display-layer only;
-     scanner still computes + logs these signals. Default ON. */
-  var _minNotionalFilterPref = localStorage.getItem('acress_min_notional_filter');
-  if (_minNotionalFilterPref == null) _minNotionalFilterPref = 'true';   // default ON
-  var _minNotionalActive = (_minNotionalFilterPref === 'true');
-  var _preMinNotionalCount = filtered.length;
-  var MIN_NOTIONAL_USD = 1000;
-  if (_minNotionalActive) {
+  /* L_MIN_VOLUME_FILTER_V1 — Card Restructure / threshold tightening
+     2026-05-28. Replaces L_MIN_NOTIONAL_FILTER_V1. Direct expression of
+     the operator's actual concern: deep 5-min liquidity. The previous
+     "max notional < $1,000" check implied $100K 5-min volume at 1%
+     participation — same idea but indirect. New filter checks
+     signal._medianVol5m (median per-bar quote volume across the recent
+     5m kline buffer) against a configurable $500K floor. Tune via
+     Settings → Position Discipline → "Min 5-min volume (USD)" (key
+     acress_min_volume_5min, default 500000, range 0-5000000; 0 disables).
+     Display-layer only — scanner still computes + logs these signals. */
+  var _minVolPref = localStorage.getItem('acress_min_volume_5min');
+  var _minVolUsd = parseFloat(_minVolPref);
+  if (!isFinite(_minVolUsd) || _minVolUsd < 0) _minVolUsd = 500000;
+  var _minVolActive = (_minVolUsd > 0);
+  var _preMinVolCount = filtered.length;
+  if (_minVolActive) {
     filtered = filtered.filter(function(s){
-      if (!s.discipline) return true;   // can't evaluate, don't drop
-      var nL = (s.discipline.long  && s.discipline.long.sizing  && s.discipline.long.sizing.notional_usd)  || 0;
-      var nS = (s.discipline.short && s.discipline.short.sizing && s.discipline.short.sizing.notional_usd) || 0;
-      return Math.max(nL, nS) >= MIN_NOTIONAL_USD;
+      var v = s._medianVol5m;
+      if (typeof v !== 'number' || !isFinite(v)) return true;   // can't evaluate, don't drop
+      return v >= _minVolUsd;
     });
+  }
+  /* Compact USD formatter for filter labels: "$500K", "$1M", "$2.5M". */
+  function _formatVolLabel(usd){
+    if (usd >= 1000000) {
+      var m = usd / 1000000;
+      return '$' + (m === Math.floor(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
+    }
+    if (usd >= 1000) {
+      var k = usd / 1000;
+      return '$' + (k === Math.floor(k) ? k.toFixed(0) : k.toFixed(1)) + 'K';
+    }
+    return '$' + usd;
   }
   /* L_FILTER_UI_REGIME_OI_SYMBOL_V1 — apply the new filters. For OI stage,
      'untagged' matches signals where s.oiStage is null/undefined (the DB
@@ -9468,10 +9487,11 @@ function renderResults(){invalidateMechanismStats();
     var msgTitle, msgBody;
     /* L_VELOCITY_FILTER_EMPTY_STATE_V1 +
        L_FILTER_EMPTY_STATE_EXTENDED_V1 — Upgrade quick-fix 2026-05-28.
-       When velocity OR min-notional filter cuts results to zero AND signals
+       L_MIN_VOLUME_FILTER_V1 — extended to reflect the new min-volume filter.
+       When velocity OR min-volume filter cuts results to zero AND signals
        exist pre-filter, surface which filter(s) are active so the operator
        knows what to toggle. Extended copy lists every active display filter. */
-    if ((_velFilterActive || _minNotionalActive) && (_preVelocityCount > 0 || _preMinNotionalCount > 0)) {
+    if ((_velFilterActive || _minVolActive) && (_preVelocityCount > 0 || _preMinVolCount > 0)) {
       var activeFilters = [];
       /* L_VELOCITY_ABSOLUTE_FLOOR_V1 — empty-state copy reflects both the
          decile and absolute-pct conditions when the absolute floor is active. */
@@ -9482,7 +9502,7 @@ function renderResults(){invalidateMechanismStats();
           activeFilters.push('Velocity ≥ green decile 9');
         }
       }
-      if (_minNotionalActive) activeFilters.push('Minimum $' + MIN_NOTIONAL_USD.toLocaleString() + ' notional achievable');
+      if (_minVolActive) activeFilters.push('5-min volume ≥ ' + _formatVolLabel(_minVolUsd));
       msgTitle = '0 cards meet active filters';
       msgBody = '0 of ' + _preVelocityCount + ' signal' + (_preVelocityCount !== 1 ? 's' : '') +
         ' pass the active display filter' + (activeFilters.length > 1 ? 's' : '') + ':<br>' +
@@ -13413,15 +13433,28 @@ function openDrilldownByHourFromVPS(hour){
           </label>
           <!-- L_VELOCITY_PCT_SETTING_V1 — configurable absolute movement floor.
                Compound velocity filter: decile >= 9 AND |5-min pct change| >= this value.
-               0 disables the absolute floor (percentile-only). Default 1.5%. -->
+               0 disables the absolute floor (percentile-only). Default 2.5%
+               (raised from 1.5% on 2026-05-28 after operator review). -->
           <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;">
             <span style="min-width:0;flex:1;"><b>Min 5min price change (%)</b> for velocity-green display
               <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
-                Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable the floor (percentile-only behavior).
+                Compound filter: card must clear BOTH the decile and this absolute floor. Set to 0 to disable the floor (percentile-only behavior). Default 2.5%.
               </span>
             </span>
             <input type="number" id="disc-velocity-pct-min" min="0" max="5" step="0.1" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);width:70px;"
                    onchange="(function(v){var n=parseFloat(v);if(!isFinite(n)||n<0)n=0;if(n>5)n=5;try{localStorage.setItem('acress_velocity_pct_min',String(n));}catch(e){};if(typeof renderResults==='function')renderResults();})(this.value)" />
+          </label>
+          <!-- L_MIN_VOLUME_FILTER_V1 — direct expression of liquidity floor.
+               Replaces L_MIN_NOTIONAL_FILTER_V1 checkbox. Filter checks
+               signal._medianVol5m >= this value. 0 disables. Default $500K. -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--hi);margin-top:8px;">
+            <span style="min-width:0;flex:1;"><b>Min 5-min volume (USD)</b> for display
+              <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">
+                Hide cards whose median 5-min quote volume falls below this floor. Direct liquidity gate; thin-volume symbols cluttered the dashboard. Set to 0 to disable. Default $500,000.
+              </span>
+            </span>
+            <input type="number" id="disc-min-volume-5min" min="0" max="5000000" step="50000" style="padding:5px 7px;background:var(--s1);border:1px solid var(--border);color:var(--hi);border-radius:3px;font-family:var(--font-mono);width:110px;"
+                   onchange="(function(v){var n=parseFloat(v);if(!isFinite(n)||n<0)n=0;if(n>5000000)n=5000000;try{localStorage.setItem('acress_min_volume_5min',String(n));}catch(e){};if(typeof renderResults==='function')renderResults();})(this.value)" />
           </label>
           <script>
             (function(){
@@ -13429,7 +13462,12 @@ function openDrilldownByHourFromVPS(hour){
                 var inp = document.getElementById('disc-velocity-pct-min');
                 if (inp) {
                   var raw = parseFloat(localStorage.getItem('acress_velocity_pct_min'));
-                  inp.value = (isFinite(raw) && raw >= 0) ? raw : 1.5;
+                  inp.value = (isFinite(raw) && raw >= 0) ? raw : 2.5;
+                }
+                var vin = document.getElementById('disc-min-volume-5min');
+                if (vin) {
+                  var vraw = parseFloat(localStorage.getItem('acress_min_volume_5min'));
+                  vin.value = (isFinite(vraw) && vraw >= 0) ? vraw : 500000;
                 }
               } catch (e) {}
             })();
@@ -13509,11 +13547,11 @@ function openDrilldownByHourFromVPS(hour){
           <input type="checkbox" id="set-show-budget-header" onchange="(function(c){try{localStorage.setItem('acress_show_daily_budget_header',c?'1':'0');}catch(e){};if(typeof renderDailyBudgetHeader==='function')renderDailyBudgetHeader();})(this.checked)">
           Show daily-budget header on scanner page
         </label>
-        <!-- L_MIN_NOTIONAL_FILTER_V1 — display filter for thin-liquidity symbols -->
-        <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--hi);cursor:pointer;margin-bottom:4px;">
-          <input type="checkbox" id="set-min-notional-filter" onchange="(function(c){try{localStorage.setItem('acress_min_notional_filter',c?'true':'false');}catch(e){};if(typeof renderResults==='function')renderResults();})(this.checked)">
-          Hide signals where max achievable position is below $1,000 (thin liquidity)
-        </label>
+        <!-- L_MIN_VOLUME_FILTER_V1 — replaces L_MIN_NOTIONAL_FILTER_V1.
+             The liquidity gate moved to Position Discipline as a number
+             input ("Min 5-min volume (USD)"). The checkbox here has been
+             removed to avoid two-knob confusion. The underlying filter
+             is always active when its threshold > 0 (default $500K). -->
         <script>
           (function(){
             try {
@@ -13521,11 +13559,6 @@ function openDrilldownByHourFromVPS(hour){
               if (sel) sel.value = (localStorage.getItem('acress_execute_exchange') || 'binance');
               var bx = document.getElementById('set-show-budget-header');
               if (bx) bx.checked = (localStorage.getItem('acress_show_daily_budget_header') !== '0');  // default true
-              var mn = document.getElementById('set-min-notional-filter');
-              if (mn) {
-                var v = localStorage.getItem('acress_min_notional_filter');
-                mn.checked = (v == null || v === 'true');  // default true
-              }
             } catch (e) {}
           })();
         </script>
