@@ -7381,11 +7381,29 @@ function classifySpotPerpDrive(perpK5, spotK5){
    L_CARD_CASE_AUDIT_V1 — Pass 5: drive state labels normalized to
    lowercase ("spot-led" / "perp-led" / "balanced") so prose reads
    naturally instead of as SCREAMING_SNAKE tokens. */
+/* L_LIFECYCLE_VERDICT_SURFACE_V1 — Upgrade 26.F Fix Pass 2 (2026-05-28).
+   Phase → plain-English verdict map. Editable in one place. Verdict
+   strings interpolate {DIR} with the engine perspective's chosen
+   direction (legacy line uses signal.dir; shadow line uses
+   signal.shadow.emergent_direction). The phase name itself is preserved
+   in a title attribute on the verdict line for technical inspection. */
+var PHASE_VERDICTS = {
+  'Compression Building':  'Early — {DIR} setup forming, not ripe yet',
+  'Compression Mature':    'Entry zone — {DIR} structure ripe',
+  'Release Active':        'Moving now — {DIR} underway, chase risk',
+  'Expansion Extended':    'Late — {DIR} move advanced',
+  'Exhaustion Emerging':   'Exhausting — {DIR} losing steam',
+  'Post-Release':          'Done — {DIR} largely played out'
+};
+
 /* L_LIFECYCLE_PINNED_UI_V1 — Upgrade 26.F Change 4 (2026-05-28). Renders
    the Lifecycle prose section on pinned cards (gated by s._pinned + s.lifecycle).
    Two engine lines when legacy and shadow phases diverge; single engine
    line when they agree. Bootstrap placeholder "gathering data (X/5)" when
-   the per-symbol ring buffer hasn't accumulated enough history yet. */
+   the per-symbol ring buffer hasn't accumulated enough history yet.
+   L_LIFECYCLE_VERDICT_SURFACE_V1 — Fix Pass 2 (2026-05-28): each engine
+   line now opens with a plain-English verdict translating the phase into
+   actionable read; z-score dimensional readout retained beneath. */
 function buildLifecycleHtml(s){
   if (!s || !s.lifecycle) return '';
   var lc = s.lifecycle;
@@ -7422,31 +7440,35 @@ function buildLifecycleHtml(s){
     var v = (dims.liquidityVulnerability && typeof dims.liquidityVulnerability[key] === 'number') ? dims.liquidityVulnerability[key] : null;
     return 'Pressure ' + fmtZ(p) + ' · Momentum ' + fmtZ(m) + ' · Exhaustion ' + fmtZ(x) + ' · Freshness ' + fmtFresh(f) + ' · Vulnerability ' + fmtZ(v);
   }
+  /* L_LIFECYCLE_VERDICT_SURFACE_V1 — translate phase → verdict for engine perspective. */
+  function verdictFor(phase, dir){
+    if (phase === 'no shadow direction') return 'No shadow direction';
+    if (phase === 'gathering data')      return null;  /* handled by bootstrap branch above */
+    var tpl = PHASE_VERDICTS[phase];
+    if (!tpl) return phase;  /* defensive: unknown phase token surfaces raw */
+    return tpl.replace('{DIR}', dir || '?');
+  }
+  function engineBlock(label, phase, dir, perspective) {
+    var verdict = verdictFor(phase, dir);
+    /* L_LIFECYCLE_VERDICT_SURFACE_V1 — verdict line on top (plain English,
+       bold), z-score line below (existing dimensional readout, lighter).
+       Phase technical name preserved on title for hover/inspection. */
+    return '<div class="vel-line ' + phaseClass(phase) + '" style="margin:0;" title="' + label + ' phase: ' + phase + '">'
+      + '<b>' + label + (dir ? ' (' + dir + ')' : '') + ': ' + verdict + '</b>'
+      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine(perspective) + '</span>'
+      + '</div>';
+  }
   var legacy_phase = lc.legacy_phase || 'Compression Building';
   var shadow_phase = lc.shadow_phase || 'no shadow direction';
   var legacyDir = s.dir || '?';
   var shadowDir = (s.shadow && s.shadow.emergent_direction && s.shadow.emergent_direction !== 'NEUTRAL') ? s.shadow.emergent_direction : null;
   var shadowAvailable = (shadow_phase !== 'no shadow direction' && shadow_phase !== 'gathering data');
   var agree = shadowAvailable && (legacy_phase === shadow_phase);
-  var html = '';
   if (!shadowAvailable || agree) {
-    /* Single engine line. */
-    html += '<div class="vel-line ' + phaseClass(legacy_phase) + '" style="margin:0;">'
-      + '<b>Lifecycle (' + legacyDir + '): ' + legacy_phase + '</b>'
-      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine('LEGACY') + '</span>'
-      + '</div>';
-  } else {
-    /* Two engine lines — phases diverged. */
-    html += '<div class="vel-line ' + phaseClass(legacy_phase) + '" style="margin:0;">'
-      + '<b>Legacy (' + legacyDir + '): ' + legacy_phase + '</b>'
-      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine('LEGACY') + '</span>'
-      + '</div>';
-    html += '<div class="vel-line ' + phaseClass(shadow_phase) + '" style="margin:0;">'
-      + '<b>Shadow (' + (shadowDir || '?') + '): ' + shadow_phase + '</b>'
-      + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine('SHADOW') + '</span>'
-      + '</div>';
+    return engineBlock('Lifecycle', legacy_phase, legacyDir, 'LEGACY');
   }
-  return html;
+  return engineBlock('Legacy', legacy_phase, legacyDir, 'LEGACY')
+       + engineBlock('Shadow', shadow_phase, shadowDir || '?', 'SHADOW');
 }
 
 function buildSpotPerpDriveHtml(drive, opts){
@@ -7984,6 +8006,16 @@ function togglePin(base) {
     /* If re-pinning during the grace window, clear the grace flag so
        refreshPinned doesn't wipe the buffer on the next sweep. */
     if (unpinGraceMap[base]) delete unpinGraceMap[base];
+    /* L_LIFECYCLE_PIN_SEED_V1 — Upgrade 26.F Fix Pass 2 (2026-05-28).
+       Seed phaseRingBuffer from window.signals current entry if available.
+       Guard inside the helper skips when buffer is already at bootstrap
+       depth (grace-preserved buffer wins). Error-wrapped so any seed
+       failure leaves the legacy pin path untouched. */
+    try {
+      if (typeof seedPhaseRingBufferFromMainFeed === 'function') {
+        seedPhaseRingBufferFromMainFeed(base);
+      }
+    } catch (_) {}
   }
   savePinnedSymbols(list);
   /* Trigger main render so all .pc-pin-btn instances repaint with the
@@ -8017,6 +8049,57 @@ var pinnedRefreshInflight = false;
    grace wipe via unpinGraceMap (accidental-toggle protection). */
 var phaseRingBuffer = {};     // base → [scan_state_0, scan_state_1, ...]
 var unpinGraceMap   = {};     // base → unpin_timestamp (ms)
+
+/* L_LIFECYCLE_PIN_SEED_V1 — Upgrade 26.F Fix Pass 2 (2026-05-28).
+   At pin time, seed phaseRingBuffer[base] with a single scan_state derived
+   from the symbol's current entry in window.signals. Cuts bootstrap from
+   5 live scans (2.5 min) to 4 live scans (2.0 min) — modest improvement.
+
+   Honest architectural limit: the main feed retains only the LATEST
+   snapshot per symbol (signals.find + overwrite at runScan), so one
+   seed entry is the max recoverable history. A rolling per-symbol history
+   buffer in the main feed would enable true live-on-pin verdict — that's
+   catalogged as a follow-up, deferred pending operator decision after
+   seeing the modest seed live.
+
+   Skipped when:
+     - existing buffer already has >= LIFECYCLE_BOOTSTRAP_N entries
+       (grace-preserved buffer wins on re-pin within 5-min grace window)
+     - no current main-feed entry for the symbol (signal expired/never
+       fired → fall back to native bootstrap, same as today's behavior) */
+function seedPhaseRingBufferFromMainFeed(base){
+  if (!base) return { seeded: 0, reason: 'no-base' };
+  var existing = phaseRingBuffer[base];
+  if (Array.isArray(existing) && existing.length >= LIFECYCLE_BOOTSTRAP_N) {
+    return { seeded: 0, reason: 'grace-preserved-buffer-at-bootstrap' };
+  }
+  var sig = (Array.isArray(window.signals)) ? window.signals.find(function(x){
+    return x && x.base === base && x.validUntil > Date.now();
+  }) : null;
+  if (!sig) return { seeded: 0, reason: 'no-main-feed-entry' };
+  try {
+    var currentMood = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
+    var priorBuffer = existing || [];
+    var dimensions = computeLifecycleDimensions(sig, currentMood, priorBuffer);
+    var legacy_phase = derivePhase(dimensions, priorBuffer, 'LEGACY');
+    var shadow_phase = derivePhase(dimensions, priorBuffer, 'SHADOW');
+    var scan_state = {
+      ts: Date.now(),
+      mood: currentMood,
+      legacy_dir: sig.dir || null,
+      shadow_dir: (sig.shadow && sig.shadow.emergent_direction) ? sig.shadow.emergent_direction : null,
+      dimensions: dimensions,
+      _raw: dimensions ? dimensions._raw : null,
+      legacy_phase: legacy_phase,
+      shadow_phase: shadow_phase,
+      _seeded: true   /* marker so a future diagnostic can distinguish seed vs live */
+    };
+    phaseRingBuffer[base] = priorBuffer.concat([scan_state]).slice(-PHASE_BUFFER_DEPTH);
+    return { seeded: 1, reason: 'main-feed-snapshot' };
+  } catch (e) {
+    return { seeded: 0, reason: 'seed-compute-error' };
+  }
+}
 async function refreshPinned() {
   if (pinnedRefreshInflight) return;
   var bases = getPinnedSymbols();
