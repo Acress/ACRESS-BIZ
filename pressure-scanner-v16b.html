@@ -9414,10 +9414,46 @@ function determineDirectionAndConviction(event_type, st) {
   var T = AGNOSTIC_EVENT_TYPES;
   function _fmt(n) { return (typeof n === 'number' && isFinite(n)) ? n.toFixed(2) : String(n); }
 
+  /* L_SHADOW_FINE_TUNE_RATIONALE_V1 — Upgrade 26.0c (2026-05-28).
+     DIVERGENT_RISK suppression fine-tune across the four positioning-aware
+     branches (1, 2, 7, 8). Architectural rationale:
+
+       Positioning encodes inventory state, not directional conviction.
+       When the operator's direction aligns with crowded retail
+       (DIVERGENT_RISK = retail long heavy + you LONG, OR retail short
+       heavy + you SHORT), this is structural fragility — retail is on
+       the wrong side of likely hedge-unwind flow. The system should NOT
+       emit any directional reading from these branches when DIVERGENT_RISK
+       fires; NEUTRAL is the correct conservative output.
+
+     Behavioral effect by branch:
+       - Branches 1-2 (OI expansion): defensive future-proofing only.
+         The current positive-set check {ALIGNED_WITH_TOPS, DIVERGENT_RETAIL}
+         already excludes DIVERGENT_RISK; the explicit `!== 'DIVERGENT_RISK'`
+         makes intent visible and survives any future positioning-state
+         additions to classifyPositioning.
+       - Branches 7-8 (CVD divergence): real directional suppression.
+         The current `!== 'AGAINST_TOPS'` check admits DIVERGENT_RISK today.
+         Post-fine-tune: DIVERGENT_RISK signals drop from HIGH/LONG (or
+         HIGH/SHORT) to NEUTRAL/ZERO directly — NOT to MEDIUM, because the
+         branch's MEDIUM FALSE_DIVERGENCE path requires the opposite FFC
+         sign, which by construction doesn't hold for the same signal that
+         was hitting the HIGH gate. HIGH→NEUTRAL is the architecturally
+         honest suppression and aligns with the conservative-output framing.
+
+     Direction outputs from the matrix REMAIN UNCHANGED for any signal where
+     positioning_state is anything other than DIVERGENT_RISK; this is a
+     purely additive predicate strengthening, not a redirection.
+
+     Methodology break #5 catalogged for the June 3 multi-regime analysis. */
   // ── 1. AGGRESSIVE_LONG_OI_EXPANSION ─────────────────────────────────────
   if (event_type === T.AGGRESSIVE_LONG_OI_EXPANSION) {
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — defensive future-proofing.
+       ALIGNED_WITH_TOPS / DIVERGENT_RETAIL positive set already excludes
+       DIVERGENT_RISK; explicit clause makes intent visible. */
     if (st.ffc_composite > 30 &&
-        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL')) {
+        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL') &&
+        st.positioning_state !== 'DIVERGENT_RISK') {
       return {
         direction: 'LONG', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
         reasoning: 'OI expansion (LONG side) into supportive structural pull (FFC ' + st.ffc_composite +
@@ -9447,8 +9483,12 @@ function determineDirectionAndConviction(event_type, st) {
                    '); short-side crowding against upward structure.'
       };
     }
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — defensive future-proofing
+       (mirror of branch 1). Positive set already excludes DIVERGENT_RISK;
+       explicit clause makes intent visible. */
     if (st.ffc_composite < -30 &&
-        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL')) {
+        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL') &&
+        st.positioning_state !== 'DIVERGENT_RISK') {
       return {
         direction: 'SHORT', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
         reasoning: 'OI expansion (SHORT side) into supportive structural pull (FFC ' + st.ffc_composite +
@@ -9604,7 +9644,14 @@ function determineDirectionAndConviction(event_type, st) {
 
   // ── 7. BUY_SIDE_CVD_DIVERGENCE ──────────────────────────────────────────
   if (event_type === T.BUY_SIDE_CVD_DIVERGENCE) {
-    if (st.ffc_composite > 20 && st.positioning_state !== 'AGAINST_TOPS') {
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — real behavioral change.
+       Pre-fine-tune: positioning != AGAINST_TOPS admitted DIVERGENT_RISK
+       and emitted LONG/HIGH HIDDEN_ACCUMULATION. Post-fine-tune:
+       DIVERGENT_RISK fails the gate; branch falls through to the MEDIUM
+       FALSE_DIVERGENCE path (which requires ffc<-20 — false for this
+       branch where ffc>20), then to NEUTRAL/ZERO/NO_TRADE_ZONE. Net
+       effect: HIGH→NEUTRAL when retail crowded long. */
+    if (st.ffc_composite > 20 && st.positioning_state !== 'AGAINST_TOPS' && st.positioning_state !== 'DIVERGENT_RISK') {
       return {
         direction: 'LONG', conviction: 'HIGH', classification: 'HIDDEN_ACCUMULATION',
         reasoning: 'Buy-side CVD divergence, FFC structural pull upward (' + st.ffc_composite +
@@ -9627,7 +9674,13 @@ function determineDirectionAndConviction(event_type, st) {
 
   // ── 8. SELL_SIDE_CVD_DIVERGENCE ─────────────────────────────────────────
   if (event_type === T.SELL_SIDE_CVD_DIVERGENCE) {
-    if (st.ffc_composite < -20 && st.positioning_state !== 'AGAINST_TOPS') {
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — real behavioral change
+       (mirror of branch 7). Pre-fine-tune: positioning != AGAINST_TOPS
+       admitted DIVERGENT_RISK and emitted SHORT/HIGH HIDDEN_DISTRIBUTION.
+       Post-fine-tune: DIVERGENT_RISK fails the gate; MEDIUM path requires
+       ffc>20 (false here) so falls through to NEUTRAL/ZERO. Net effect:
+       HIGH→NEUTRAL when retail crowded short. */
+    if (st.ffc_composite < -20 && st.positioning_state !== 'AGAINST_TOPS' && st.positioning_state !== 'DIVERGENT_RISK') {
       return {
         direction: 'SHORT', conviction: 'HIGH', classification: 'HIDDEN_DISTRIBUTION',
         reasoning: 'Sell-side CVD divergence, FFC structural pull downward (' + st.ffc_composite +
