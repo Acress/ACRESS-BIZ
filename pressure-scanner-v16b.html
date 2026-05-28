@@ -7487,8 +7487,10 @@ var PHASE_VERDICTS = {
    L_LIFECYCLE_VERDICT_SURFACE_V1 — Fix Pass 2 (2026-05-28): each engine
    line now opens with a plain-English verdict translating the phase into
    actionable read; z-score dimensional readout retained beneath. */
-function buildLifecycleHtml(s){
+function buildLifecycleHtml(s, opts){
   if (!s || !s.lifecycle) return '';
+  opts = opts || {};
+  var compact = !!opts.compact;   /* L_LIFECYCLE_UNIVERSAL_V1 — compact mode toggle */
   var lc = s.lifecycle;
   var bufN = lc.buffer_length || 0;
   var bootN = lc.bootstrap_n || 5;
@@ -7533,10 +7535,22 @@ function buildLifecycleHtml(s){
   }
   function engineBlock(label, phase, dir, perspective) {
     var verdict = verdictFor(phase, dir);
+    /* L_LIFECYCLE_UNIVERSAL_V1 — compact mode emits single verdict line
+       only, with the z-score dimensional readout moved into the title
+       attribute for hover. Full mode (pinned + per-symbol expanded)
+       retains the inline z-score readout below the verdict. */
+    var titleStr = label + ' phase: ' + phase;
+    if (compact) {
+      var dimsForTitle = dimsLine(perspective);
+      if (dimsForTitle && dimsForTitle !== '—') titleStr += ' · ' + dimsForTitle;
+      return '<div class="vel-line ' + phaseClass(phase) + '" style="margin:0;" title="' + titleStr + '">'
+        + '<b>' + label + (dir ? ' (' + dir + ')' : '') + ': ' + verdict + '</b>'
+        + '</div>';
+    }
     /* L_LIFECYCLE_VERDICT_SURFACE_V1 — verdict line on top (plain English,
        bold), z-score line below (existing dimensional readout, lighter).
        Phase technical name preserved on title for hover/inspection. */
-    return '<div class="vel-line ' + phaseClass(phase) + '" style="margin:0;" title="' + label + ' phase: ' + phase + '">'
+    return '<div class="vel-line ' + phaseClass(phase) + '" style="margin:0;" title="' + titleStr + '">'
       + '<b>' + label + (dir ? ' (' + dir + ')' : '') + ': ' + verdict + '</b>'
       + '<br/><span style="opacity:0.85;font-weight:400;">└ ' + dimsLine(perspective) + '</span>'
       + '</div>';
@@ -8147,19 +8161,97 @@ var pinnedSignals = {};       // base → most-recent analyzed signal (or null)
 var pinnedRefreshAt = {};     // base → timestamp of last successful refresh
 var pinnedRefreshInflight = false;
 
-/* L_LIFECYCLE_RING_BUFFER_V1 — Upgrade 26.F (2026-05-28). Per-pinned-symbol
+/* L_LIFECYCLE_RING_BUFFER_V1 — Upgrade 26.F (2026-05-28). Per-symbol
    time-series ring buffer of the last 20 scan_state entries. Each entry
    stores the six lifecycle dimensions (z-scores + raw values for next-scan
    normalization) + per-engine phase. In-memory only — buffer rebuilds in
-   ~10 minutes if the page reloads. Unpinning a symbol queues it for 5-min
-   grace wipe via unpinGraceMap (accidental-toggle protection). */
+   ~10 minutes if the page reloads.
+
+   L_LIFECYCLE_UNIVERSAL_V1 — Upgrade 26.F-U (2026-05-28). Scope promoted
+   from pinned-only to universe-wide: every scanned coin (top-100 volume
+   cap) gets a buffer, populated by runScan after analyzeCoinDiag. Pinned
+   coins continue refreshing at 30s cadence on top of the 90s main scans,
+   giving them ~4x denser history. */
 var phaseRingBuffer = {};     // base → [scan_state_0, scan_state_1, ...]
 var unpinGraceMap   = {};     // base → unpin_timestamp (ms)
+
+/* L_LIFECYCLE_UNIVERSAL_V1 — eviction policy under universal scope.
+   Two-tier pruning runs at the end of each scan loop:
+
+   Per-entry: any scan_state with ts older than ENTRY_MAX_AGE_MS (4h) is
+   pruned regardless of pin status. PHASE_BUFFER_DEPTH=20 already caps
+   the ring buffer for actively-scanned coins, so this only matters for
+   pinned-but-no-longer-active coins (preserved from base-level eviction
+   but allowed to drift stale individually).
+
+   Per-base: if the most recent entry is older than BASE_TTL_MS (30 min,
+   matching SIGNAL_TTL_MS), the whole base buffer is deleted — UNLESS
+   the coin is currently pinned, in which case base-level eviction is
+   skipped entirely. Pinned-coin buffers are sacred at the base level.
+
+   This replaces the old 5-min unpinGraceMap-driven hard eviction. The
+   unpinGraceMap flag is retained as an accidental-toggle indicator
+   (cleared when the operator re-pins within 5 min) but no longer drives
+   buffer deletion directly; universal TTL handles that case. */
+var LIFECYCLE_BASE_TTL_MS     = 30 * 60 * 1000;       // 30 min — matches SIGNAL_TTL_MS
+var LIFECYCLE_ENTRY_MAX_AGE_MS = 4 * 60 * 60 * 1000;  // 4h — anti-leak prune on individual entries
+
+function pruneLifecycleBuffers(){
+  var now = Date.now();
+  for (var base in phaseRingBuffer) {
+    var buf = phaseRingBuffer[base];
+    if (!Array.isArray(buf) || !buf.length) { delete phaseRingBuffer[base]; continue; }
+    /* Per-entry aging — drop entries older than 4h regardless of pin state. */
+    var fresh = buf.filter(function(e){ return e && typeof e.ts === 'number' && (now - e.ts) <= LIFECYCLE_ENTRY_MAX_AGE_MS; });
+    if (fresh.length === 0) {
+      /* All entries aged out — base buffer is dead, evict regardless of pin. */
+      delete phaseRingBuffer[base];
+      continue;
+    }
+    if (fresh.length < buf.length) phaseRingBuffer[base] = fresh;
+    /* Per-base TTL — skip for pinned coins (sacred). */
+    var isPinned = (typeof isSymbolPinned === 'function') ? isSymbolPinned(base) : false;
+    if (!isPinned) {
+      var lastTs = fresh[fresh.length - 1].ts;
+      if ((now - lastTs) > LIFECYCLE_BASE_TTL_MS) delete phaseRingBuffer[base];
+    }
+  }
+  /* Clear unpinGraceMap entries past their 5-min window — buffer eviction
+     is now governed by universal TTL above, so the grace flag just gets
+     dropped on expiry without further action. */
+  for (var gb in unpinGraceMap) {
+    if ((now - unpinGraceMap[gb]) > UNPIN_GRACE_MS) delete unpinGraceMap[gb];
+  }
+}
+
+/* L_LIFECYCLE_UNIVERSAL_V1 — render-tier helper. Compact mode renders the
+   single verdict line only (no inline z-score readout); full mode renders
+   verdict + z-scores (existing Fix Pass 2 behavior). Pinned cards always
+   get full mode; per-symbol expanded main feed cards also get full mode;
+   everything else is compact. */
+function isCompactRender(s){
+  if (!s) return true;
+  if (s._pinned) return false;
+  if (typeof isSymbolExpanded === 'function' && isSymbolExpanded(s.base)) return false;
+  return true;
+}
 
 /* L_LIFECYCLE_PIN_SEED_V1 — Upgrade 26.F Fix Pass 2 (2026-05-28).
    At pin time, seed phaseRingBuffer[base] with a single scan_state derived
    from the symbol's current entry in window.signals. Cuts bootstrap from
    5 live scans (2.5 min) to 4 live scans (2.0 min) — modest improvement.
+
+   L_UNIVERSAL_LIFECYCLE_PIN_BENEFIT_V1 — Upgrade 26.F-U (2026-05-28). With
+   universal lifecycle, this seed is now MOSTLY REDUNDANT for in-universe
+   coins (top-100 volume cap) — their buffers are already populated by the
+   90s runScan loop before any pin event. The seed helper remains as a
+   safety fallback for two cases: (a) coins pinned during the brief window
+   before the first universal scan completes after page load; (b) coins
+   pinned that aren't in the current top-100 universe (edge case where
+   the operator's watchlist diverges from the scanner's pool). For both
+   cases the seed continues to deliver its modest bootstrap reduction.
+   Net effect of 26.F-U: cold-start-on-pin is largely solved as a byproduct
+   of universal coverage, not as a dedicated feature.
 
    Honest architectural limit: the main feed retains only the LATEST
    snapshot per symbol (signals.find + overwrite at runScan), so one
@@ -8289,16 +8381,12 @@ async function refreshPinned() {
         nextRefreshAt[base] = Date.now();
       }
     }
-    /* L_LIFECYCLE_RING_BUFFER_V1 — expired-grace cleanup. Walk
-       unpinGraceMap and wipe phaseRingBuffer entries for any
-       base that has been unpinned for longer than UNPIN_GRACE_MS. */
-    var graceNow = Date.now();
-    for (var gb in unpinGraceMap) {
-      if (graceNow - unpinGraceMap[gb] > UNPIN_GRACE_MS) {
-        delete phaseRingBuffer[gb];
-        delete unpinGraceMap[gb];
-      }
-    }
+    /* L_LIFECYCLE_UNIVERSAL_V1 — shared pruning. Calls the universal
+       two-tier helper instead of the previous unpinGraceMap-driven hard
+       eviction. Buffer eviction is now governed by 30-min base TTL +
+       4h per-entry aging; the unpinGraceMap flag stays for accidental-
+       toggle UX but no longer drives buffer deletion. */
+    try { if (typeof pruneLifecycleBuffers === 'function') pruneLifecycleBuffers(); } catch(_) {}
     pinnedSignals = nextSignals;
     pinnedRefreshAt = nextRefreshAt;
     if (typeof renderPinnedSection === 'function') renderPinnedSection();
@@ -10417,6 +10505,41 @@ async function runScan(){
         var r=await analyzeCoinDiag(s,diagnostics);
         if(r){
           diagnostics.topScores.push({sym:r.base,score:r.score,dir:r.dir});
+          /* L_LIFECYCLE_UNIVERSAL_V1 — Upgrade 26.F-U (2026-05-28).
+             Compute lifecycle dimensions + phases for EVERY scanned coin,
+             BEFORE the score>=25 gate. The buffer accumulates regardless of
+             whether the signal will render this scan, so a coin's history
+             is ready the moment its score crosses the display threshold.
+             r.lifecycle attachment is gated below — only signals that will
+             enter the displayable set carry the bundle. Error-wrapped so
+             any lifecycle failure leaves the legacy scan path untouched. */
+          try {
+            var _currentMood = (typeof getCurrentMarketMood === 'function') ? getCurrentMarketMood() : 'UNKNOWN';
+            var _existingBuffer = phaseRingBuffer[r.base] || [];
+            var _dimensions = computeLifecycleDimensions(r, _currentMood, _existingBuffer);
+            var _legacy_phase = derivePhase(_dimensions, _existingBuffer, 'LEGACY');
+            var _shadow_phase = derivePhase(_dimensions, _existingBuffer, 'SHADOW');
+            var _scan_state = {
+              ts: Date.now(),
+              mood: _currentMood,
+              legacy_dir: r.dir || null,
+              shadow_dir: (r.shadow && r.shadow.emergent_direction) ? r.shadow.emergent_direction : null,
+              dimensions: _dimensions,
+              _raw: _dimensions ? _dimensions._raw : null,
+              legacy_phase: _legacy_phase,
+              shadow_phase: _shadow_phase
+            };
+            phaseRingBuffer[r.base] = _existingBuffer.concat([_scan_state]).slice(-PHASE_BUFFER_DEPTH);
+            /* Stash lifecycle locally; only attach to r if the signal will display. */
+            r._lifecycleStaged = {
+              phase: _legacy_phase,
+              dimensions: _dimensions,
+              legacy_phase: _legacy_phase,
+              shadow_phase: _shadow_phase,
+              buffer_length: phaseRingBuffer[r.base].length,
+              bootstrap_n: LIFECYCLE_BOOTSTRAP_N
+            };
+          } catch (_lifecycleErr) { /* swallowed — universal scan must not destroy signal */ }
           // L_REVERT: spec-aligned signal push (2026-05-22).
           // All filter layers added since the May 21 reference spec have been removed:
           //   - Layer 2a herd-name filter (_herdMechs)
@@ -10429,6 +10552,9 @@ async function runScan(){
           // Push all signals scoring >= 25 per spec section 4.8.
           // UI display threshold (default 60+ Regular) handled by acress_score_range.
           if(r.score>=25){
+            /* L_LIFECYCLE_UNIVERSAL_V1 — attach staged lifecycle bundle inside the
+               display gate so only renderable signals carry the property. */
+            if (r._lifecycleStaged) { r.lifecycle = r._lifecycleStaged; delete r._lifecycleStaged; }
             var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
             if(existing){
               if(r.score>existing.score && shouldAcceptSignal(r)){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
@@ -10462,6 +10588,13 @@ async function runScan(){
                    firing-moment snapshot. Pure kline-derived; safe to update
                    on existing signals. */
                 if (r && r.macroTrend)  existing.macroTrend  = r.macroTrend;
+                /* L_LIFECYCLE_UNIVERSAL_V1 — mirror the freshly-computed
+                   lifecycle bundle onto existing signal so phase + verdict
+                   reflect the latest scan's structural read, not the
+                   firing-moment snapshot. The buffer push already happened
+                   above (before the >=25 gate); this just propagates the
+                   newest bundle onto the in-flight signal object. */
+                if (r && r.lifecycle)   existing.lifecycle   = r.lifecycle;
               }
             }else{
               if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
@@ -10483,6 +10616,12 @@ async function runScan(){
      before renderResults. The pass writes signal.velocity.decile +
      signal.velocity.prospective_score on every live signal. */
   try { recomputeProspectiveDeciles(signals); } catch(e) { console.warn('[Acress] prospective decile pass err:', e.message); }
+  /* L_LIFECYCLE_UNIVERSAL_V1 — post-scan pruning. Two-tier policy: per-entry
+     aging beyond 4h drops individual stale entries; per-base TTL evicts
+     buffers for coins whose latest entry is older than 30 min, skipping
+     pinned coins. Replaces the previous 5-min inline cleanup that lived
+     inside refreshPinned. Cheap O(N) walk over phaseRingBuffer. */
+  try { pruneLifecycleBuffers(); } catch(e) { console.warn('[Acress] lifecycle prune err:', e.message); }
   signals.sort(function(a,b){return b.score-a.score;});
   diagnostics.topScores.sort(function(a,b){return b.score-a.score;});
   window._lastDiagnostics=diagnostics;
@@ -12166,10 +12305,14 @@ function buildCard(s, moodKey){
     +'<div class="pc-prose-body' + ((typeof isSymbolExpanded === 'function' && isSymbolExpanded(s.base)) ? ' card-expanded' : '') + '">'
       /* L_LIFECYCLE_PINNED_UI_V1 — Upgrade 26.F Change 4 (2026-05-28).
          Lifecycle prose section rendered ABOVE the standard prose
-         dimensions on pinned cards only. Main-feed cards have no
-         signal.lifecycle attached (set only inside refreshPinned), so
-         buildLifecycleHtml returns '' for them. */
-      +(s._pinned && s.lifecycle && typeof buildLifecycleHtml === 'function' ? buildLifecycleHtml(s) : '')
+         dimensions.
+         L_LIFECYCLE_UNIVERSAL_V1 — Upgrade 26.F-U (2026-05-28). Gate
+         broadened from s._pinned to s.lifecycle alone. Every signal with
+         a populated buffer renders the verdict; compact mode applies on
+         non-pinned, non-expanded cards (single verdict line, z-scores in
+         title hover); pinned + per-symbol expanded cards get full mode
+         (verdict + inline z-score readout, existing Fix Pass 2 layout). */
+      +(s.lifecycle && typeof buildLifecycleHtml === 'function' ? buildLifecycleHtml(s, { compact: (typeof isCompactRender === 'function') ? isCompactRender(s) : !s._pinned }) : '')
       /* L_CANONICAL_REORDER_V3 + L_SMART_MONEY_COMPOSITE_V1 + L_EFFICIENCY_PROMOTE_V1
          — Card UI Restructure Pass 5 (2026-05-28). Above-demarcation
          cluster now reads:
