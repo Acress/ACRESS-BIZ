@@ -10748,6 +10748,12 @@ async function analyzeCoinDiag(symObj,diag){
          Equal-highs/lows + nearest-pool distance/strength for the lifecycle
          engine's Liquidity Vulnerability dimension. Diag/emit path. */
       liquidityPool: (typeof computeLiquidityPoolProximity === 'function') ? computeLiquidityPoolProximity(k5, price) : null,
+      /* L_MACRO_TREND_BADGE_V1 — Upgrade Macro-Trend (2026-05-28).
+         Five-timeframe composite trend reading from extended k5 buffer.
+         Diag/emit path — this is the analyzeCoinDiag emit that runScan
+         drives through, so the attach here is what makes signals carry
+         macroTrend in the main feed. */
+      macroTrend: (typeof computeMacroTrend === 'function') ? computeMacroTrend(k5) : null,
       /* L_POSITION_SIZING_V1 + L_FITNESS_VERDICT_V1 — diag/emit path discipline inputs */
       _medianVol5m:   _medianVol,
       _takerRatio5m:  takerRatioFromLastBar(k5),
