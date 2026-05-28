@@ -187,6 +187,13 @@ input{font-family:var(--font-ui);}
 .pc-chip-verdict-wait{background:rgba(255,170,0,0.18);color:var(--amber);border:1px solid rgba(255,170,0,0.42);}
 .pc-chip-verdict-skip{background:rgba(255,60,60,0.18);color:var(--red);border:1px solid rgba(255,60,60,0.42);}
 .pc-chip-verdict-not-enough{background:rgba(128,128,128,0.18);color:var(--faint);border:1px solid rgba(128,128,128,0.36);}
+/* L_MACRO_TREND_BADGE_V1 — five-bucket macro-trend pill in pc-head. */
+.pc-macro-trend{font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 6px;border-radius:var(--r-pill);letter-spacing:.3px;line-height:1.4;white-space:nowrap;}
+.pc-macro-trend.pc-mt-strong-up{background:rgba(0,200,100,0.22);color:var(--green);border:1px solid rgba(0,200,100,0.46);}
+.pc-macro-trend.pc-mt-mild-up{background:rgba(0,200,100,0.13);color:#7ed8a4;border:1px solid rgba(0,200,100,0.30);}
+.pc-macro-trend.pc-mt-flat{background:rgba(160,160,180,0.13);color:#aaa;border:1px solid rgba(160,160,180,0.28);}
+.pc-macro-trend.pc-mt-mild-dn{background:rgba(255,80,80,0.13);color:#ff8a8a;border:1px solid rgba(255,80,80,0.30);}
+.pc-macro-trend.pc-mt-strong-dn{background:rgba(255,60,60,0.22);color:var(--red);border:1px solid rgba(255,60,60,0.46);}
 
 /* L_DISCIPLINE_CARD_V1 — Position-level Discipline Surface section between
    .pc-head and .pc-mech. Collapsed by default (just verdict + sizing
@@ -1771,6 +1778,82 @@ function recomputeProspectiveDeciles(arr){
     var decile = Math.min(10, Math.floor(pct * 10) + 1);
     entry.s.velocity.decile = decile;
   });
+}
+
+
+/* L_MACRO_TREND_BADGE_V1 — Upgrade Macro-Trend (2026-05-28).
+   Five-timeframe composite trend reading from the extended k5 buffer.
+   Pure function — no side effects, no globals beyond the weights/threshold
+   constants. Operator card surface shows verdict word only; full
+   percentage breakdown lives on the badge's title attribute (hover).
+
+   Computation:
+     pct_15m = close[N-1] vs close[N-4]    (3 bars back × 5min)
+     pct_1h  = close[N-1] vs close[N-13]   (12 bars back)
+     pct_4h  = close[N-1] vs close[N-49]   (48 bars back)
+     pct_8h  = close[N-1] vs close[N-97]   (96 bars back)
+     pct_12h = close[N-1] vs close[N-145]  (144 bars back)
+     composite = weighted_sum / sum_of_present_weights  (null-skip-rescale)
+
+   Calibration (all CALIBRATION_PLACEHOLDER):
+     - Weight curve flattened from initial 0.05/0.10/0.20/0.30/0.35 to
+       0.10/0.15/0.20/0.25/0.30 per operator decision. Heavier 12h would
+       risk a long-ago-pumped-now-dumping coin reading as "Trending up",
+       contradicting the WITH/AGAINST-at-a-glance intent.
+     - Strong-trend threshold ±3.0%; mild-trend threshold ±0.5%.
+     - Refinement deferred until empirical outcome data accumulates.
+
+   Returns null when fewer than 3 bars are available (defensive floor
+   matches the 27.5 / 26.F null-skip-rescale convention). Caller renders
+   no badge when result is null. */
+var MACRO_TREND_WEIGHTS = {
+  pct_15m: 0.10,
+  pct_1h:  0.15,
+  pct_4h:  0.20,
+  pct_8h:  0.25,
+  pct_12h: 0.30
+};
+var MACRO_TREND_STRONG_PCT = 3.0;   /* CALIBRATION_PLACEHOLDER */
+var MACRO_TREND_MILD_PCT   = 0.5;   /* CALIBRATION_PLACEHOLDER */
+
+function computeMacroTrend(k5){
+  if (!Array.isArray(k5) || k5.length < 3) return null;
+  var n = k5.length;
+  function pctChange(barsBack){
+    if (n < barsBack + 1) return null;
+    var prior = parseFloat(k5[n - 1 - barsBack][4]);   /* close price */
+    var current = parseFloat(k5[n - 1][4]);
+    if (!isFinite(prior) || !isFinite(current) || prior <= 0) return null;
+    return (current - prior) / prior * 100;
+  }
+  var byTf = {
+    pct_15m: pctChange(3),
+    pct_1h:  pctChange(12),
+    pct_4h:  pctChange(48),
+    pct_8h:  pctChange(96),
+    pct_12h: pctChange(144)
+  };
+  var sumW = 0, sumWV = 0, present = 0;
+  for (var key in MACRO_TREND_WEIGHTS) {
+    var v = byTf[key];
+    if (typeof v !== 'number' || !isFinite(v)) continue;
+    sumW  += MACRO_TREND_WEIGHTS[key];
+    sumWV += MACRO_TREND_WEIGHTS[key] * v;
+    present++;
+  }
+  if (present === 0 || sumW <= 0) return null;
+  var composite = sumWV / sumW;
+  var verdict, arrow, label;
+  if      (composite >=  MACRO_TREND_STRONG_PCT) { verdict = 'strong-up'; arrow = '↑'; label = 'Trending up'; }
+  else if (composite >=  MACRO_TREND_MILD_PCT)   { verdict = 'mild-up';   arrow = '↗'; label = 'Drifting up'; }
+  else if (composite <= -MACRO_TREND_STRONG_PCT) { verdict = 'strong-dn'; arrow = '↓'; label = 'Bleeding'; }
+  else if (composite <= -MACRO_TREND_MILD_PCT)   { verdict = 'mild-dn';   arrow = '↘'; label = 'Drifting down'; }
+  else                                            { verdict = 'flat';      arrow = '→'; label = 'Stagnant'; }
+  return {
+    verdict: verdict, arrow: arrow, label: label,
+    composite_pct: composite,
+    byTimeframe: byTf
+  };
 }
 
 
@@ -7471,6 +7554,29 @@ function buildLifecycleHtml(s){
        + engineBlock('Shadow', shadow_phase, shadowDir || '?', 'SHADOW');
 }
 
+/* L_MACRO_TREND_BADGE_V1 — render badge in pc-head. Verdict word only;
+   full per-timeframe percentages live on the title attribute (hover).
+   Returns empty string when signal lacks macroTrend (defensive — older
+   in-flight signals from before this upgrade won't carry the field). */
+function buildMacroTrendBadgeHtml(s){
+  var mt = s && s.macroTrend;
+  if (!mt) return '';
+  function fmtPct(v){
+    if (typeof v !== 'number' || !isFinite(v)) return '—';
+    return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  }
+  var tf = mt.byTimeframe || {};
+  var title = '15m ' + fmtPct(tf.pct_15m)
+            + ' · 1h ' + fmtPct(tf.pct_1h)
+            + ' · 4h ' + fmtPct(tf.pct_4h)
+            + ' · 8h ' + fmtPct(tf.pct_8h)
+            + ' · 12h ' + fmtPct(tf.pct_12h)
+            + '  →  composite ' + fmtPct(mt.composite_pct);
+  return '<span class="pc-macro-trend pc-mt-' + mt.verdict + '" title="' + title + '">'
+       + mt.arrow + ' ' + mt.label
+       + '</span>';
+}
+
 function buildSpotPerpDriveHtml(drive, opts){
   opts = opts || {};
   var style = opts.inlineStyle ? (' style="' + opts.inlineStyle + '"') : '';
@@ -10018,7 +10124,7 @@ async function analyzeCoin(symObj){
     var _spotPair = binanceSpotSet ? resolveSpotPair(sym) : null;
     var [k1,k5,k15,oi,prem,spotK5]=await Promise.all([
       fetchKlines(base,'1m',60),
-      fetchKlines(base,'5m',60),   /* L_KLINE_RETENTION_BUMP_V1 — was 40 */
+      fetchKlines(base,'5m',145),  /* L_MACRO_TREND_KLINE_FETCH_V1 — extended 60 → 145 for macro-trend badge: 144 bars BACK from latest needed for 12h pct, +1 for the current bar itself. Original target was 144, bumped by one to deliver an exact 12h reading; sub-1KB delta per symbol. L_KLINE_RETENTION_BUMP_V1 — was 40. */
       fetchKlines(base,'15m',30),
       fetchOIHist(base,'5m',30),
       fetchPremium(base).catch(function(){return null;}),
@@ -10180,6 +10286,12 @@ async function analyzeCoin(symObj){
          Equal-highs/lows detection + nearest-pool distance/strength.
          Consumed by Liquidity Vulnerability dimension in the lifecycle engine. */
       liquidityPool: (typeof computeLiquidityPoolProximity === 'function') ? computeLiquidityPoolProximity(k5, price) : null,
+      /* L_MACRO_TREND_BADGE_V1 — Upgrade Macro-Trend (2026-05-28).
+         Five-timeframe composite trend reading from extended k5. Renders
+         as a verdict badge in pc-head adjacent to the direction arrow so
+         WITH/AGAINST conflict (e.g. LONG signal on "Bleeding" coin) is
+         visible at-a-glance. */
+      macroTrend: (typeof computeMacroTrend === 'function') ? computeMacroTrend(k5) : null,
       /* L_POSITION_SIZING_V1 + L_FITNESS_VERDICT_V1 — inputs the discipline
          bundle needs at compute time (carried alongside the signal so the
          bundle can be recomputed from a re-emitted signal during refresh). */
@@ -10345,6 +10457,11 @@ async function runScan(){
                 if (r && r.forcedFlow)  existing.forcedFlow  = r.forcedFlow;
                 if (r && r.spotDrive)   existing.spotDrive   = r.spotDrive;
                 if (r && r.sweepState)  existing.sweepState  = r.sweepState;
+                /* L_MACRO_TREND_BADGE_V1 — refresh macro-trend on every
+                   scan so the badge reflects current kline state, not the
+                   firing-moment snapshot. Pure kline-derived; safe to update
+                   on existing signals. */
+                if (r && r.macroTrend)  existing.macroTrend  = r.macroTrend;
               }
             }else{
               if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
@@ -10486,7 +10603,7 @@ async function analyzeCoinDiag(symObj,diag){
     var _spotPair = binanceSpotSet ? resolveSpotPair(sym) : null;
     var [k1,k5,k15,oiResult,prem,liqStats,oiAgg,spotK5]=await Promise.all([
       fetchKlines(base,'1m',60),
-      fetchKlines(base,'5m',60),   /* L_KLINE_RETENTION_BUMP_V1 — was 40 */
+      fetchKlines(base,'5m',145),  /* L_MACRO_TREND_KLINE_FETCH_V1 — extended 60 → 145 for macro-trend badge: 144 bars BACK from latest needed for 12h pct, +1 for the current bar itself. Original target was 144, bumped by one to deliver an exact 12h reading; sub-1KB delta per symbol. L_KLINE_RETENTION_BUMP_V1 — was 40. */
       fetchKlines(base,'15m',30),
       fetchCombinedOI(base),
       fetchPremium(base).catch(function(){return null;}),
@@ -11993,6 +12110,7 @@ function buildCard(s, moodKey){
         +'<span class="pc-sym">'+s.base+'</span>'
         +'<span class="pc-price">$'+fP(s.price)+'</span>'
         +'<span class="pc-chg '+(s.chg24>=0?'up':'dn')+'">'+fPct(s.chg24,1)+'</span>'
+        +(typeof buildMacroTrendBadgeHtml === 'function' ? buildMacroTrendBadgeHtml(s) : '') /* L_MACRO_TREND_BADGE_V1 — at-a-glance WITH/AGAINST cue next to direction arrow */
         +chipsHtml /* L_PRIME_CARD_TAG_V1 + L_HIGH_CONFIDENCE_CARD_CHIP_V1 */
       +'</div>'
       +'<div class="pc-score-wrap">'
