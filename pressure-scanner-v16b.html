@@ -2347,6 +2347,19 @@ function derivePhase(dimensions, buffer, engine_perspective) {
   var lastEntry = buffer[buffer.length - 1];
   var phaseKey  = (engine_perspective === 'SHADOW') ? 'shadow_phase' : 'legacy_phase';
   var currentPhase = (lastEntry && lastEntry[phaseKey]) ? lastEntry[phaseKey] : 'Compression Building';
+  /* L_LIFECYCLE_PHASE_DERIVATION_V1 — Phase 1 Fix Pass 1 (2026-05-28).
+     Discovered in 30-min extended observation: bootstrap-era buffer
+     entries write 'gathering data' to their phase fields; on first
+     post-bootstrap scan derivePhase reads that sentinel as currentPhase,
+     then the switch below has no case for it and falls through to
+     return currentPhase → engine permanently stuck. Same defect for
+     'no shadow direction' if SHADOW perspective recovers a real direction
+     after a prior NEUTRAL scan. Normalize sentinels to 'Compression
+     Building' here so the cycle begins properly the moment the bootstrap
+     guard releases. */
+  if (currentPhase === 'gathering data' || currentPhase === 'no shadow direction') {
+    currentPhase = 'Compression Building';
+  }
   /* Direction-conditional dimensions for THIS engine. */
   var pressure   = dimensions.compressionPressure;
   var momentum   = _perEngineDim(dimensions.releaseMomentum, engine_perspective);
