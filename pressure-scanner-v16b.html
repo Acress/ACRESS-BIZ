@@ -1788,6 +1788,28 @@ function recomputeProspectiveDeciles(arr){
 }
 
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYER 0 — ENVIRONMENT
+ *
+ * Regime classifier (mood banner), volatility state, macro-trend context,
+ * session, BTC behavior. Conditions thresholds across higher layers.
+ *
+ * See ACRESS-architecture.md Section 4 (layer summary) and Section 5
+ * (component mapping).
+ *
+ * This banner is a navigational signpost. Layer 0 code is non-contiguous
+ * in this file:
+ *   - Macro-trend composite below at ~1815-1885 (computeMacroTrend, weights,
+ *     thresholds; marker L_MACRO_TREND_BADGE_V1)
+ *   - Mood banner / regime classifier downstream at ~3644-3735
+ *     (getCurrentMarketMood, getRegimeAdaptiveFloor, buildMarketMoodBanner;
+ *     marker L_REGIME_ADAPTIVE_VELOCITY_V1)
+ *   - Macro-trend kline fetch wires inside analyzeCoin / analyzeCoinDiag
+ *     (marker L_MACRO_TREND_KLINE_FETCH_V1)
+ *
+ * Marker: L_SCAFFOLD_LAYER0_V1
+ * ═══════════════════════════════════════════════════════════════════════
+ */
 /* L_MACRO_TREND_BADGE_V1 — Upgrade Macro-Trend (2026-05-28).
    Five-timeframe composite trend reading from the extended k5 buffer.
    Pure function — no side effects, no globals beyond the weights/threshold
@@ -1861,6 +1883,89 @@ function computeMacroTrend(k5){
     composite_pct: composite,
     byTimeframe: byTf
   };
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYER 1A — ENGINE A: TEXTBOOK SETUP DETECTOR (RESERVED)
+ *
+ * Reads the price chart only — classical TA, no structural composites,
+ * no FFC, no positioning, no inference. Outputs proposed textbook setup
+ * direction with named pattern, quality, and pivot level.
+ *
+ * See ACRESS-architecture.md Section 2 (Engine A definition) and
+ * Section 6 (build plan).
+ *
+ * Status: Engine A V1 NOT YET BUILT. This region is reserved for the
+ * Phase 2 implementation (~200-400 lines estimated). The computeTextbookSetup
+ * stub below returns null today; Phase 2 will replace it with the real
+ * detector orchestrator (detectBreakout, detectBreakdown,
+ * detectPullbackInUptrend, detectPullbackInDowntrend,
+ * detectBullishEngulfingAtSupport, detectBearishEngulfingAtResistance,
+ * detectPinBarRejectionAtLevel, detectRangeBoundary).
+ *
+ * Marker: L_SCAFFOLD_LAYER1A_V1
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+/* L_SCAFFOLD_STUB_V1 — Phase 2 of architectural rebuild.
+   computeTextbookSetup(signal) reads kline data and detects textbook
+   price-action patterns (breakouts, pullbacks, candle patterns, range
+   identification). Returns { setup_direction, setup_pattern, setup_quality,
+   setup_level } or null when no pattern fires.
+   See ACRESS-architecture.md Section 2 (Engine A) and Section 6 (build plan). */
+function computeTextbookSetup(signal) {
+  // TODO: Phase 2 implementation
+  return null;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYER 1B — ENGINE B: MM/EXCHANGE/SOPHISTICATED FOOTPRINT OBSERVER
+ *
+ * Reads structural composites, positioning, funding, drive, sweep state,
+ * displacement efficiency, OI surface, liquidation flux, and (when built)
+ * basis spread, funding velocity, cross-venue OI.
+ * Outputs structured list of footprint observations.
+ *
+ * See ACRESS-architecture.md Section 2 (Engine B definition) and
+ * Section 5 (component mapping).
+ *
+ * Note: Engine B code is non-contiguous in this file. The lifecycle
+ * dimensions + phase derivation start immediately below; additional regions
+ * appear further down:
+ *   - Liquidity pool proximity helper at ~2535-2654
+ *   - Displacement efficiency at ~2655-2780
+ *   - Positioning (getPositioning, classifyPositioning) at ~2782-2935
+ *   - FFC composite (computeForcedFlowConvexity) at ~3069-3380
+ *   - Spot/Perp drive (classifySpotPerpDrive) at ~7447-7500
+ *   - Lifecycle ring buffer state + pruning at ~8205-8344
+ *   - Mechanism gates (gateOI/Taker/MTF/CVD/Sweep) at ~8936-9165
+ *   - Sweep state machinery at ~9182-9457
+ *   - Scoring + classifyMechanism at ~9547-10198
+ *   - Per-coin orchestrators (analyzeCoin, analyzeCoinDiag) at ~10239 and ~10760
+ *
+ * Functions in the immediate-below region:
+ *   - _dim* (six lifecycle dimensions)
+ *   - computeLifecycleDimensions, derivePhase + helpers
+ *   - [stub] computeFootprintObservations — aggregates Engine B inputs
+ *           into a structured observation list (Phase 3 of the rebuild)
+ *
+ * Marker: L_SCAFFOLD_LAYER1B_V1
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+/* L_SCAFFOLD_STUB_V1 — Phase 3 of architectural rebuild.
+   computeFootprintObservations(signal) aggregates Engine B's distributed
+   inputs (FFC composite, lifecycle dimensions, sweep state, displacement
+   efficiency, positioning, funding, drive, OI, liquidation) into a
+   structured list of typed observations. Each observation carries
+   { observation_type, direction, magnitude, price_level, freshness }.
+   Returns the list (empty when nothing fires).
+   See ACRESS-architecture.md Section 2 (Engine B) and Section 6 (build plan). */
+function computeFootprintObservations(signal) {
+  // TODO: Phase 3 implementation
+  return [];
 }
 
 
@@ -7246,6 +7351,40 @@ function computeMinutesToFunding(){
   var hoursUtc = nowUtc.getUTCHours() + nowUtc.getUTCMinutes()/60 + nowUtc.getUTCSeconds()/3600;
   return (8 - (hoursUtc % 8)) * 60;
 }
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYER 3 — EXECUTION EDGE
+ *
+ * Conditions on Layer 2's trade decision. Refines, ranks, downgrades, or
+ * surfaces cost/timing/risk context. Cannot create new trades. Cannot
+ * bypass Layers 1 and 2.
+ *
+ * Components: macro-trend badge (render side), velocity decile,
+ * cascade lifecycle phase label, break-even cost gate, path-risk
+ * (planned), FFC composite refinement, displacement efficiency context.
+ *
+ * See ACRESS-architecture.md Section 4 (layer summary), Section 5
+ * (component mapping), and the dependency rule in Section 10.
+ *
+ * Layer 3 code is the most scattered in the file because each Layer 3
+ * helper sits next to the Layer 1B input it refines. This banner is
+ * a navigational signpost, not a code-region boundary. Additional Layer 3
+ * regions:
+ *   - BE threshold constants at ~1371-1375 (L_BE_THRESHOLD_CHEAP /
+ *     L_BE_THRESHOLD_EXPENSIVE)
+ *   - Prospective velocity composite at ~1500-1559
+ *     (L_PROSPECTIVE_VELOCITY_COMPOSITE_V1)
+ *   - Efficiency display helper (buildEfficiencyHtml) at ~2751-2780
+ *   - Lifecycle verdict surface at ~7509-7611
+ *     (L_LIFECYCLE_VERDICT_SURFACE_V1, L_LIFECYCLE_PINNED_UI_V1)
+ *   - Macro-trend badge HTML helper at ~7613-7650
+ *     (L_MACRO_TREND_BADGE_V1 render side)
+ *
+ * Functions in the immediate-below region:
+ *   - computeBreakEven (BE cost gate compute)
+ *
+ * Marker: L_SCAFFOLD_LAYER3_V1
+ * ═══════════════════════════════════════════════════════════════════════
+ */
 function computeBreakEven(dir, entryPrice, fundingRatePct, spreadBps, minutesToFunding){
   // fundingRatePct is in percent units (matches ctx.fr convention — lastFundingRate * 100)
   // Returns nulls (and funding_applies=0) when spread_bps is unavailable.
@@ -8125,6 +8264,43 @@ function buildTrackExecuteRows(s) {
   return hint + trackRow + execRow;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYER 4 — OPERATOR TOOLING
+ *
+ * Pin functionality, Telegram delivery (in bridge.js, not this file), UI
+ * render path, settings modal, decile selector, top combos, top movers,
+ * standby scripts, backup/restore.
+ *
+ * See ACRESS-architecture.md Section 4 (layer summary) and Section 5
+ * (component mapping).
+ *
+ * Telegram delivery routes live in /home/acress/acress-vps/bridge.js, NOT
+ * this file. Bridge anchors: L_TG_FORMAT_V2 (formatSignal at bridge.js
+ * ~636), passesWhitelist (bridge.js ~912), shouldSendTelegramAlert
+ * (bridge.js ~926 — the PRIME alert gate).
+ *
+ * Layer 4 code is the largest non-contiguous footprint in the file.
+ * Additional regions:
+ *   - UI render path (renderSortedColumn, renderResults, buildCard,
+ *     startCardTimers) at ~11185-12413
+ *   - Settings modal (open/close + Universe section + Position Discipline
+ *     + Backup/Restore + VPS sync) at ~14269-15850
+ *   - Top Combos leaderboard at ~3783 (L_TOP_COMBOS_5MIN_V1)
+ *   - Top Movers row at ~5480 (L_TOP_MOVERS_CSS)
+ *   - Universe filter helpers (post Tidy-Up Pass 1) at ~3398-3525 and
+ *     ~7185-7385 (L_UNIVERSE_FULL_OPEN_V1, L_VOL_FLOOR_RESTORE_300K_V1)
+ *   - Mood banner render (buildMarketMoodBanner invocation at ~3744 —
+ *     adjacent to the Layer 0 compute)
+ *
+ * Functions in the immediate-below region:
+ *   - getPinnedSymbols, savePinnedSymbols
+ *   - togglePin
+ *   - refreshPinned, pruneLifecycleBuffers (shared with Layer 1B)
+ *   - renderPinnedSection
+ *
+ * Marker: L_SCAFFOLD_LAYER4_V1
+ * ═══════════════════════════════════════════════════════════════════════
+ */
 /* L_PINNED_PERSISTENCE_V1 — Upgrade 26.D Pin V1 (2026-05-28).
    localStorage key: acress_pinned_symbols, JSON array of base symbols.
    Defensive: parse failures or non-array values yield an empty list. */
@@ -9665,6 +9841,56 @@ function scoreCoin(gates,context){
    The cohort-level Telegram filter (L_TG_FILTER_V1) already suppresses
    Long Cap alerts regardless. Re-evaluate the flip after 8.6 lands. */
 var LONG_CAP_LIQ_GATE_ACTIVE = false;
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYER 2 — INTERPRETATION ENGINE
+ *
+ * Reads Engine A's proposed direction + Engine B's observation list.
+ * Produces trade verdict with direction and joint confidence:
+ *   CONFIRMED LONG / CONFIRMED SHORT / TRAP — REAL DIRECTION SHORT /
+ *   TRAP — REAL DIRECTION LONG / MIXED / UNCONFIRMED / FOOTPRINT_ONLY / SKIP.
+ *
+ * Layer 2 is the ONLY layer that emits trade decisions. Layers 3 and 4
+ * consume Layer 2 output; they do not generate trade direction themselves.
+ *
+ * See ACRESS-architecture.md Section 2 (Engine A/B), Section 3
+ * (interpretation table), and Section 6 (build plan).
+ *
+ * Current state: the shadow direction matrix (determineDirectionAndConviction
+ * below, anchor L_DETERMINE_DIRECTION_AND_CONVICTION_V1) is an early
+ * prototype. Phase 4 of the rebuild will replace it with the
+ * computeTradeVerdict stub below, which will read explicit Engine A
+ * setupState and Engine B observation list rather than the agnostic-event
+ * taxonomy.
+ *
+ * Functions in this region:
+ *   - AGNOSTIC_EVENT_TYPES + legacyToAgnostic (anchor below)
+ *   - determineDirectionAndConviction (12-branch matrix; includes the
+ *     26.0c DIVERGENT_RISK suppression inline)
+ *   - buildStructuralState (constructs the shadow input shape)
+ *   - Shadow execution wires inside analyzeCoin / analyzeCoinDiag
+ *     (markers L_SHADOW_ENGINE_EXECUTION_V1)
+ *   - [stub] computeTradeVerdict — Phase 4 replacement for the
+ *     direction matrix
+ *
+ * Marker: L_SCAFFOLD_LAYER2_V1
+ * ═══════════════════════════════════════════════════════════════════════
+ */
+
+/* L_SCAFFOLD_STUB_V1 — Phase 4 of architectural rebuild.
+   computeTradeVerdict(setupState, footprintObservations) walks the
+   footprint observation list, tallies support vs contradiction against
+   the proposed Engine A setup direction, returns { verdict, direction,
+   joint_confidence } where verdict is one of CONFIRMED_LONG,
+   CONFIRMED_SHORT, TRAP_REAL_SHORT, TRAP_REAL_LONG, MIXED, UNCONFIRMED,
+   FOOTPRINT_ONLY, SKIP. V1 uses simple tally; V2 onwards: Bayesian
+   joint posterior.
+   See ACRESS-architecture.md Section 3 (interpretation table) and
+   Section 6 (build plan). */
+function computeTradeVerdict(setupState, footprintObservations) {
+  // TODO: Phase 4 implementation
+  return null;
+}
 
 /* L_AGNOSTIC_EVENT_TAXONOMY_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
    12 agnostic event-type constants that decouple event detection from direction
