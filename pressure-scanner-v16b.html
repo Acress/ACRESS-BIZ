@@ -3439,13 +3439,23 @@ function getActiveExcludeBases(){
   return active;
 }
 
-/* 24h volume floor (P5). Operator-tunable via localStorage; default 0
-   (admit everything). */
+/* L_VOL_FLOOR_RESTORE_300K_V1 — Tidy-Up Pass 1 calibration (2026-05-29).
+   Default 24h volume floor restored to $300K after 30-min observation
+   showed dust coins (sub-$10K daily volume → sub-$10 position notionals
+   at 10x leverage) cluttered the feed without tradeability. Setting
+   infrastructure preserved — operator can lower via Settings if they
+   want broader admission for analytical purposes.
+   Storage semantics: localStorage key acress_min_24h_vol_usd null → use
+   $300K default; key set to any explicit number (including '0') → use
+   that number. The operator can therefore set 0 to admit everything;
+   it just isn't the first-load default any more. */
+var MIN_24H_VOL_FLOOR_DEFAULT_USD = 300000;
 function getMin24hVolFloor(){
   try { var v = localStorage.getItem('acress_min_24h_vol_usd');
-        var n = v != null ? parseFloat(v) : 0;
-        return (isFinite(n) && n > 0) ? n : 0; }
-  catch(_){ return 0; }
+        if (v == null) return MIN_24H_VOL_FLOOR_DEFAULT_USD;
+        var n = parseFloat(v);
+        return (isFinite(n) && n >= 0) ? n : MIN_24H_VOL_FLOOR_DEFAULT_USD; }
+  catch(_){ return MIN_24H_VOL_FLOOR_DEFAULT_USD; }
 }
 
 /* Legacy aliases for any code paths that still read the flat constants. */
@@ -15765,9 +15775,11 @@ function openDrilldownByHourFromVPS(hour){
           <input type="checkbox" id="univ-exclude-tradfi" onchange="onUnivExcludeToggleChange('tradfi', this.checked)" style="cursor:pointer;">
           <span><b>Exclude TradFi perps</b> <span style="color:var(--muted);font-weight:400;">(XAU gold, SPY, QQQ, crude oil CL, etc. — default OFF = admit)</span></span>
         </label>
+        <!-- L_VOL_FLOOR_RESTORE_300K_V1 — default restored to $300K post-tidy-up
+             observation. Operator can set 0 to admit all for analytical work. -->
         <label style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--hi);">
-          <span style="min-width:0;flex:1;"><b>24h quote volume floor (USD)</b> <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">Pre-scan universe filter. Coins with 24h quote volume below this floor are excluded from the scan pool. Default 0 (admit all). Historical default was $500,000.</span></span>
-          <input type="number" id="univ-min-24h-vol" min="0" step="50000" placeholder="0" onchange="onUnivMin24hVolChange(this.value)" style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:var(--font-mono);font-size:11px;width:120px;">
+          <span style="min-width:0;flex:1;"><b>24h quote volume floor (USD)</b> <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">Pre-scan universe filter. Coins with 24h quote volume below this floor are excluded from the scan pool. Default $300,000 (post-tidy-up calibration — dust coins were cluttering the feed). Set to 0 to admit all coins for analytical work.</span></span>
+          <input type="number" id="univ-min-24h-vol" min="0" step="50000" value="300000" placeholder="300000" onchange="onUnivMin24hVolChange(this.value)" style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:var(--font-mono);font-size:11px;width:120px;">
         </label>
         <script>
           (function(){
@@ -15784,19 +15796,29 @@ function openDrilldownByHourFromVPS(hour){
                 var el = document.getElementById('univ-exclude-' + cat);
                 if (el) el.checked = (localStorage.getItem(keys[cat]) === 'true');
               });
+              /* L_VOL_FLOOR_RESTORE_300K_V1 — display the effective current
+                 floor in the input. When no value stored, show the $300K
+                 default. When operator has explicitly stored a value (including
+                 '0' = admit-all-override), show that value. */
               var volEl = document.getElementById('univ-min-24h-vol');
               if (volEl) {
                 var stored = localStorage.getItem('acress_min_24h_vol_usd');
-                if (stored != null && stored !== '0') volEl.value = stored;
+                if (stored != null) volEl.value = stored;
+                else volEl.value = (typeof MIN_24H_VOL_FLOOR_DEFAULT_USD === 'number') ? MIN_24H_VOL_FLOOR_DEFAULT_USD : 300000;
               }
               window.onUnivExcludeToggleChange = function(cat, checked){
                 try { localStorage.setItem(keys[cat], checked ? 'true' : 'false'); } catch(_){}
               };
+              /* L_VOL_FLOOR_RESTORE_300K_V1 — store ANY non-negative number
+                 (including 0 = admit-all-override) explicitly. Only clear the
+                 key when the input is fully empty/blank so the operator can
+                 reset to the $300K default by clearing the field. */
               window.onUnivMin24hVolChange = function(value){
-                var n = parseFloat(value);
                 try {
-                  if (isFinite(n) && n > 0) localStorage.setItem('acress_min_24h_vol_usd', String(Math.round(n)));
-                  else localStorage.removeItem('acress_min_24h_vol_usd');
+                  var trimmed = (value == null ? '' : String(value).trim());
+                  if (trimmed === '') { localStorage.removeItem('acress_min_24h_vol_usd'); return; }
+                  var n = parseFloat(trimmed);
+                  if (isFinite(n) && n >= 0) localStorage.setItem('acress_min_24h_vol_usd', String(Math.round(n)));
                 } catch(_){}
               };
             } catch (e) {}
