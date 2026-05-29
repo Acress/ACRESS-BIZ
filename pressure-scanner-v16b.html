@@ -1003,10 +1003,17 @@ body.acress-budget-footer-on{padding-bottom:42px;}
     </div>
     <div class="cfg-group" id="pool-size-group">
       <span>Pool</span>
+      <!-- L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). Default
+           expanded from Top 100 to All-eligible. The "All" option passes a
+           large N (9999) to fetchTopCoins so .slice(0, n) becomes a no-op
+           and every coin passing the still-active stables/stocks/tradfi
+           toggles + Bybit gate + USDT-margined gate enters the scan pool. -->
       <select id="pool-size">
         <option value="60">Top 60</option>
-        <option value="100" selected>Top 100</option>
+        <option value="100">Top 100</option>
         <option value="150">Top 150</option>
+        <option value="200">Top 200</option>
+        <option value="9999" selected>All eligible</option>
       </select>
     </div>
     <div class="cfg-group">
@@ -3388,52 +3395,79 @@ function buildForcedFlowHtml(ffc, opts){
    on 2026-05-26 surfaced 4 unambiguous additions truly missing from existing
    exclusion infrastructure (15 of 22 originally-proposed exclusions were
    already in production via STOCKS and TRADFI lists). */
-var EXCLUDE_BASES_STABLES = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX',
-                             'STABLE'];
+/* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). EXCLUDE_BASES
+   split from one combined Set into four per-category lists, each backed
+   by a localStorage toggle (default OFF = admit category). Operator
+   Settings UI surfaces the four toggles. Default fully-open admits every
+   coin the scanner can reach. Reading at scan time via
+   getActiveExcludeBases() composes the active union from whichever
+   categories are currently toggled ON. The DEFAULT lists below are the
+   historical content preserved as the toggle-ON payload. */
+var EXCLUDE_BASES_STABLES_DEFAULT = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','USDD','USDE','PAXG','USDT','USDX','STABLE'];
 /* L_MEGACAP_V1.1 — POL added (Polygon post-rebrand); MATIC kept for forward-compat. */
 var EXCLUDE_BASES_MEGACAPS_DEFAULT = ['BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','TRX','DOT','LINK','MATIC','POL','LTC','BCH','NEAR','ATOM','FIL','ICP'];   // 19 names (18 effective on Binance)
-var EXCLUDE_BASES_MEGACAPS = (function(){
+var EXCLUDE_BASES_STOCKS_DEFAULT = ['TSLA','INTC','HOOD','MSTR','AMZN','CRCL','COIN','PLTR','SOXL','MRVL','CRWV','WMT','JPM','V','BRKB','TSM','NVDA','MU','SNDK','META','GOOGL','MSFT','ORCL','AAPL'];
+/* L_UNIVERSE_NONCRYPTO_EXCLUDE_V1 — CL (crude oil perp), XAUT (Tether Gold —
+   gold microstructure regardless of crypto wrapper), SPY (S&P 500 ETF perp). */
+var EXCLUDE_BASES_TRADFI_DEFAULT = ['XAU','XAG','XPT','XPD','QQQ','EWJ','EWY','CL','XAUT','SPY'];
+
+/* Per-category toggles. Default false (admit). localStorage key returns
+   string 'true'/'false'; null → default false. */
+function _excludeCategoryEnabled(key){
+  try { var v = localStorage.getItem(key); return v === 'true'; }
+  catch(_){ return false; }
+}
+function isExcludeStablesEnabled() { return _excludeCategoryEnabled('acress_exclude_stables_enabled'); }
+function isExcludeMegacapsEnabled(){ return _excludeCategoryEnabled('acress_exclude_megacaps_enabled'); }
+function isExcludeStocksEnabled()  { return _excludeCategoryEnabled('acress_exclude_stocks_enabled'); }
+function isExcludeTradfiEnabled()  { return _excludeCategoryEnabled('acress_exclude_tradfi_enabled'); }
+
+/* Megacap list remains overridable via existing localStorage key. */
+function getMegacapExcludeBases(){
   try { var v = localStorage.getItem('acress_megacap_excludes');
-        return v ? JSON.parse(v) : EXCLUDE_BASES_MEGACAPS_DEFAULT; }
-  catch(_){ return EXCLUDE_BASES_MEGACAPS_DEFAULT; }
-})();
-var EXCLUDE_BASES_STOCKS=['TSLA','INTC','HOOD','MSTR','AMZN','CRCL','COIN','PLTR','SOXL','MRVL','CRWV','WMT','JPM','V','BRKB','TSM','NVDA','MU','SNDK','META','GOOGL','MSFT','ORCL','AAPL'];
-/* Added 2026-05-26 — L_UNIVERSE_NONCRYPTO_EXCLUDE_V1
-   CL (crude oil perp), XAUT (Tether Gold — gold microstructure regardless of
-   crypto wrapper), SPY (S&P 500 ETF perp) extend the existing TRADFI exclusion.
-   See STABLES note above for context. */
-var EXCLUDE_BASES_TRADFI=['XAU','XAG','XPT','XPD','QQQ','EWJ','EWY',
-                         'CL','XAUT','SPY'];
-var EXCLUDE_BASES=new Set(EXCLUDE_BASES_STABLES.concat(EXCLUDE_BASES_MEGACAPS).concat(EXCLUDE_BASES_STOCKS).concat(EXCLUDE_BASES_TRADFI));
+        return new Set(v ? JSON.parse(v) : EXCLUDE_BASES_MEGACAPS_DEFAULT); }
+  catch(_){ return new Set(EXCLUDE_BASES_MEGACAPS_DEFAULT); }
+}
+
+/* Compose the active exclude-bases Set from whichever categories are ON. */
+function getActiveExcludeBases(){
+  var active = new Set();
+  if (isExcludeStablesEnabled())  EXCLUDE_BASES_STABLES_DEFAULT.forEach(function(b){ active.add(b); });
+  if (isExcludeMegacapsEnabled()) getMegacapExcludeBases().forEach(function(b){ active.add(b); });
+  if (isExcludeStocksEnabled())   EXCLUDE_BASES_STOCKS_DEFAULT.forEach(function(b){ active.add(b); });
+  if (isExcludeTradfiEnabled())   EXCLUDE_BASES_TRADFI_DEFAULT.forEach(function(b){ active.add(b); });
+  return active;
+}
+
+/* 24h volume floor (P5). Operator-tunable via localStorage; default 0
+   (admit everything). */
+function getMin24hVolFloor(){
+  try { var v = localStorage.getItem('acress_min_24h_vol_usd');
+        var n = v != null ? parseFloat(v) : 0;
+        return (isFinite(n) && n > 0) ? n : 0; }
+  catch(_){ return 0; }
+}
+
+/* Legacy aliases for any code paths that still read the flat constants. */
+var EXCLUDE_BASES_STABLES = EXCLUDE_BASES_STABLES_DEFAULT;
+var EXCLUDE_BASES_MEGACAPS = EXCLUDE_BASES_MEGACAPS_DEFAULT;
+var EXCLUDE_BASES_STOCKS = EXCLUDE_BASES_STOCKS_DEFAULT;
+var EXCLUDE_BASES_TRADFI = EXCLUDE_BASES_TRADFI_DEFAULT;
 
 // ── STATE ──────────────────────────────────────────────────────────
 var signals=[];
-/* L_FILTER_V1 */
-var SYMBOL_BLACKLIST = new Set([
-  'SPCX','GUA','AMD','BROCCOLIF3B','DOGS','SKYAI','NATGAS','PUMP','FET','PROM',
-  'AIA','1000PEPE','EWY','DOGE','AVAX','PLAY','LINK','ADA','XLM'
-]);
-var MECH_BLACKLIST = new Set([]); /* disabled — use recent-perf gate instead */
-/* L_SCORE_CAP_REMOVAL_V2 — Score cap at 80 removed alongside PRIME deployment
-   2026-05-25. PRIME is now the sole gate for Telegram alerts. Score is no
-   longer a gate at any layer. See Risk T-1 in CLAUDE.md for monitoring
-   discipline on the 80+ score band. The previous L_SCORE_CAP_V1 logic below
-   is intentionally retained as commented-out reference but does not execute. */
-/* L_SCORE_CAP_80_V1 — Upgrade 7: simulator-validated score cap at 80.
-   Score>80 bucket showed −0.371% mean PnL vs −0.252% for the 60-74 bucket
-   in the 15K-signal simulator run; capping removes the worst-performing tail
-   without losing the productive middle. Tunable via SCORE_CAP_MAX. */
-var SCORE_CAP_MAX = 80;
+/* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). M2 deleted:
+   SYMBOL_BLACKLIST (formerly L_FILTER_V1) hardcoded 19-base list removed.
+   Contradicted maximum visibility. M3 deleted: score-cap dead code (formerly
+   L_SCORE_CAP_REMOVAL_V2 / L_SCORE_CAP_80_V1 commentary + SCORE_CAP_MAX
+   variable) cleaned up. shouldAcceptSignal now only guards against non-ASCII
+   bases (garbage-data sanity) — every other gate it used to enforce has been
+   removed as a deliberate universe-opening choice. MECH_BLACKLIST has been
+   empty since 2026-05; removed alongside the other dead state. */
 function shouldAcceptSignal(r){
   if(!r) return false;
   var b = r.base || (r.sym && r.sym.replace(/USDT$/,''));
   if(b && /[^\x00-\x7F]/.test(b)){ shouldAcceptSignal._lastReason='non_ascii_sym:'+b; return false; }
-  if(b && SYMBOL_BLACKLIST.has(b)){ shouldAcceptSignal._lastReason='blacklist_sym:'+b; return false; }
-  var mn = r.mechanism && r.mechanism.name;
-  if(mn && MECH_BLACKLIST.has(mn)){ shouldAcceptSignal._lastReason='blacklist_mech:'+mn; return false; }
-  /* L_SCORE_CAP_REMOVAL_V2 — score-cap rejection removed. PRIME is now the
-     sole alert gate. The score>SCORE_CAP_MAX branch previously returned false
-     here and is intentionally deleted so high-score signals enter the pipeline. */
   shouldAcceptSignal._lastReason=null;
   return true;
 }
@@ -7138,17 +7172,11 @@ function showWlError(msg){
 }
 
 // ── BINANCE FUTURES API ────────────────────────────────────────────
-// v16b — Pool-level volatility floor.
-// Skip coins whose 24h high-to-low range is below MIN_24H_RANGE_PCT.
-// User-tunable via console: localStorage.setItem('acress_min_range_pct', '3')
-// /* L_RANGE_FILTER_REMOVED_V1 */ default lowered 4 → 0 to disable the gate
-// without removing the override mechanism. Range is still computed and tagged
-// onto each signal as range24Pct for post-hoc analysis.
-var MIN_24H_RANGE_PCT = (function(){
-  try { var v = localStorage.getItem('acress_min_range_pct');
-        return v != null ? parseFloat(v) : 0; }
-  catch(_){ return 0; }
-})();
+/* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). The 24h-range
+   floor (formerly MIN_24H_RANGE_PCT, marker L_RANGE_FILTER_REMOVED_V1)
+   was already disabled by default. Removed entirely as part of universe
+   opening. range24Pct is still computed and tagged onto each signal for
+   post-hoc analysis — the FILTER is gone, not the data. */
 
 /* L_SCHEMA_POPULATE_V3 — bookTicker map (best bid/ask per symbol, refreshed per scan)
    and helper functions for break-even / cost modeling. */
@@ -7247,25 +7275,31 @@ function computeBreakEven(dir, entryPrice, fundingRatePct, spreadBps, minutesToF
    (L_VELOCITY_GREEN_DISPLAY_FILTER_V1) per operator preference. */
 async function fetchTopCoins(n){
   var d=await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr',{signal:AbortSignal.timeout(8000)}).then(function(r){return r.json();});
-  var excludedMegacap = 0, excludedLowRange = 0;
+  /* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1. Per-category EXCLUDE_BASES_*
+     sets are now operator-tunable via localStorage (each defaults to OFF
+     = empty set = admit). Combined exclusion read at scan time via
+     getActiveExcludeBases() helper. 24h-range gate REMOVED. 24h $500K
+     volume floor surfaced as operator setting (acress_min_24h_vol_usd,
+     default 0 — admit everything). */
+  var excludedMegacap = 0;
+  var _activeExcludes = (typeof getActiveExcludeBases === 'function') ? getActiveExcludeBases() : new Set();
+  var _min24hVol = (typeof getMin24hVolFloor === 'function') ? getMin24hVolFloor() : 0;
   var filtered = d.filter(function(t){
     var sym=t.symbol;
     if(!sym.endsWith('USDT'))return false;
     if(sym.includes('_'))return false;
     var base=sym.slice(0,-4);
-    if(EXCLUDE_BASES.has(base)){
+    if(_activeExcludes.has(base)){
       // Track megacap exclusions separately for diagnostics
-      if(EXCLUDE_BASES_MEGACAPS.indexOf(base)>=0) excludedMegacap++;
+      if (typeof getMegacapExcludeBases === 'function' && getMegacapExcludeBases().has(base)) excludedMegacap++;
       return false;
     }
-    if(parseFloat(t.quoteVolume)<500000)return false;
-    // 24h range gate (now defaults off; range is tagged onto ticker so it
-    // flows through to the signal object for slicing the newly-admitted cohort)
+    if (_min24hVol > 0 && parseFloat(t.quoteVolume) < _min24hVol) return false;
+    // 24h range computed + tagged for post-hoc analysis; no longer a filter.
     var hi = parseFloat(t.highPrice), lo = parseFloat(t.lowPrice);
     if(!isFinite(hi)||!isFinite(lo)||lo<=0)return false;
     var rangePct = (hi - lo) / lo * 100;
     t.range24Pct = rangePct;
-    if(rangePct < MIN_24H_RANGE_PCT){ excludedLowRange++; return false; }
     // BYBIT GATE: only allow symbols listed on Bybit, where we execute trades.
     // Binance still provides ticker/kline/funding data for scoring and confirmation,
     // but the symbol must exist on Bybit to make it into the signal pool.
@@ -7280,7 +7314,7 @@ async function fetchTopCoins(n){
     return true;
   }).sort(function(a,b){return parseFloat(b.quoteVolume)-parseFloat(a.quoteVolume);}).slice(0,n);
   try {
-    console.log('[Acress] Pool · kept ' + filtered.length + ' coins · excluded ' + excludedMegacap + ' megacap, ' + excludedLowRange + ' below ' + MIN_24H_RANGE_PCT + '% 24h-range');
+    console.log('[Acress] Pool · kept ' + filtered.length + ' coins · excluded ' + excludedMegacap + ' megacap (vol floor ' + (_min24hVol > 0 ? '$' + (_min24hVol/1000) + 'K' : 'off') + ')');
   } catch(_){}
   return filtered;
 }
@@ -7295,19 +7329,17 @@ async function fetchWatchlistCoins(bases){
     if(t.symbol.includes('_'))return false;
     return baseSet.has(t.symbol.slice(0,-4));
   });
-  // Warn for watchlisted coins that fall below the 24h-range floor — they're
-  // explicitly chosen, so we don't drop them, but the user should know.
+  /* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1. range24Pct still computed
+     and tagged on every watchlist entry for post-hoc analysis. The
+     below-floor console.warn was removed when the 24h-range filter was
+     deleted (range was already default-off; the floor floor existed only
+     as an operator-override mechanism, both removed together). */
   var byBase={};
   found.forEach(function(t){
     byBase[t.symbol.slice(0,-4)]=t;
     var hi = parseFloat(t.highPrice), lo = parseFloat(t.lowPrice);
     if(isFinite(hi)&&isFinite(lo)&&lo>0){
-      var rangePct = (hi - lo) / lo * 100;
-      t.range24Pct = rangePct;
-      if(rangePct < MIN_24H_RANGE_PCT){
-        try { console.warn('[Acress] Watchlist coin ' + t.symbol.slice(0,-4) +
-          ' has only ' + rangePct.toFixed(1) + '% 24h range (below ' + MIN_24H_RANGE_PCT + '% floor) — keeping it but low signal quality likely'); } catch(_){}
-      }
+      t.range24Pct = (hi - lo) / lo * 100;
     }
   });
   return bases.map(function(b){return byBase[b];}).filter(Boolean);
@@ -10549,56 +10581,42 @@ async function runScan(){
           //   - L4c plain-English log
           //   - L4d skip-reason log + case-fix
           //   - L4e mechanism.type=='continuation' drop
-          // Push all signals scoring >= 25 per spec section 4.8.
-          // UI display threshold (default 60+ Regular) handled by acress_score_range.
-          if(r.score>=25){
-            /* L_LIFECYCLE_UNIVERSAL_V1 — attach staged lifecycle bundle inside the
-               display gate so only renderable signals carry the property. */
-            if (r._lifecycleStaged) { r.lifecycle = r._lifecycleStaged; delete r._lifecycleStaged; }
-            var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
-            if(existing){
-              if(r.score>existing.score && shouldAcceptSignal(r)){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
-              else if(r.score>existing.score){console.log('[ACRESS-FILTER] upgrade rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
-              else {
-                /* L_FFC_REFRESH_ON_EXISTING_V1
-                   Structural state snapshot fields refresh on every scan regardless of
-                   whether the new scan upgraded the mechanism score. Mechanism-firing
-                   fields (score, reasons, mechanism name, entryPrice, loggedAt) stay
-                   locked to the best-scoring scan that won the existing slot.
+          /* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). The
+             score>=25 storage gate (M1) is REMOVED. Every signal returned
+             by analyzeCoinDiag now enters signals[]. This was the single
+             biggest visibility blocker — sub-25 signals were both invisible
+             AND not logged to analysis_log. Display narrowing remains
+             available via the scoreRange slider (default min=1, max=100). */
+          /* L_LIFECYCLE_UNIVERSAL_V1 — attach staged lifecycle bundle now
+             that every signal enters; previously this was gated by the
+             >=25 wrap so only displayable signals carried the property.
+             Unconditional attach matches the universe-opening semantics. */
+          if (r._lifecycleStaged) { r.lifecycle = r._lifecycleStaged; delete r._lifecycleStaged; }
+          var existing=signals.find(function(x){return x.sym===r.sym&&x.validUntil>Date.now();});
+          if(existing){
+            if(r.score>existing.score && shouldAcceptSignal(r)){signals=signals.filter(function(x){return x.sym!==r.sym;});signals.push(r);renderResults();}
+            else if(r.score>existing.score){console.log('[ACRESS-FILTER] upgrade rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
+            else {
+              /* L_FFC_REFRESH_ON_EXISTING_V1
+                 Structural state snapshot fields refresh on every scan regardless of
+                 whether the new scan upgraded the mechanism score. Mechanism-firing
+                 fields (score, reasons, mechanism name, entryPrice, loggedAt) stay
+                 locked to the best-scoring scan that won the existing slot.
 
-                   Fields that refresh:
-                     - forcedFlow      (FFC composite, alignment, reliability, inputs_status)
-                     - spotDrive       (added in 21.6 — Spot vs Perp Drive classification)
-                     - positioning/efficiency/velocity (planned in Upgrade 8.7)
-
-                   Architectural principle: mechanism firing is a moment-in-time event.
-                   Structural state is a continuously-evolving observation. The DB row
-                   for an active signal should reflect the current structural state when
-                   PRIME evaluates it, not the state at the original firing moment.
-
-                   Upgrade 8.7 — Structural State Refresh Generalization — will extend
-                   this block with positioning/efficiency/velocity once those snapshot
-                   bugs are addressed. The marker is the canonical reference for
-                   "which fields participate in the refresh pattern." */
-                if (r && r.forcedFlow)  existing.forcedFlow  = r.forcedFlow;
-                if (r && r.spotDrive)   existing.spotDrive   = r.spotDrive;
-                if (r && r.sweepState)  existing.sweepState  = r.sweepState;
-                /* L_MACRO_TREND_BADGE_V1 — refresh macro-trend on every
-                   scan so the badge reflects current kline state, not the
-                   firing-moment snapshot. Pure kline-derived; safe to update
-                   on existing signals. */
-                if (r && r.macroTrend)  existing.macroTrend  = r.macroTrend;
-                /* L_LIFECYCLE_UNIVERSAL_V1 — mirror the freshly-computed
-                   lifecycle bundle onto existing signal so phase + verdict
-                   reflect the latest scan's structural read, not the
-                   firing-moment snapshot. The buffer push already happened
-                   above (before the >=25 gate); this just propagates the
-                   newest bundle onto the in-flight signal object. */
-                if (r && r.lifecycle)   existing.lifecycle   = r.lifecycle;
-              }
-            }else{
-              if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
+                 Fields that refresh:
+                   - forcedFlow      (FFC composite, alignment, reliability, inputs_status)
+                   - spotDrive       (added in 21.6 — Spot vs Perp Drive classification)
+                   - positioning/efficiency/velocity (planned in Upgrade 8.7) */
+              if (r && r.forcedFlow)  existing.forcedFlow  = r.forcedFlow;
+              if (r && r.spotDrive)   existing.spotDrive   = r.spotDrive;
+              if (r && r.sweepState)  existing.sweepState  = r.sweepState;
+              /* L_MACRO_TREND_BADGE_V1 — refresh macro-trend on every scan. */
+              if (r && r.macroTrend)  existing.macroTrend  = r.macroTrend;
+              /* L_LIFECYCLE_UNIVERSAL_V1 — mirror lifecycle bundle on refresh. */
+              if (r && r.lifecycle)   existing.lifecycle   = r.lifecycle;
             }
+          }else{
+            if(shouldAcceptSignal(r)){signals.push(r);renderResults();}else{console.log('[ACRESS-FILTER] new rejected',r.base||r.sym,shouldAcceptSignal._lastReason);}
           }
         }
       }catch(e){errors++;console.warn('[Acress] coin err',s.symbol,e.message);}
@@ -11197,8 +11215,11 @@ function renderResults(){invalidateMechanismStats();
      runScan via signals.push(r) before this render, so filtered signals
      still log to analysis_log + count in cohort tracking + flow through
      PRIME alert gate. This filter ONLY affects what shows on the dashboard. */
+  /* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). D4 default
+     flipped from 'true' (decile-9 cliff on first scan) to 'false' (admit
+     every signal). Operator can re-enable via the Settings toggle. */
   var _hideNonGreen = localStorage.getItem('acress_hide_non_green_velocity');
-  if (_hideNonGreen == null) _hideNonGreen = 'true';   // default ON at first scan
+  if (_hideNonGreen == null) _hideNonGreen = 'false';   // default OFF post-Tidy-Up Pass 1
   var _velFilterActive = (_hideNonGreen === 'true');
   var _preVelocityCount = filtered.length;
   /* L_VELOCITY_ABSOLUTE_FLOOR_V1 + L_REGIME_ADAPTIVE_VELOCITY_V1 (Upgrade 27.0).
@@ -11231,8 +11252,11 @@ function renderResults(){invalidateMechanismStats();
      and only the volume gate applies. Verified semantic via velocityDecileFor:
      D10 = top 10% (fastest), D9 = next 10% (so D≥9 = top 20% cumulative),
      formula (11 - N) * 10 = cumulative top % covered. */
+  /* L_UNIVERSE_FULL_OPEN_V1 — D5 default flipped from '9' to 'all'. When
+     D4 (_velFilterActive) is off, this selection is moot; when D4 is
+     on, the operator-narrowed default of 'all' still admits every decile. */
   var _decileSel = localStorage.getItem('acress_velocity_decile_min');
-  if (_decileSel == null) _decileSel = '9';
+  if (_decileSel == null) _decileSel = 'all';
   var _decileMin = null;   // null = no decile filter
   if (_decileSel !== 'all') {
     var __dN = parseInt(_decileSel, 10);
@@ -11263,7 +11287,11 @@ function renderResults(){invalidateMechanismStats();
      quality. The legacy acress_min_volume_5min localStorage key is no
      longer consulted — volume always derives from acress_velocity_decile_min.
      Display-layer only — scanner still computes + logs filtered signals. */
-  var _minVolUsd = (typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(_decileSel) : 500000;
+  /* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). D7 made
+     dependent on D4 (_velFilterActive). When the parent velocity-gate
+     toggle is off, the tiered volume floor doesn't apply — operator sees
+     every signal regardless of 5-min volume. */
+  var _minVolUsd = (_velFilterActive && typeof getVolumeFloorForDecile === 'function') ? getVolumeFloorForDecile(_decileSel) : 0;
   var _minVolActive = (_minVolUsd > 0);
   var _preMinVolCount = filtered.length;
   if (_minVolActive) {
@@ -11384,8 +11412,13 @@ function renderResults(){invalidateMechanismStats();
       if(mechFilter&&mechFilter!=='all')bits.push('mechanism: '+mechFilter);
       msgBody='You have '+live.length+' live signal'+(live.length!==1?'s':'')+', but none match your current filter ('+bits.join(' · ')+'). Adjust the score slider, change the direction filter, switch mechanism, or click SHOW ALL to bypass the score range.';
     }else{
+      /* L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). Storage floor
+         (M1, score>=25) was removed; ANY signal that returned from
+         analyzeCoinDiag enters signals[]. So an empty universe now genuinely
+         means "no signals computed this scan" — likely API-layer failure
+         or pre-first-scan state. */
       msgTitle='No signals produced this scan';
-      msgBody='No coin scored above the storage floor (25). This means either: (a) market is genuinely quiet — no forced-participant pressure right now; (b) gate thresholds are still too strict for current conditions; or (c) data fetches failed. Open browser DevTools → Console for diagnostic info.';
+      msgBody='Every signal returned by the analyzer now enters the display set — there is no longer a score cutoff. An empty result usually means: (a) first scan still in flight (wait ~30s); (b) Binance/Bybit API fetches failed (open DevTools Console for errors); or (c) the universe filter excluded every coin (check Settings → Universe).';
     }
     document.getElementById('results').innerHTML='<div class="empty"><div class="empty-icon">⚪</div><div class="empty-title">'+msgTitle+'</div><div class="empty-body">'+msgBody+'</div></div>';
     return;
@@ -15706,6 +15739,69 @@ function openDrilldownByHourFromVPS(hour){
             })();
           </script>
         </div>
+      </div>
+
+      <!-- L_UNIVERSE_FULL_OPEN_V1 — Tidy-Up Pass 1 (2026-05-29). Universe
+           category toggles + 24h volume floor input. All four toggles default
+           OFF (admit category). 24h vol floor defaults to 0 (admit). -->
+      <div class="settings-section" style="border:1px solid rgba(180,180,255,.3);background:rgba(180,180,255,.04);padding:14px;border-radius:6px;">
+        <h4 style="color:#b4b4ff;">🌐 Universe — category exclusion toggles &amp; volume floor</h4>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55;">
+          Tidy-Up Pass 1 opens the universe by default — every coin the scanner can reach enters the scan pool. Re-enable a category here to exclude it. Bybit listing + USDT-margined are technical execution constraints and stay active regardless.
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--hi);margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="univ-exclude-stables" onchange="onUnivExcludeToggleChange('stables', this.checked)" style="cursor:pointer;">
+          <span><b>Exclude stables</b> <span style="color:var(--muted);font-weight:400;">(USDC, DAI, etc. — synthetic price action, default OFF = admit)</span></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--hi);margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="univ-exclude-megacaps" onchange="onUnivExcludeToggleChange('megacaps', this.checked)" style="cursor:pointer;">
+          <span><b>Exclude megacaps</b> <span style="color:var(--muted);font-weight:400;">(BTC, ETH, SOL, BNB, XRP + 14 others — operator-tunable, default OFF = admit)</span></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--hi);margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="univ-exclude-stocks" onchange="onUnivExcludeToggleChange('stocks', this.checked)" style="cursor:pointer;">
+          <span><b>Exclude equity-tokenized stocks</b> <span style="color:var(--muted);font-weight:400;">(TSLA, NVDA, MSTR, etc. — non-crypto microstructure, default OFF = admit)</span></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--hi);margin-bottom:14px;cursor:pointer;">
+          <input type="checkbox" id="univ-exclude-tradfi" onchange="onUnivExcludeToggleChange('tradfi', this.checked)" style="cursor:pointer;">
+          <span><b>Exclude TradFi perps</b> <span style="color:var(--muted);font-weight:400;">(XAU gold, SPY, QQQ, crude oil CL, etc. — default OFF = admit)</span></span>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:11px;color:var(--hi);">
+          <span style="min-width:0;flex:1;"><b>24h quote volume floor (USD)</b> <span style="color:var(--muted);font-weight:400;display:block;font-size:10.5px;line-height:1.4;margin-top:2px;">Pre-scan universe filter. Coins with 24h quote volume below this floor are excluded from the scan pool. Default 0 (admit all). Historical default was $500,000.</span></span>
+          <input type="number" id="univ-min-24h-vol" min="0" step="50000" placeholder="0" onchange="onUnivMin24hVolChange(this.value)" style="background:var(--s2);color:var(--hi);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:var(--font-mono);font-size:11px;width:120px;">
+        </label>
+        <script>
+          (function(){
+            try {
+              /* L_UNIVERSE_FULL_OPEN_V1 — initialize the 4 toggles + vol-floor input
+                 from localStorage, then expose change handlers globally. */
+              var keys = {
+                'stables':  'acress_exclude_stables_enabled',
+                'megacaps': 'acress_exclude_megacaps_enabled',
+                'stocks':   'acress_exclude_stocks_enabled',
+                'tradfi':   'acress_exclude_tradfi_enabled'
+              };
+              Object.keys(keys).forEach(function(cat){
+                var el = document.getElementById('univ-exclude-' + cat);
+                if (el) el.checked = (localStorage.getItem(keys[cat]) === 'true');
+              });
+              var volEl = document.getElementById('univ-min-24h-vol');
+              if (volEl) {
+                var stored = localStorage.getItem('acress_min_24h_vol_usd');
+                if (stored != null && stored !== '0') volEl.value = stored;
+              }
+              window.onUnivExcludeToggleChange = function(cat, checked){
+                try { localStorage.setItem(keys[cat], checked ? 'true' : 'false'); } catch(_){}
+              };
+              window.onUnivMin24hVolChange = function(value){
+                var n = parseFloat(value);
+                try {
+                  if (isFinite(n) && n > 0) localStorage.setItem('acress_min_24h_vol_usd', String(Math.round(n)));
+                  else localStorage.removeItem('acress_min_24h_vol_usd');
+                } catch(_){}
+              };
+            } catch (e) {}
+          })();
+        </script>
       </div>
 
       <div class="settings-section" style="border:1px solid rgba(65,209,255,.3);background:rgba(65,209,255,.04);padding:14px;border-radius:6px;">
