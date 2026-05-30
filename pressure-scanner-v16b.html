@@ -1908,395 +1908,15 @@ function computeMacroTrend(k5){
  * ═══════════════════════════════════════════════════════════════════════
  */
 
-/* L_ENGINE_A_V1 — Phase 2 (2026-05-29). Engine A V1: Textbook Setup Detector.
-   Reads the price chart only. Classical TA. No structural composites, no FFC,
-   no positioning, no inference. See ACRESS-architecture.md Section 2
-   (Engine A definition) and Section 6 (build plan). */
-
-var UNCLEAR_SETUP = Object.freeze({
-  setup_direction: 'UNCLEAR',
-  setup_pattern: null,
-  setup_quality: null,
-  setup_level: null
-});
-
-/* L_ENGINE_A_V1 helper: find swing highs and lows via local maxima/minima with
-   `flank` bars on each side (default 2). Returns { highs: [{idx, price}],
-   lows: [{idx, price}] }. */
-function computeSwingPoints(klines, flank){
-  flank = flank || 2;
-  var highs = [], lows = [];
-  if (!Array.isArray(klines) || klines.length < (flank * 2 + 1)) return { highs: highs, lows: lows };
-  for (var i = flank; i < klines.length - flank; i++) {
-    var hi = parseFloat(klines[i][2]);
-    var lo = parseFloat(klines[i][3]);
-    if (!isFinite(hi) || !isFinite(lo)) continue;
-    var isHigh = true, isLow = true;
-    for (var k = i - flank; k <= i + flank; k++) {
-      if (k === i) continue;
-      var khi = parseFloat(klines[k][2]);
-      var klo = parseFloat(klines[k][3]);
-      if (isFinite(khi) && khi > hi) isHigh = false;
-      if (isFinite(klo) && klo < lo) isLow = false;
-      if (!isHigh && !isLow) break;
-    }
-    if (isHigh) highs.push({ idx: i, price: hi });
-    if (isLow) lows.push({ idx: i, price: lo });
-  }
-  return { highs: highs, lows: lows };
-}
-
-/* L_ENGINE_A_V1 helper: classify recent trend from swing high/low sequence.
-   HH+HL = up, LH+LL = down, mixed = sideways. Strength reflects consistency
-   across the last few swing pairs. */
-function identifyTrendState(klines, lookback){
-  lookback = lookback || 20;
-  if (!Array.isArray(klines) || klines.length < lookback) return { state: 'sideways', strength: 'LOW' };
-  var slice = klines.slice(-lookback);
-  var swings = computeSwingPoints(slice, 2);
-  var highs = swings.highs, lows = swings.lows;
-  if (highs.length < 2 || lows.length < 2) return { state: 'sideways', strength: 'LOW' };
-  var recentHighs = highs.slice(-2);
-  var recentLows = lows.slice(-2);
-  var hhCount = recentHighs[1].price > recentHighs[0].price ? 1 : 0;
-  var hlCount = recentLows[1].price > recentLows[0].price ? 1 : 0;
-  var lhCount = recentHighs[1].price < recentHighs[0].price ? 1 : 0;
-  var llCount = recentLows[1].price < recentLows[0].price ? 1 : 0;
-  var deepHighs = highs.slice(-4);
-  var deepLows = lows.slice(-4);
-  var hhStrong = 0, lhStrong = 0, hlStrong = 0, llStrong = 0;
-  for (var i = 1; i < deepHighs.length; i++) {
-    if (deepHighs[i].price > deepHighs[i-1].price) hhStrong++;
-    else lhStrong++;
-  }
-  for (var j = 1; j < deepLows.length; j++) {
-    if (deepLows[j].price > deepLows[j-1].price) hlStrong++;
-    else llStrong++;
-  }
-  if (hhCount + hlCount === 2) {
-    var uS = (hhStrong + hlStrong) >= 4 ? 'HIGH' : (hhStrong + hlStrong) >= 2 ? 'MEDIUM' : 'LOW';
-    return { state: 'up', strength: uS };
-  }
-  if (lhCount + llCount === 2) {
-    var dS = (lhStrong + llStrong) >= 4 ? 'HIGH' : (lhStrong + llStrong) >= 2 ? 'MEDIUM' : 'LOW';
-    return { state: 'down', strength: dS };
-  }
-  return { state: 'sideways', strength: 'LOW' };
-}
-
-/* L_ENGINE_A_V1 helper: was the latest bar's volume meaningfully above the
-   trailing N-bar average? Returns { confirmed, ratio, lastVol, avgVol }. */
-function checkVolumeConfirmation(klines, lookback, multiplier){
-  lookback = lookback || 20;
-  multiplier = multiplier || 1.5;
-  if (!Array.isArray(klines) || klines.length < lookback + 1) {
-    return { confirmed: false, ratio: 0, lastVol: 0, avgVol: 0 };
-  }
-  var n = klines.length;
-  var lastVol = parseFloat(klines[n - 1][5]) || 0;
-  var sum = 0, count = 0;
-  for (var i = n - 1 - lookback; i < n - 1; i++) {
-    var v = parseFloat(klines[i][5]);
-    if (isFinite(v) && v > 0) { sum += v; count++; }
-  }
-  var avgVol = count > 0 ? sum / count : 0;
-  var ratio = avgVol > 0 ? lastVol / avgVol : 0;
-  return { confirmed: ratio >= multiplier, ratio: ratio, lastVol: lastVol, avgVol: avgVol };
-}
-
-/* L_ENGINE_A_V1 helper: classify the latest candle pattern. Returns
-   { pattern, strength } where pattern is one of bullish_engulfing,
-   bearish_engulfing, bullish_pin_bar, bearish_pin_bar, doji, none. */
-function classifyCandlePattern(klines){
-  if (!Array.isArray(klines) || klines.length < 2) return { pattern: 'none', strength: 0 };
-  var n = klines.length;
-  var prev = klines[n - 2], cur = klines[n - 1];
-  var pO = parseFloat(prev[1]), pC = parseFloat(prev[4]);
-  var cO = parseFloat(cur[1]),  cC = parseFloat(cur[4]);
-  var cH = parseFloat(cur[2]),  cL = parseFloat(cur[3]);
-  if (![pO,pC,cO,cC,cH,cL].every(isFinite)) return { pattern: 'none', strength: 0 };
-  var prevBody = Math.abs(pC - pO);
-  var curBody = Math.abs(cC - cO);
-  var curRange = cH - cL;
-  if (curRange <= 0) return { pattern: 'none', strength: 0 };
-  var prevBear = pC < pO, prevBull = pC > pO;
-  var curBull = cC > cO, curBear = cC < cO;
-  if (prevBear && curBull && cC > pO && cO < pC) {
-    var brB = prevBody > 0 ? curBody / prevBody : 1;
-    return { pattern: 'bullish_engulfing', strength: Math.min(1, brB / 2) };
-  }
-  if (prevBull && curBear && cO > pC && cC < pO) {
-    var brR = prevBody > 0 ? curBody / prevBody : 1;
-    return { pattern: 'bearish_engulfing', strength: Math.min(1, brR / 2) };
-  }
-  var upWick = cH - Math.max(cO, cC);
-  var loWick = Math.min(cO, cC) - cL;
-  var bodyToRange = curBody / curRange;
-  if (loWick >= 2 * curBody && bodyToRange < 0.33) {
-    return { pattern: 'bullish_pin_bar', strength: Math.min(1, loWick / (curBody > 0 ? curBody : 1) / 3) };
-  }
-  if (upWick >= 2 * curBody && bodyToRange < 0.33) {
-    return { pattern: 'bearish_pin_bar', strength: Math.min(1, upWick / (curBody > 0 ? curBody : 1) / 3) };
-  }
-  if (bodyToRange < 0.1) return { pattern: 'doji', strength: 0.5 };
-  return { pattern: 'none', strength: 0 };
-}
-
-/* Detector 1: Breakout. Close clears most recent swing high with volume. */
-function detectBreakout(k5, swings, vol){
-  if (!Array.isArray(k5) || k5.length < 5) return null;
-  if (!swings || !swings.highs || !swings.highs.length) return null;
-  var n = k5.length;
-  var close = parseFloat(k5[n-1][4]);
-  if (!isFinite(close)) return null;
-  var recentHigh = swings.highs[swings.highs.length - 1];
-  if (!recentHigh || recentHigh.idx >= n - 2) {
-    if (swings.highs.length < 2) return null;
-    recentHigh = swings.highs[swings.highs.length - 2];
-  }
-  if (close <= recentHigh.price) return null;
-  var breakPct = (close - recentHigh.price) / recentHigh.price * 100;
-  var volRatio = vol ? vol.ratio : 0;
-  var quality = 'weak';
-  if (breakPct >= 0.5 && volRatio >= 2.0) quality = 'clean';
-  else if (volRatio >= 1.5) quality = 'moderate';
-  return {
-    setup_direction: 'LONG',
-    setup_pattern: 'breakout',
-    setup_quality: quality,
-    setup_level: recentHigh.price,
-    _criteria: 'close ' + close.toFixed(6) + ' > swing high ' + recentHigh.price.toFixed(6) + ' (+' + breakPct.toFixed(2) + '%); vol ratio ' + volRatio.toFixed(2) + 'x'
-  };
-}
-
-/* Detector 2: Breakdown. Close breaks recent swing low with volume. */
-function detectBreakdown(k5, swings, vol){
-  if (!Array.isArray(k5) || k5.length < 5) return null;
-  if (!swings || !swings.lows || !swings.lows.length) return null;
-  var n = k5.length;
-  var close = parseFloat(k5[n-1][4]);
-  if (!isFinite(close)) return null;
-  var recentLow = swings.lows[swings.lows.length - 1];
-  if (!recentLow || recentLow.idx >= n - 2) {
-    if (swings.lows.length < 2) return null;
-    recentLow = swings.lows[swings.lows.length - 2];
-  }
-  if (close >= recentLow.price) return null;
-  var breakPct = (recentLow.price - close) / recentLow.price * 100;
-  var volRatio = vol ? vol.ratio : 0;
-  var quality = 'weak';
-  if (breakPct >= 0.5 && volRatio >= 2.0) quality = 'clean';
-  else if (volRatio >= 1.5) quality = 'moderate';
-  return {
-    setup_direction: 'SHORT',
-    setup_pattern: 'breakdown',
-    setup_quality: quality,
-    setup_level: recentLow.price,
-    _criteria: 'close ' + close.toFixed(6) + ' < swing low ' + recentLow.price.toFixed(6) + ' (-' + breakPct.toFixed(2) + '%); vol ratio ' + volRatio.toFixed(2) + 'x'
-  };
-}
-
-/* Detector 3: Pullback in uptrend. Retrace to support with bullish close. */
-function detectPullbackInUptrend(k5, trend, swings){
-  if (!trend || trend.state !== 'up') return null;
-  if (!Array.isArray(k5) || k5.length < 5) return null;
-  if (!swings || !swings.lows || !swings.lows.length) return null;
-  var n = k5.length;
-  var close = parseFloat(k5[n-1][4]);
-  var open = parseFloat(k5[n-1][1]);
-  var low = parseFloat(k5[n-1][3]);
-  if (![close,open,low].every(isFinite)) return null;
-  var recentLow = swings.lows[swings.lows.length - 1];
-  if (!recentLow) return null;
-  var distToSupport = (low - recentLow.price) / recentLow.price * 100;
-  if (distToSupport > 0.5 || distToSupport < -1.0) return null;
-  if (close <= open) return null;
-  var quality = 'weak';
-  if (trend.strength === 'HIGH' && distToSupport < 0.2) quality = 'clean';
-  else if (trend.strength === 'MEDIUM') quality = 'moderate';
-  return {
-    setup_direction: 'LONG',
-    setup_pattern: 'pullback_in_uptrend',
-    setup_quality: quality,
-    setup_level: recentLow.price,
-    _criteria: 'trend up (' + trend.strength + '); low ' + low.toFixed(6) + ' near support ' + recentLow.price.toFixed(6) + ' (' + distToSupport.toFixed(2) + '%); bullish close ' + close.toFixed(6) + ' > open ' + open.toFixed(6)
-  };
-}
-
-/* Detector 4: Pullback in downtrend. Mirror. */
-function detectPullbackInDowntrend(k5, trend, swings){
-  if (!trend || trend.state !== 'down') return null;
-  if (!Array.isArray(k5) || k5.length < 5) return null;
-  if (!swings || !swings.highs || !swings.highs.length) return null;
-  var n = k5.length;
-  var close = parseFloat(k5[n-1][4]);
-  var open = parseFloat(k5[n-1][1]);
-  var high = parseFloat(k5[n-1][2]);
-  if (![close,open,high].every(isFinite)) return null;
-  var recentHigh = swings.highs[swings.highs.length - 1];
-  if (!recentHigh) return null;
-  var distToResistance = (recentHigh.price - high) / recentHigh.price * 100;
-  if (distToResistance > 0.5 || distToResistance < -1.0) return null;
-  if (close >= open) return null;
-  var quality = 'weak';
-  if (trend.strength === 'HIGH' && distToResistance < 0.2) quality = 'clean';
-  else if (trend.strength === 'MEDIUM') quality = 'moderate';
-  return {
-    setup_direction: 'SHORT',
-    setup_pattern: 'pullback_in_downtrend',
-    setup_quality: quality,
-    setup_level: recentHigh.price,
-    _criteria: 'trend down (' + trend.strength + '); high ' + high.toFixed(6) + ' near resistance ' + recentHigh.price.toFixed(6) + ' (' + distToResistance.toFixed(2) + '%); bearish close ' + close.toFixed(6) + ' < open ' + open.toFixed(6)
-  };
-}
-
-/* Detector 5: Bullish engulfing at support. */
-function detectBullishEngulfingAtSupport(k5, swings, candle){
-  if (!candle || candle.pattern !== 'bullish_engulfing') return null;
-  if (!Array.isArray(k5) || k5.length < 2) return null;
-  if (!swings || !swings.lows || !swings.lows.length) return null;
-  var n = k5.length;
-  var low = parseFloat(k5[n-1][3]);
-  if (!isFinite(low)) return null;
-  var recentLow = swings.lows[swings.lows.length - 1];
-  if (!recentLow) return null;
-  var dist = Math.abs(low - recentLow.price) / recentLow.price * 100;
-  if (dist > 0.5) return null;
-  var quality = 'weak';
-  if (candle.strength >= 0.8 && dist < 0.2) quality = 'clean';
-  else if (candle.strength >= 0.5) quality = 'moderate';
-  return {
-    setup_direction: 'LONG',
-    setup_pattern: 'bullish_engulfing_at_support',
-    setup_quality: quality,
-    setup_level: recentLow.price,
-    _criteria: 'bullish engulfing strength ' + candle.strength.toFixed(2) + ' at swing low ' + recentLow.price.toFixed(6) + ' (dist ' + dist.toFixed(2) + '%)'
-  };
-}
-
-/* Detector 6: Bearish engulfing at resistance. */
-function detectBearishEngulfingAtResistance(k5, swings, candle){
-  if (!candle || candle.pattern !== 'bearish_engulfing') return null;
-  if (!Array.isArray(k5) || k5.length < 2) return null;
-  if (!swings || !swings.highs || !swings.highs.length) return null;
-  var n = k5.length;
-  var high = parseFloat(k5[n-1][2]);
-  if (!isFinite(high)) return null;
-  var recentHigh = swings.highs[swings.highs.length - 1];
-  if (!recentHigh) return null;
-  var dist = Math.abs(recentHigh.price - high) / recentHigh.price * 100;
-  if (dist > 0.5) return null;
-  var quality = 'weak';
-  if (candle.strength >= 0.8 && dist < 0.2) quality = 'clean';
-  else if (candle.strength >= 0.5) quality = 'moderate';
-  return {
-    setup_direction: 'SHORT',
-    setup_pattern: 'bearish_engulfing_at_resistance',
-    setup_quality: quality,
-    setup_level: recentHigh.price,
-    _criteria: 'bearish engulfing strength ' + candle.strength.toFixed(2) + ' at swing high ' + recentHigh.price.toFixed(6) + ' (dist ' + dist.toFixed(2) + '%)'
-  };
-}
-
-/* Detector 7: Pin bar rejection at level. Bullish pin → LONG; bearish → SHORT. */
-function detectPinBarRejectionAtLevel(k5, swings, candle){
-  if (!candle || (candle.pattern !== 'bullish_pin_bar' && candle.pattern !== 'bearish_pin_bar')) return null;
-  if (!Array.isArray(k5) || k5.length < 2) return null;
-  var n = k5.length;
-  var bar = k5[n-1];
-  var high = parseFloat(bar[2]), low = parseFloat(bar[3]);
-  if (!isFinite(high) || !isFinite(low)) return null;
-  if (candle.pattern === 'bullish_pin_bar') {
-    if (!swings.lows || !swings.lows.length) return null;
-    var recentLow = swings.lows[swings.lows.length - 1];
-    if (!recentLow) return null;
-    var dist = (low - recentLow.price) / recentLow.price * 100;
-    if (dist > 0.3 || dist < -0.5) return null;
-    var quality = 'weak';
-    if (candle.strength >= 0.8) quality = 'clean';
-    else if (candle.strength >= 0.5) quality = 'moderate';
-    return {
-      setup_direction: 'LONG',
-      setup_pattern: 'bullish_pin_bar_at_support',
-      setup_quality: quality,
-      setup_level: recentLow.price,
-      _criteria: 'bullish pin bar strength ' + candle.strength.toFixed(2) + '; low ' + low.toFixed(6) + ' wicked support ' + recentLow.price.toFixed(6) + ' (' + dist.toFixed(2) + '%)'
-    };
-  }
-  if (!swings.highs || !swings.highs.length) return null;
-  var recentHigh = swings.highs[swings.highs.length - 1];
-  if (!recentHigh) return null;
-  var distH = (recentHigh.price - high) / recentHigh.price * 100;
-  if (distH > 0.3 || distH < -0.5) return null;
-  var qualityH = 'weak';
-  if (candle.strength >= 0.8) qualityH = 'clean';
-  else if (candle.strength >= 0.5) qualityH = 'moderate';
-  return {
-    setup_direction: 'SHORT',
-    setup_pattern: 'bearish_pin_bar_at_resistance',
-    setup_quality: qualityH,
-    setup_level: recentHigh.price,
-    _criteria: 'bearish pin bar strength ' + candle.strength.toFixed(2) + '; high ' + high.toFixed(6) + ' wicked resistance ' + recentHigh.price.toFixed(6) + ' (' + distH.toFixed(2) + '%)'
-  };
-}
-
-/* Detector 8: Range boundary. Symbol bouncing between defined levels.
-   Direction UNCLEAR; surface as no-directional-bias pattern. */
-function detectRangeBoundary(k5, swings){
-  if (!Array.isArray(k5) || k5.length < 10) return null;
-  if (!swings || !swings.highs || !swings.lows) return null;
-  if (swings.highs.length < 2 || swings.lows.length < 2) return null;
-  var h1 = swings.highs[swings.highs.length - 1].price;
-  var h2 = swings.highs[swings.highs.length - 2].price;
-  var l1 = swings.lows[swings.lows.length - 1].price;
-  var l2 = swings.lows[swings.lows.length - 2].price;
-  var hDiff = Math.abs(h1 - h2) / Math.max(h1, h2) * 100;
-  var lDiff = Math.abs(l1 - l2) / Math.max(l1, l2) * 100;
-  if (hDiff > 0.5 || lDiff > 0.5) return null;
-  var n = k5.length;
-  var close = parseFloat(k5[n-1][4]);
-  if (!isFinite(close) || close < Math.min(l1, l2) || close > Math.max(h1, h2)) return null;
-  var rangeBars = Math.abs(swings.highs[swings.highs.length-1].idx - swings.lows[swings.lows.length-1].idx);
-  var quality = rangeBars >= 10 ? 'clean' : 'moderate';
-  var level = (Math.max(h1,h2) + Math.min(l1,l2)) / 2;
-  return {
-    setup_direction: 'UNCLEAR',
-    setup_pattern: 'range_boundary',
-    setup_quality: quality,
-    setup_level: level,
-    _criteria: 'range high ~' + ((h1+h2)/2).toFixed(6) + ' (diff ' + hDiff.toFixed(2) + '%); range low ~' + ((l1+l2)/2).toFixed(6) + ' (diff ' + lDiff.toFixed(2) + '%); bars between swings ' + rangeBars
-  };
-}
-
-/* L_ENGINE_A_ORCHESTRATOR_V1 — Phase 2 (2026-05-29). Engine A V1 orchestrator.
-   Walks all 8 textbook detectors against the same k5 + swing/trend/volume/
-   candle context. Returns the highest-quality candidate (tiebreak: detector
-   index order per Phase 2 brief Q3). UNCLEAR_SETUP if none fire.
-   Input: { base, k5, k15, k1 } — klines passed explicitly from analyzeCoin /
-   analyzeCoinDiag where they are still in local scope after Promise.all.
-   Output: { setup_direction, setup_pattern, setup_quality, setup_level }
-   (with optional _criteria field for spot-check telemetry). */
-function computeTextbookSetup(input){
-  if (!input || !Array.isArray(input.k5) || input.k5.length < 20) return UNCLEAR_SETUP;
-  var k5 = input.k5;
-  var swings = computeSwingPoints(k5, 2);
-  var trend = identifyTrendState(input.k15 || k5, 20);
-  var vol = checkVolumeConfirmation(k5, 20, 1.5);
-  var candle = classifyCandlePattern(k5);
-  var candidates = [];
-  function add(c){ if (c) candidates.push(c); }
-  add(detectBreakout(k5, swings, vol));
-  add(detectBreakdown(k5, swings, vol));
-  add(detectPullbackInUptrend(k5, trend, swings));
-  add(detectPullbackInDowntrend(k5, trend, swings));
-  add(detectBullishEngulfingAtSupport(k5, swings, candle));
-  add(detectBearishEngulfingAtResistance(k5, swings, candle));
-  add(detectPinBarRejectionAtLevel(k5, swings, candle));
-  add(detectRangeBoundary(k5, swings));
-  if (!candidates.length) return UNCLEAR_SETUP;
-  var qRank = { clean: 3, moderate: 2, weak: 1 };
-  candidates.sort(function(a,b){ return (qRank[b.setup_quality]||0) - (qRank[a.setup_quality]||0); });
-  return candidates[0];
+/* L_SCAFFOLD_STUB_V1 — Phase 2 of architectural rebuild.
+   computeTextbookSetup(signal) reads kline data and detects textbook
+   price-action patterns (breakouts, pullbacks, candle patterns, range
+   identification). Returns { setup_direction, setup_pattern, setup_quality,
+   setup_level } or null when no pattern fires.
+   See ACRESS-architecture.md Section 2 (Engine A) and Section 6 (build plan). */
+function computeTextbookSetup(signal) {
+  // TODO: Phase 2 implementation
+  return null;
 }
 
 
@@ -9357,12 +8977,6 @@ function applyRegimeFilter(signal){
   var mech=signal.mechanism||{};
   var isReversal=mech.type==='reversal';
   var dir=signal.dir;
-  /* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). UNCLEAR signals
-     have no direction to evaluate against the BTC regime, so regime filter
-     is a no-op. The signal still emits with its UNCLEAR badge for spot-check. */
-  if (dir === 'UNCLEAR' || (dir !== 'LONG' && dir !== 'SHORT')) {
-    return { action: 'allow', reason: '' };
-  }
   // Counter-regime reversal longs in down moves = catching falling knives
   if(isReversal&&dir==='LONG'){
     if(r==='cascade')return{action:'suppress',reason:'Cascade regime — reversal longs suppressed (BTC '+marketRegime.btc4h.toFixed(2)+'% in 4h)'};
@@ -10106,36 +9720,20 @@ function gateContext(premium,direction){
 // ══ PRECISION SCORING + MECHANISM CLASSIFICATION ══════════════════
 // 100-point scale across 6 gates. Direction must be consistent.
 // Mechanism is named based on which gate(s) dominate the signal.
-/* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). scoreCoin signature
-   was scoreCoin(gates, context). It contained a gate-voting block (OI=3,
-   Taker=3, MTF=2, CVD=2, Sweep=2; required +2 majority; returned null
-   otherwise) that produced the legacy trade direction. Engine A V1's
-   setupState.setup_direction now drives direction. scoreCoin receives
-   setupDirection as a third parameter; if LONG/SHORT it scores against
-   alignment as before; if UNCLEAR it sums all gate-passing points
-   regardless of direction (any structural activity adds to score) per
-   Phase 2 brief Q1. Pre-Phase-2 behavior preserved in
-   pressure-scanner-v16b.html.bak.phase2_engine_a_pre. */
-function scoreCoin(gates,context,setupDirection){
-  var dir = (setupDirection === 'LONG' || setupDirection === 'SHORT') ? setupDirection : null;
-  var unclear = !dir;
+function scoreCoin(gates,context){
+  var dirVotes={LONG:0,SHORT:0};
+  function vote(d,weight){if(d)dirVotes[d]+=weight;}
+  vote(gates.oi&&gates.oi.dir,3);
+  vote(gates.taker&&gates.taker.dir,3);
+  vote(gates.mtf&&gates.mtf.dir,2);
+  vote(gates.cvd&&gates.cvd.dir,2);
+  vote(gates.sweep&&gates.sweep.dir,2);
+  // Need clean majority — no contradicting major gates
+  var dir;
+  if(dirVotes.LONG>dirVotes.SHORT+2)dir='LONG';
+  else if(dirVotes.SHORT>dirVotes.LONG+2)dir='SHORT';
+  else return null; // mixed signals
   var score=0,reasons=[];
-  if (unclear) {
-    /* L_LEGACY_DIRECTION_REMOVED_V1 — UNCLEAR scoring path (Phase 2 brief Q1).
-       Sum gate-firing points regardless of direction. Any structural activity
-       adds to the score. Context (regime alignment) is skipped — it requires
-       a known direction to be meaningful. */
-    if (gates.oi && gates.oi.passes && gates.oi.dir) { score += 15; reasons.push({lvl:'ok',tag:'OI',text:gates.oi.detail}); }
-    if (gates.taker && gates.taker.dir) { score += 15; reasons.push({lvl:'ok',tag:'TAKER',text:gates.taker.detail}); }
-    if (gates.mtf && gates.mtf.dir) { score += (gates.mtf.strength==='full' ? 20 : 12); reasons.push({lvl:'ok',tag:'MTF',text:gates.mtf.detail}); }
-    if (gates.cvd && gates.cvd.dir) { score += (gates.cvd.type==='confirmed' ? 12 : 15); reasons.push({lvl:'ok',tag:'CVD',text:gates.cvd.detail}); }
-    if (gates.sweep && gates.sweep.dir) {
-      var _uSwPts = (gates.sweep.type==='high_sweep_reclaim' || gates.sweep.type==='low_sweep_reclaim') ? 15 : 10;
-      score += _uSwPts; reasons.push({lvl:'ok',tag:'SWEEP',text:gates.sweep.detail});
-    }
-    if (gates.liq && gates.liq.dir) { score += (gates.liq.type==='cascade_confirmed' ? 15 : 8); reasons.push({lvl:'ok',tag:'LIQ',text:gates.liq.detail}); }
-    if (gates.oiExhaust && gates.oiExhaust.dir) { score += (gates.oiExhaust.type==='strong_exhaustion' ? 25 : 12); reasons.push({lvl:'ok',tag:'OIX',text:gates.oiExhaust.detail}); }
-  } else {
   // OI (foundation, 25 points max)
   if(gates.oi&&gates.oi.passes){
     if(gates.oi.dir===dir){
@@ -10205,7 +9803,6 @@ function scoreCoin(gates,context,setupDirection){
     score += oiePts;
     reasons.push({lvl: 'ok', tag: 'OIX', text: gates.oiExhaust.detail});
   }
-  } /* end else (directional scoring) */
   if(score<0)score=0;
   // Rescale by maximum possible from available gates so a missing OI gate doesn't
   // unfairly cap the score. With all 6 gates available, max = 100. Without OI,
@@ -10221,10 +9818,9 @@ function scoreCoin(gates,context,setupDirection){
   if(context)maxAvailable+=context.score>0?context.score:0; // context boost only counted if positive
   if(maxAvailable<70)maxAvailable=70; // floor — don't over-amplify when most gates missing
   var normalized=Math.min(100,score/maxAvailable*100);
-  // Mechanism classification (what's driving) — diagnostic label only post-Phase-2
+  // Mechanism classification (what's driving)
   var mechanism=classifyMechanism(dir,gates);
-  var emitDir = dir || 'UNCLEAR';
-  return{dir:emitDir,score:Math.round(normalized),reasons:reasons,mechanism:mechanism,oiAvailable:!!gates.oi,unclear:unclear};
+  return{dir:dir,score:Math.round(normalized),reasons:reasons,mechanism:mechanism,oiAvailable:!!gates.oi};
 }
 
 /* L_LONG_CAP_LIQ_GATE_V1 — Upgrade 8.5
@@ -10260,16 +9856,22 @@ var LONG_CAP_LIQ_GATE_ACTIVE = false;
  * See ACRESS-architecture.md Section 2 (Engine A/B), Section 3
  * (interpretation table), and Section 6 (build plan).
  *
- * Current state (post-Phase-2, 2026-05-29): the shadow direction matrix
- * (AGNOSTIC_EVENT_TYPES, legacyToAgnostic, determineDirectionAndConviction,
- * buildStructuralState) and its execution wires inside analyzeCoin /
- * analyzeCoinDiag have been removed. Direction now comes from Engine A V1
- * (computeTextbookSetup). Phase 4 will build computeTradeVerdict (stub
- * below) — the real Layer 2 — to read Engine A setupState + Engine B
- * footprint observations and emit a verdict.
+ * Current state: the shadow direction matrix (determineDirectionAndConviction
+ * below, anchor L_DETERMINE_DIRECTION_AND_CONVICTION_V1) is an early
+ * prototype. Phase 4 of the rebuild will replace it with the
+ * computeTradeVerdict stub below, which will read explicit Engine A
+ * setupState and Engine B observation list rather than the agnostic-event
+ * taxonomy.
  *
  * Functions in this region:
- *   - [stub] computeTradeVerdict — Phase 4 implementation pending
+ *   - AGNOSTIC_EVENT_TYPES + legacyToAgnostic (anchor below)
+ *   - determineDirectionAndConviction (12-branch matrix; includes the
+ *     26.0c DIVERGENT_RISK suppression inline)
+ *   - buildStructuralState (constructs the shadow input shape)
+ *   - Shadow execution wires inside analyzeCoin / analyzeCoinDiag
+ *     (markers L_SHADOW_ENGINE_EXECUTION_V1)
+ *   - [stub] computeTradeVerdict — Phase 4 replacement for the
+ *     direction matrix
  *
  * Marker: L_SCAFFOLD_LAYER2_V1
  * ═══════════════════════════════════════════════════════════════════════
@@ -10290,37 +9892,536 @@ function computeTradeVerdict(setupState, footprintObservations) {
   return null;
 }
 
-/* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). The shadow matrix
-   block lived here: AGNOSTIC_EVENT_TYPES taxonomy (12 event-type constants),
-   legacyToAgnostic (mechanism-name → agnostic event mapping), the 12-branch
-   determineDirectionAndConviction matrix (event_type × structural_state →
-   direction + conviction + classification), and buildStructuralState
-   (signal → structural_state snapshot). All four were removed together; their
-   only consumer was the shadow-engine execution wires inside analyzeCoin /
-   analyzeCoinDiag, which are also removed (search L_LEGACY_DIRECTION_REMOVED_V1
-   in those functions). Direction now comes from Engine A V1
-   (computeTextbookSetup, search L_ENGINE_A_ORCHESTRATOR_V1). Pre-Phase-2
-   behavior preserved in pressure-scanner-v16b.html.bak.phase2_engine_a_pre. */
+/* L_AGNOSTIC_EVENT_TAXONOMY_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
+   12 agnostic event-type constants that decouple event detection from direction
+   determination. The legacy classifyMechanism still emits directionalized labels;
+   legacyToAgnostic remaps them to direction-free event descriptors. Pure data
+   and pure lookup — no side effects. */
+var AGNOSTIC_EVENT_TYPES = {
+  AGGRESSIVE_LONG_OI_EXPANSION:         'aggressive_long_oi_expansion',
+  AGGRESSIVE_SHORT_OI_EXPANSION:        'aggressive_short_oi_expansion',
+  FORCED_SHORT_COVERING_CASCADE:        'forced_short_covering_cascade',
+  FORCED_LONG_LIQUIDATION_CASCADE:      'forced_long_liquidation_cascade',
+  UPPER_LIQUIDITY_BOUNDARY_PENETRATION: 'upper_liquidity_boundary_penetration',
+  LOWER_LIQUIDITY_BOUNDARY_PENETRATION: 'lower_liquidity_boundary_penetration',
+  BUY_SIDE_CVD_DIVERGENCE:              'buy_side_cvd_divergence',
+  SELL_SIDE_CVD_DIVERGENCE:             'sell_side_cvd_divergence',
+  LONG_SIDE_OI_SATURATION_STALLED:      'long_side_oi_saturation_stalled',
+  SHORT_SIDE_OI_SATURATION_STALLED:     'short_side_oi_saturation_stalled',
+  UNCLASSIFIED_LONG_TAKER_SURGE:        'unclassified_long_taker_surge',
+  UNCLASSIFIED_SHORT_TAKER_SURGE:       'unclassified_short_taker_surge'
+};
 
+var LEGACY_TO_AGNOSTIC = {
+  'Initiative Demand · Fresh Longs':   AGNOSTIC_EVENT_TYPES.AGGRESSIVE_LONG_OI_EXPANSION,
+  'Initiative Supply · Fresh Shorts':  AGNOSTIC_EVENT_TYPES.AGGRESSIVE_SHORT_OI_EXPANSION,
+  'Short Squeeze in Progress':         AGNOSTIC_EVENT_TYPES.FORCED_SHORT_COVERING_CASCADE,
+  'Long Capitulation in Progress':     AGNOSTIC_EVENT_TYPES.FORCED_LONG_LIQUIDATION_CASCADE,
+  'Exhaustion Reversal · High Swept':  AGNOSTIC_EVENT_TYPES.UPPER_LIQUIDITY_BOUNDARY_PENETRATION,
+  'Exhaustion Reversal · Low Swept':   AGNOSTIC_EVENT_TYPES.LOWER_LIQUIDITY_BOUNDARY_PENETRATION,
+  'Flow Divergence · Hidden Demand':   AGNOSTIC_EVENT_TYPES.BUY_SIDE_CVD_DIVERGENCE,
+  'Flow Divergence · Hidden Supply':   AGNOSTIC_EVENT_TYPES.SELL_SIDE_CVD_DIVERGENCE,
+  'OI Build Exhaustion · Long side':   AGNOSTIC_EVENT_TYPES.LONG_SIDE_OI_SATURATION_STALLED,
+  'OI Build Exhaustion · Short side':  AGNOSTIC_EVENT_TYPES.SHORT_SIDE_OI_SATURATION_STALLED,
+  'Aggressive Buying Pressure':        AGNOSTIC_EVENT_TYPES.UNCLASSIFIED_LONG_TAKER_SURGE,
+  'Aggressive Selling Pressure':       AGNOSTIC_EVENT_TYPES.UNCLASSIFIED_SHORT_TAKER_SURGE
+};
+
+function legacyToAgnostic(mechanism_name) {
+  return LEGACY_TO_AGNOSTIC[mechanism_name] || null;
+}
+
+/* L_DETERMINE_DIRECTION_AND_CONVICTION_V1 — Upgrade 26.0 (Event-State Separation)
+   Per-event deterministic state matrix. Strict conditional logic against structural
+   context — NOT weighted scoring, NOT additive points. Contradictory or ambiguous
+   structural state emits NEUTRAL / ZERO / NO_TRADE_ZONE — conservatism over false
+   positives during shadow validation.
+
+   Input shape (structural_state, hereafter `st`):
+     ffc_composite           signed number, roughly [-100, +100]
+     ffc_alignment           'ALIGNED' | 'NEUTRAL' | 'AGAINST'
+     ffc_reliability         'LOW' | 'MEDIUM' | 'HIGH'
+     positioning_state       'ALIGNED_WITH_TOPS' | 'DIVERGENT_RETAIL' | 'BALANCED' |
+                             'AGAINST_TOPS' | 'DIVERGENT_RISK' | 'BAL_GATHERING' | 'UNAVAILABLE'
+     displacement_efficiency 'clean' | 'mid' | 'absorption'  (normalized by buildStructuralState)
+     spot_perp_drive         'SPOT_LED' | 'PERP_LED' | 'BALANCED' | 'SPOT_UNAVAILABLE'
+     p1_intensity            numeric, 0+
+     p2_depletion_tier       'fresh' | 'tested' | 'wearing_thin' | 'near_breakthrough' | null
+     funding_state           'overheated' | 'neutral' | 'contrarian'
+     oi_trajectory           'expanding' | 'stable' | 'contracting'
+
+   Output shape:
+     { direction: 'LONG'|'SHORT'|'NEUTRAL',
+       conviction: 'HIGH'|'MEDIUM'|'LOW'|'ZERO',
+       classification: string,
+       reasoning: string } */
+function determineDirectionAndConviction(event_type, st) {
+  var T = AGNOSTIC_EVENT_TYPES;
+  function _fmt(n) { return (typeof n === 'number' && isFinite(n)) ? n.toFixed(2) : String(n); }
+
+  /* L_SHADOW_FINE_TUNE_RATIONALE_V1 — Upgrade 26.0c (2026-05-28).
+     DIVERGENT_RISK suppression fine-tune across the four positioning-aware
+     branches (1, 2, 7, 8). Architectural rationale:
+
+       Positioning encodes inventory state, not directional conviction.
+       When the operator's direction aligns with crowded retail
+       (DIVERGENT_RISK = retail long heavy + you LONG, OR retail short
+       heavy + you SHORT), this is structural fragility — retail is on
+       the wrong side of likely hedge-unwind flow. The system should NOT
+       emit any directional reading from these branches when DIVERGENT_RISK
+       fires; NEUTRAL is the correct conservative output.
+
+     Behavioral effect by branch:
+       - Branches 1-2 (OI expansion): defensive future-proofing only.
+         The current positive-set check {ALIGNED_WITH_TOPS, DIVERGENT_RETAIL}
+         already excludes DIVERGENT_RISK; the explicit `!== 'DIVERGENT_RISK'`
+         makes intent visible and survives any future positioning-state
+         additions to classifyPositioning.
+       - Branches 7-8 (CVD divergence): real directional suppression.
+         The current `!== 'AGAINST_TOPS'` check admits DIVERGENT_RISK today.
+         Post-fine-tune: DIVERGENT_RISK signals drop from HIGH/LONG (or
+         HIGH/SHORT) to NEUTRAL/ZERO directly — NOT to MEDIUM, because the
+         branch's MEDIUM FALSE_DIVERGENCE path requires the opposite FFC
+         sign, which by construction doesn't hold for the same signal that
+         was hitting the HIGH gate. HIGH→NEUTRAL is the architecturally
+         honest suppression and aligns with the conservative-output framing.
+
+     Direction outputs from the matrix REMAIN UNCHANGED for any signal where
+     positioning_state is anything other than DIVERGENT_RISK; this is a
+     purely additive predicate strengthening, not a redirection.
+
+     Methodology break #5 catalogged for the June 3 multi-regime analysis. */
+  // ── 1. AGGRESSIVE_LONG_OI_EXPANSION ─────────────────────────────────────
+  if (event_type === T.AGGRESSIVE_LONG_OI_EXPANSION) {
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — defensive future-proofing.
+       ALIGNED_WITH_TOPS / DIVERGENT_RETAIL positive set already excludes
+       DIVERGENT_RISK; explicit clause makes intent visible. */
+    if (st.ffc_composite > 30 &&
+        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL') &&
+        st.positioning_state !== 'DIVERGENT_RISK') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'OI expansion (LONG side) into supportive structural pull (FFC ' + st.ffc_composite +
+                   '); positioning ' + st.positioning_state + ' confirms.'
+      };
+    }
+    if (st.ffc_composite < -30) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'CROWDING_FADE',
+        reasoning: 'OI expansion (LONG side) into contrary structural pull (FFC ' + st.ffc_composite +
+                   '); crowding-against-structure fade.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'LONG OI expansion observed but structural state ambiguous (FFC ' + st.ffc_composite +
+                 ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 2. AGGRESSIVE_SHORT_OI_EXPANSION ────────────────────────────────────
+  if (event_type === T.AGGRESSIVE_SHORT_OI_EXPANSION) {
+    if (st.ffc_composite > 30) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'SQUEEZE_SETUP',
+        reasoning: 'OI expansion (SHORT side) into contrary structural pull (FFC ' + st.ffc_composite +
+                   '); short-side crowding against upward structure.'
+      };
+    }
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — defensive future-proofing
+       (mirror of branch 1). Positive set already excludes DIVERGENT_RISK;
+       explicit clause makes intent visible. */
+    if (st.ffc_composite < -30 &&
+        (st.positioning_state === 'ALIGNED_WITH_TOPS' || st.positioning_state === 'DIVERGENT_RETAIL') &&
+        st.positioning_state !== 'DIVERGENT_RISK') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'OI expansion (SHORT side) into supportive structural pull (FFC ' + st.ffc_composite +
+                   '); positioning ' + st.positioning_state + ' confirms.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'SHORT OI expansion observed but structural state ambiguous (FFC ' + st.ffc_composite +
+                 ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 3. FORCED_SHORT_COVERING_CASCADE ────────────────────────────────────
+  if (event_type === T.FORCED_SHORT_COVERING_CASCADE) {
+    if (st.p1_intensity >= 2.0 &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite > 30 &&
+        st.ffc_alignment !== 'AGAINST') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'Short fuel abundant (P1 intensity ' + _fmt(st.p1_intensity) +
+                   '), displacement clean, FFC structural pull aligned upward (' + st.ffc_composite + ').'
+      };
+    }
+    /* L_P1_AVAILABILITY_CALIBRATION_V1 — Upgrade 26.0a (2026-05-27). The EXHAUSTION_FADE
+       HIGH branch must require p1_intensity to be a real positive measurement, not
+       just any value below 0.5. Pre-fix bug: p1=0 (default when no liquidation data
+       in window) satisfied < 0.5 and fired HIGH conviction direction-flips
+       indistinguishable from genuinely-exhausted cascades. Post-fix: HIGH requires
+       p1 > 0.1; absent-P1 cases downgrade to MEDIUM (EXHAUSTION_FADE_UNCONFIRMED). */
+    if (st.p1_intensity > 0.1 && st.p1_intensity < 0.5 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite < 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'EXHAUSTION_FADE',
+        reasoning: 'Short cascade exhausted (P1 ' + _fmt(st.p1_intensity) +
+                   '), absorption rising, FFC structural pull no longer supports continuation.'
+      };
+    }
+    if (st.p1_intensity === 0 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite < 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'EXHAUSTION_FADE_UNCONFIRMED',
+        reasoning: 'Short cascade pattern matches but P1 liquidation data unavailable; downgraded from HIGH (efficiency ' +
+                   st.displacement_efficiency + ', FFC ' + st.ffc_composite + ').'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Forced short-covering event detected but structural state ambiguous (P1 ' +
+                 _fmt(st.p1_intensity) + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 4. FORCED_LONG_LIQUIDATION_CASCADE ──────────────────────────────────
+  if (event_type === T.FORCED_LONG_LIQUIDATION_CASCADE) {
+    if (st.p1_intensity >= 2.0 &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite < -30 &&
+        st.ffc_alignment !== 'AGAINST') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'MOMENTUM_RUN',
+        reasoning: 'Long fuel abundant (P1 intensity ' + _fmt(st.p1_intensity) +
+                   '), displacement clean, FFC structural pull aligned downward (' + st.ffc_composite + ').'
+      };
+    }
+    /* L_P1_AVAILABILITY_CALIBRATION_V1 — Upgrade 26.0a — symmetric fix for the
+       LONG-side cascade (mirror of the SHORT-covering branch above). */
+    if (st.p1_intensity > 0.1 && st.p1_intensity < 0.5 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite > 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'EXHAUSTION_FADE',
+        reasoning: 'Long cascade exhausted (P1 ' + _fmt(st.p1_intensity) +
+                   '), absorption rising, FFC structural pull no longer supports continuation.'
+      };
+    }
+    if (st.p1_intensity === 0 &&
+        st.displacement_efficiency === 'absorption' &&
+        (st.ffc_composite > 10 || st.ffc_alignment === 'AGAINST')) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'EXHAUSTION_FADE_UNCONFIRMED',
+        reasoning: 'Long cascade pattern matches but P1 liquidation data unavailable; downgraded from HIGH (efficiency ' +
+                   st.displacement_efficiency + ', FFC ' + st.ffc_composite + ').'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Forced long-liquidation event detected but structural state ambiguous (P1 ' +
+                 _fmt(st.p1_intensity) + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 5. UPPER_LIQUIDITY_BOUNDARY_PENETRATION (high swept + reclaim) ──────
+  if (event_type === T.UPPER_LIQUIDITY_BOUNDARY_PENETRATION) {
+    if ((st.p2_depletion_tier === 'wearing_thin' || st.p2_depletion_tier === 'near_breakthrough') &&
+        st.ffc_composite < -20) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'REVERSAL',
+        reasoning: 'Upper boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity thin), FFC structural pull downward (' + st.ffc_composite + ').'
+      };
+    }
+    if ((st.p2_depletion_tier === 'fresh' || st.p2_depletion_tier === 'tested') &&
+        st.ffc_composite > 20 &&
+        st.displacement_efficiency === 'clean') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'CONTINUATION',
+        reasoning: 'Upper boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity intact), FFC structural pull upward (' + st.ffc_composite +
+                   '), displacement clean.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Upper boundary penetration observed but structural state ambiguous (depletion ' +
+                 st.p2_depletion_tier + ', FFC ' + st.ffc_composite +
+                 ', efficiency ' + st.displacement_efficiency + ').'
+    };
+  }
+
+  // ── 6. LOWER_LIQUIDITY_BOUNDARY_PENETRATION (low swept + reclaim) ───────
+  if (event_type === T.LOWER_LIQUIDITY_BOUNDARY_PENETRATION) {
+    if ((st.p2_depletion_tier === 'wearing_thin' || st.p2_depletion_tier === 'near_breakthrough') &&
+        st.ffc_composite > 20) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'REVERSAL',
+        reasoning: 'Lower boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity thin), FFC structural pull upward (' + st.ffc_composite + ').'
+      };
+    }
+    if ((st.p2_depletion_tier === 'fresh' || st.p2_depletion_tier === 'tested') &&
+        st.ffc_composite < -20 &&
+        st.displacement_efficiency === 'clean') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'CONTINUATION',
+        reasoning: 'Lower boundary depletion tier ' + st.p2_depletion_tier +
+                   ' (resting liquidity intact), FFC structural pull downward (' + st.ffc_composite +
+                   '), displacement clean.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Lower boundary penetration observed but structural state ambiguous (depletion ' +
+                 st.p2_depletion_tier + ', FFC ' + st.ffc_composite +
+                 ', efficiency ' + st.displacement_efficiency + ').'
+    };
+  }
+
+  // ── 7. BUY_SIDE_CVD_DIVERGENCE ──────────────────────────────────────────
+  if (event_type === T.BUY_SIDE_CVD_DIVERGENCE) {
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — real behavioral change.
+       Pre-fine-tune: positioning != AGAINST_TOPS admitted DIVERGENT_RISK
+       and emitted LONG/HIGH HIDDEN_ACCUMULATION. Post-fine-tune:
+       DIVERGENT_RISK fails the gate; branch falls through to the MEDIUM
+       FALSE_DIVERGENCE path (which requires ffc<-20 — false for this
+       branch where ffc>20), then to NEUTRAL/ZERO/NO_TRADE_ZONE. Net
+       effect: HIGH→NEUTRAL when retail crowded long. */
+    if (st.ffc_composite > 20 && st.positioning_state !== 'AGAINST_TOPS' && st.positioning_state !== 'DIVERGENT_RISK') {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'HIDDEN_ACCUMULATION',
+        reasoning: 'Buy-side CVD divergence, FFC structural pull upward (' + st.ffc_composite +
+                   '), positioning ' + st.positioning_state + ' not against.'
+      };
+    }
+    if (st.ffc_composite < -20) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'FALSE_DIVERGENCE',
+        reasoning: 'Buy-side CVD divergence against downward FFC structural pull (' + st.ffc_composite +
+                   '); divergence likely fails.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Buy-side CVD divergence observed but structural state ambiguous (FFC ' +
+                 st.ffc_composite + ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 8. SELL_SIDE_CVD_DIVERGENCE ─────────────────────────────────────────
+  if (event_type === T.SELL_SIDE_CVD_DIVERGENCE) {
+    /* L_SHADOW_DIVERGENT_RISK_SUPPRESSION_V1 — real behavioral change
+       (mirror of branch 7). Pre-fine-tune: positioning != AGAINST_TOPS
+       admitted DIVERGENT_RISK and emitted SHORT/HIGH HIDDEN_DISTRIBUTION.
+       Post-fine-tune: DIVERGENT_RISK fails the gate; MEDIUM path requires
+       ffc>20 (false here) so falls through to NEUTRAL/ZERO. Net effect:
+       HIGH→NEUTRAL when retail crowded short. */
+    if (st.ffc_composite < -20 && st.positioning_state !== 'AGAINST_TOPS' && st.positioning_state !== 'DIVERGENT_RISK') {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'HIDDEN_DISTRIBUTION',
+        reasoning: 'Sell-side CVD divergence, FFC structural pull downward (' + st.ffc_composite +
+                   '), positioning ' + st.positioning_state + ' not against.'
+      };
+    }
+    if (st.ffc_composite > 20) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'FALSE_DIVERGENCE',
+        reasoning: 'Sell-side CVD divergence against upward FFC structural pull (' + st.ffc_composite +
+                   '); divergence likely fails.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Sell-side CVD divergence observed but structural state ambiguous (FFC ' +
+                 st.ffc_composite + ', positioning ' + st.positioning_state + ').'
+    };
+  }
+
+  // ── 9. LONG_SIDE_OI_SATURATION_STALLED ──────────────────────────────────
+  if (event_type === T.LONG_SIDE_OI_SATURATION_STALLED) {
+    if (st.funding_state === 'overheated' &&
+        st.displacement_efficiency === 'absorption' &&
+        st.ffc_composite < -10) {
+      return {
+        direction: 'SHORT', conviction: 'HIGH', classification: 'SATURATION_FLUSH',
+        reasoning: 'LONG side OI saturated, funding overheated, displacement absorbing, FFC pull downward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.funding_state === 'neutral' &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite > 20) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'CONTINUATION_THROUGH_SATURATION',
+        reasoning: 'LONG OI stalled but funding neutral and displacement clean; structural pull upward (' +
+                   st.ffc_composite + ') supports continuation.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'LONG OI saturation observed but structural state ambiguous (funding ' +
+                 st.funding_state + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 10. SHORT_SIDE_OI_SATURATION_STALLED ────────────────────────────────
+  if (event_type === T.SHORT_SIDE_OI_SATURATION_STALLED) {
+    if (st.funding_state === 'overheated' &&
+        st.displacement_efficiency === 'absorption' &&
+        st.ffc_composite > 10) {
+      return {
+        direction: 'LONG', conviction: 'HIGH', classification: 'SATURATION_SQUEEZE',
+        reasoning: 'SHORT side OI saturated, funding overheated, displacement absorbing, FFC pull upward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.funding_state === 'neutral' &&
+        st.displacement_efficiency === 'clean' &&
+        st.ffc_composite < -20) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'CONTINUATION_THROUGH_SATURATION',
+        reasoning: 'SHORT OI stalled but funding neutral and displacement clean; structural pull downward (' +
+                   st.ffc_composite + ') supports continuation.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'SHORT OI saturation observed but structural state ambiguous (funding ' +
+                 st.funding_state + ', efficiency ' + st.displacement_efficiency +
+                 ', FFC ' + st.ffc_composite + ').'
+    };
+  }
+
+  // ── 11. UNCLASSIFIED_LONG_TAKER_SURGE (fallback) ────────────────────────
+  // Most fallback signals should resolve NEUTRAL — unclassified surges only
+  // earn a direction when FFC very strongly confirms structural pull.
+  if (event_type === T.UNCLASSIFIED_LONG_TAKER_SURGE) {
+    if (st.ffc_composite > 75) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'STRUCTURAL_CONFIRMATION',
+        reasoning: 'Unclassified LONG taker surge, FFC structural pull strongly upward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.ffc_composite < -75) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'STRUCTURAL_OVERRIDE',
+        reasoning: 'Unclassified LONG taker surge against strongly downward FFC pull (' +
+                   st.ffc_composite + '); structure overrides direction of taker flow.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Unclassified LONG taker surge without strong FFC confirmation (' +
+                 st.ffc_composite + '); below ±75 threshold.'
+    };
+  }
+
+  // ── 12. UNCLASSIFIED_SHORT_TAKER_SURGE (fallback) ───────────────────────
+  if (event_type === T.UNCLASSIFIED_SHORT_TAKER_SURGE) {
+    if (st.ffc_composite < -75) {
+      return {
+        direction: 'SHORT', conviction: 'MEDIUM', classification: 'STRUCTURAL_CONFIRMATION',
+        reasoning: 'Unclassified SHORT taker surge, FFC structural pull strongly downward (' +
+                   st.ffc_composite + ').'
+      };
+    }
+    if (st.ffc_composite > 75) {
+      return {
+        direction: 'LONG', conviction: 'MEDIUM', classification: 'STRUCTURAL_OVERRIDE',
+        reasoning: 'Unclassified SHORT taker surge against strongly upward FFC pull (' +
+                   st.ffc_composite + '); structure overrides direction of taker flow.'
+      };
+    }
+    return {
+      direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+      reasoning: 'Unclassified SHORT taker surge without strong FFC confirmation (' +
+                 st.ffc_composite + '); below ±75 threshold.'
+    };
+  }
+
+  // Unknown event type — return NEUTRAL/ZERO defensively. Should not happen
+  // since legacyToAgnostic returns null for unmapped names and the shadow
+  // execution path skips when event_type is null.
+  return {
+    direction: 'NEUTRAL', conviction: 'ZERO', classification: 'NO_TRADE_ZONE',
+    reasoning: 'Unknown event type: ' + event_type
+  };
+}
+
+/* L_BUILD_STRUCTURAL_STATE_V1 — Upgrade 26.0 (Event-State Separation)
+   Maps a fully-enriched signal object to the structural_state input shape
+   that determineDirectionAndConviction expects. Defensive — every field has
+   a default so missing inputs degrade to NEUTRAL/ZERO rather than throwing.
+
+   Field provenance:
+     ffc_*             ← signal.forcedFlow (FFC composite, scanner-side)
+     positioning_state ← classifyPositioning(signal.positioning, signal.dir).state
+     displacement_efficiency ← signal.efficiency.pct, normalized to tier string
+                              (>=70 clean, >=40 mid, else absorption; pending → mid)
+     spot_perp_drive   ← signal.spotDrive.state  (L_SPOT_PERP_DRIVE_V1)
+     p1_intensity      ← signal.liquidation.intensityTotal  OR
+                         window.__acressLiqStats[sym].intensityTotal  (L_FFC_P1_WIRING_V1)
+     p2_depletion_tier ← signal.sweepState.nearest_level_tier  (L_PER_LEVEL_RETEST_V1)
+     funding_state, oi_trajectory ← default 'neutral' / 'stable' for V1
+                                    (room to derive later; shadow tolerates defaults) */
+function buildStructuralState(signal) {
+  var ff   = signal && signal.forcedFlow   ? signal.forcedFlow   : null;
+  var eff  = signal && signal.efficiency   ? signal.efficiency   : null;
+  var sd   = signal && signal.spotDrive    ? signal.spotDrive    : null;
+  var sw   = signal && signal.sweepState   ? signal.sweepState   : null;
+  var liq  = (signal && signal.liquidation) ||
+             (typeof window !== 'undefined' && window.__acressLiqStats && signal && signal.sym
+              ? window.__acressLiqStats[signal.sym] : null);
+
+  // Normalize displacement_efficiency to tier string.
+  var eff_tier = 'mid';
+  if (eff && typeof eff.pct === 'number' && isFinite(eff.pct)) {
+    if (eff.pct >= 70) eff_tier = 'clean';
+    else if (eff.pct >= 40) eff_tier = 'mid';
+    else eff_tier = 'absorption';
+  }
+
+  // Positioning — classify from raw cache + signal.dir.
+  var pos_state = 'UNAVAILABLE';
+  try {
+    if (signal && signal.positioning && typeof classifyPositioning === 'function') {
+      var pc = classifyPositioning(signal.positioning, signal.dir);
+      if (pc && typeof pc.state === 'string') pos_state = pc.state;
+    }
+  } catch (_) { /* leave default */ }
+
+  // p1_intensity — total intensity magnitude (direction-agnostic).
+  var p1 = 0;
+  if (liq && typeof liq.intensityTotal === 'number' && isFinite(liq.intensityTotal)) {
+    p1 = liq.intensityTotal;
+  }
+
+  return {
+    ffc_composite:           (ff && typeof ff.score === 'number') ? ff.score : 0,
+    ffc_alignment:           (ff && typeof ff.alignment === 'string') ? ff.alignment : 'NEUTRAL',
+    ffc_reliability:         (ff && typeof ff.reliability === 'string') ? ff.reliability : 'LOW',
+    positioning_state:       pos_state,
+    displacement_efficiency: eff_tier,
+    spot_perp_drive:         (sd && typeof sd.state === 'string') ? sd.state : 'SPOT_UNAVAILABLE',
+    p1_intensity:            p1,
+    p2_depletion_tier:       (sw && typeof sw.nearest_level_tier === 'string') ? sw.nearest_level_tier : null,
+    funding_state:           'neutral',
+    oi_trajectory:           'stable'
+  };
+}
 
 function classifyMechanism(dir,gates){
-  /* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). Direction is now
-     supplied by Engine A (textbook setup). When Engine A returns UNCLEAR
-     (no setup but gates fired), the mechanism is still informative as a
-     diagnostic label of which gates fired, but cannot be direction-named.
-     Return a generic structural-activity label. */
-  if (dir !== 'LONG' && dir !== 'SHORT') {
-    var firedTags = [];
-    if (gates.oi && gates.oi.passes && gates.oi.dir) firedTags.push('OI ' + gates.oi.dir);
-    if (gates.taker && gates.taker.dir) firedTags.push('TAKER ' + gates.taker.dir);
-    if (gates.mtf && gates.mtf.dir) firedTags.push('MTF ' + gates.mtf.dir);
-    if (gates.cvd && gates.cvd.dir) firedTags.push('CVD ' + gates.cvd.dir);
-    if (gates.sweep && gates.sweep.dir) firedTags.push('SWEEP ' + gates.sweep.dir);
-    if (gates.liq && gates.liq.dir) firedTags.push('LIQ ' + gates.liq.dir);
-    if (gates.oiExhaust && gates.oiExhaust.dir) firedTags.push('OIX ' + gates.oiExhaust.dir);
-    var label = firedTags.length ? 'Structural Activity · ' + firedTags.join(' / ') : 'Structural Activity · no gates';
-    return { name: label, type: 'diagnostic', horizon: '—' };
-  }
   // Reversal vs continuation, then named mechanism
   var hasSweepReclaim=gates.sweep&&gates.sweep.dir===dir&&(gates.sweep.type==='high_sweep_reclaim'||gates.sweep.type==='low_sweep_reclaim');
   var hasDivergence=gates.cvd&&gates.cvd.dir===dir&&(gates.cvd.type==='bullish_divergence'||gates.cvd.type==='bearish_divergence');
@@ -10418,17 +10519,17 @@ async function analyzeCoin(symObj){
       cvd:gateCVD(k5,base),           // v16: now Z-score-aware
       sweep:gateSweep(k5,atr5m)       // v16: now ATR-validated
     };
-    /* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). The pre-vote block
-       (gate-weighted majority on OI/Taker/MTF/CVD/Sweep) used to set `probable`
-       direction for context scoring. Engine A's textbook setup is now the sole
-       direction source. Pre-Phase-2 behavior preserved in
-       pressure-scanner-v16b.html.bak.phase2_engine_a_pre. */
-    var _setup = (typeof computeTextbookSetup === 'function')
-      ? computeTextbookSetup({ base: base, k5: k5, k15: k15, k1: k1 })
-      : UNCLEAR_SETUP;
-    var _ctxDir = (_setup.setup_direction === 'LONG' || _setup.setup_direction === 'SHORT') ? _setup.setup_direction : null;
-    var ctx = _ctxDir ? gateContext(prem, _ctxDir) : null;
-    var result = scoreCoin(gates, ctx, _setup.setup_direction);
+    // Determine probable direction first to score context properly
+    var probable=null;
+    var v={LONG:0,SHORT:0};
+    if(gates.oi&&gates.oi.dir)v[gates.oi.dir]+=3;
+    if(gates.taker&&gates.taker.dir)v[gates.taker.dir]+=3;
+    if(gates.mtf&&gates.mtf.dir)v[gates.mtf.dir]+=2;
+    if(gates.cvd&&gates.cvd.dir)v[gates.cvd.dir]+=2;
+    if(gates.sweep&&gates.sweep.dir)v[gates.sweep.dir]+=2;
+    if(v.LONG>v.SHORT)probable='LONG';else if(v.SHORT>v.LONG)probable='SHORT';
+    var ctx=probable?gateContext(prem,probable):null;
+    var result=scoreCoin(gates,ctx);
     if(!result)return null;
     // v16+ — OI VELOCITY CHECK for continuation signals
     // Catches late-stage continuations where OI is still moving in the
@@ -10509,14 +10610,6 @@ async function analyzeCoin(symObj){
       /* L_RANGE_FILTER_REMOVED_V1 */
       range24Pct:(symObj.range24Pct!=null?symObj.range24Pct:null),
       dir:result.dir,score:result.score,
-      /* L_ENGINE_A_V1 — textbook-setup bundle drives s.dir; also persists for
-         June 3 cohort analysis. setup_direction is one of LONG/SHORT/UNCLEAR. */
-      setupState: {
-        setup_direction: _setup.setup_direction,
-        setup_pattern:   _setup.setup_pattern,
-        setup_quality:   _setup.setup_quality,
-        setup_level:     _setup.setup_level
-      },
       mechanism:result.mechanism,reasons:result.reasons,
       regimeKind:result.regimeKind,regimeAction:result.regimeAction,
       absorbed:result.absorbed,
@@ -10568,20 +10661,41 @@ async function analyzeCoin(symObj){
     /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
        confluence_quality_score so the bridge can poll and gate alerts. */
     attachPrimeFields(_signal);
-    /* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). The shadow engine
-       execution block was here (legacyToAgnostic → buildStructuralState →
-       determineDirectionAndConviction). Both the matrix and its wires were
-       removed. signal.shadow is set to null so downstream consumers (lifecycle,
-       UI, bridge) that guard against null shadow continue to work. The signal
-       direction is now Engine A's textbook setup direction; no parallel engine.
-       Pre-Phase-2 behavior preserved in pressure-scanner-v16b.html.bak.phase2_engine_a_pre. */
-    _signal.shadow = null;
-    /* L_PER_DIRECTION_SIZING_V1 — discipline bundle computes per-direction
-       (long + short). Post-Phase-2 it reads s.dir directly with no shadow consensus.
-       L_ENGINE_A_V1 — try/catch so an UNCLEAR signal whose discipline calc
-       chokes still emits to the feed; discipline bundle becomes null in that case. */
-    try { _signal.discipline = computeDisciplineBundle(_signal); }
-    catch (_dErr) { _signal.discipline = null; try { console.log('[Acress · discipline err]', _signal.base, _dErr && _dErr.message); } catch(_){} }
+    /* L_SHADOW_ENGINE_EXECUTION_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
+       Compute agnostic event + state-derived direction in parallel with legacy.
+       Order swapped under L_PER_DIRECTION_SIZING_V1 so signal.shadow is set
+       BEFORE computeDisciplineBundle, letting the bundle's suggested_direction
+       reflect engine consensus. Try/catch ensures any failure inside the
+       shadow path leaves the legacy pipeline untouched. */
+    try {
+      var _mechName = (_signal.mechanism && _signal.mechanism.name) || null;
+      var _agnosticEvent = _mechName ? legacyToAgnostic(_mechName) : null;
+      if (_agnosticEvent) {
+        var _structState = buildStructuralState(_signal);
+        var _shadowResult = determineDirectionAndConviction(_agnosticEvent, _structState);
+        _signal.shadow = {
+          agnostic_event_type:    _agnosticEvent,
+          structural_state_class: _shadowResult.classification,
+          emergent_direction:     _shadowResult.direction,
+          state_conviction:       _shadowResult.conviction,
+          state_reasoning:        _shadowResult.reasoning,
+          legacy_direction:       _signal.dir,
+          /* direction_disagreement excludes NEUTRAL — that's "shadow suppresses", not
+             "shadow says opposite". Validation Metric 1 filters on emergent != NEUTRAL,
+             so the column should align with that. Stored as 0/1 INTEGER for DB. */
+          direction_disagreement: (_signal.dir !== _shadowResult.direction && _shadowResult.direction !== 'NEUTRAL') ? 1 : 0,
+          structural_state_snapshot: _structState
+        };
+      } else {
+        _signal.shadow = null;
+      }
+    } catch (_shadowErr) {
+      try { console.log('[Acress · L_SHADOW_ENGINE_EXECUTION_V1 ERR]', _signal && _signal.base, _mechName, _shadowErr && _shadowErr.message); } catch (_) {}
+      _signal.shadow = null;
+    }
+    /* L_PER_DIRECTION_SIZING_V1 — discipline bundle now computes per-direction
+       (long + short) and reads signal.shadow for the consensus suggestion. */
+    _signal.discipline = computeDisciplineBundle(_signal);
     return _signal;
   }catch(e){
     return null;
@@ -10926,19 +11040,20 @@ async function analyzeCoinDiag(symObj,diag){
     if(gates.mtf&&gates.mtf.passes)diag.mtfPass++;
     if(gates.cvd&&gates.cvd.passes)diag.cvdPass++;
     if(gates.sweep&&gates.sweep.passes)diag.sweepPass++;
-    /* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). The pre-vote block
-       (gate-weighted majority + oiExhaust contributing +3) used to set
-       `probable` direction here. Engine A's textbook setup is now the sole
-       direction source on the diag/emit path. Pre-Phase-2 behavior preserved
-       in pressure-scanner-v16b.html.bak.phase2_engine_a_pre. */
-    var _setup = (typeof computeTextbookSetup === 'function')
-      ? computeTextbookSetup({ base: base, k5: k5, k15: k15, k1: k1 })
-      : UNCLEAR_SETUP;
-    var _ctxDir = (_setup.setup_direction === 'LONG' || _setup.setup_direction === 'SHORT') ? _setup.setup_direction : null;
-    var ctx = _ctxDir ? gateContext(prem, _ctxDir) : null;
-    // Layer 2b: LIQ_INTENSITY directional confirmation reads Engine A's direction
-    gates.liq = _ctxDir ? gateLiq(liqStats, _ctxDir) : null;
-    var result = scoreCoin(gates, ctx, _setup.setup_direction);
+    var probable=null;
+    var v={LONG:0,SHORT:0};
+    if(gates.oi&&gates.oi.dir)v[gates.oi.dir]+=3;
+    if(gates.taker&&gates.taker.dir)v[gates.taker.dir]+=3;
+    if(gates.mtf&&gates.mtf.dir)v[gates.mtf.dir]+=2;
+    if(gates.cvd&&gates.cvd.dir)v[gates.cvd.dir]+=2;
+    if(gates.sweep&&gates.sweep.dir)v[gates.sweep.dir]+=2;
+    if(gates.oiExhaust&&gates.oiExhaust.dir)v[gates.oiExhaust.dir]+=3;
+    if(v.LONG>v.SHORT)probable='LONG';else if(v.SHORT>v.LONG)probable='SHORT';
+    var ctx=probable?gateContext(prem,probable):null;
+    // Layer 2b: LIQ_INTENSITY directional confirmation from bridge liquidation feed
+    gates.liq = probable ? gateLiq(liqStats, probable) : null;
+    // Option C: gates.oiExhaust now set in the initial gates object (above) so it votes on direction
+    var result=scoreCoin(gates,ctx);
     if(!result)return null;
     // v16+ — OI velocity check (continuation late-stage filter)
     var oiDerivs=computeOIDerivatives(oiResult.oi);
@@ -10982,14 +11097,6 @@ async function analyzeCoinDiag(symObj,diag){
       sym:sym,base:base,price:price,chg24:chg24,
       range24Pct:(symObj.range24Pct!=null?symObj.range24Pct:null),
       dir:result.dir,score:result.score,
-      /* L_ENGINE_A_V1 — textbook-setup bundle drives s.dir; also persists for
-         June 3 cohort analysis. setup_direction is one of LONG/SHORT/UNCLEAR. */
-      setupState: {
-        setup_direction: _setup.setup_direction,
-        setup_pattern:   _setup.setup_pattern,
-        setup_quality:   _setup.setup_quality,
-        setup_level:     _setup.setup_level
-      },
       mechanism:result.mechanism,reasons:result.reasons,
       regimeKind:marketRegime.kind,regimeAction:regimeAction.action,
       absorbed:result.absorbed,
@@ -11052,17 +11159,38 @@ async function analyzeCoinDiag(symObj,diag){
     /* L_PRIME_CLASSIFIER_V1 — attach prime / prime_failed_dimensions /
        confluence_quality_score on the diag/emit path. */
     attachPrimeFields(_signal);
-    /* L_FITNESS_VERDICT_V1 — discipline bundle for card + Telegram + DB.
-       L_ENGINE_A_V1 — wrapped in try/catch so UNCLEAR signals whose discipline
-       calc chokes still emit to the feed. */
-    try { _signal.discipline = computeDisciplineBundle(_signal); }
-    catch (_dErr) { _signal.discipline = null; try { console.log('[Acress · discipline err]', _signal.base, _dErr && _dErr.message); } catch(_){} }
-    /* L_LEGACY_DIRECTION_REMOVED_V1 — Phase 2 (2026-05-29). Shadow engine
-       execution block was here on the diag/emit path. Both the matrix and its
-       wires were removed. signal.shadow is set to null so downstream consumers
-       (lifecycle, UI, bridge) that defensively guard against null shadow
-       continue to work without code change. */
-    _signal.shadow = null;
+    /* L_FITNESS_VERDICT_V1 — discipline bundle for card + Telegram + DB. */
+    _signal.discipline = computeDisciplineBundle(_signal);
+    /* L_SHADOW_ENGINE_EXECUTION_V1 — Upgrade 26.0 (Event-State Separation, Shadow Mode)
+       Compute agnostic event + state-derived direction in parallel with legacy.
+       Try/catch ensures any failure inside the shadow path leaves the legacy
+       pipeline untouched: signal.shadow = null on error, legacy continues. */
+    try {
+      var _mechName = (_signal.mechanism && _signal.mechanism.name) || null;
+      var _agnosticEvent = _mechName ? legacyToAgnostic(_mechName) : null;
+      if (_agnosticEvent) {
+        var _structState = buildStructuralState(_signal);
+        var _shadowResult = determineDirectionAndConviction(_agnosticEvent, _structState);
+        _signal.shadow = {
+          agnostic_event_type:    _agnosticEvent,
+          structural_state_class: _shadowResult.classification,
+          emergent_direction:     _shadowResult.direction,
+          state_conviction:       _shadowResult.conviction,
+          state_reasoning:        _shadowResult.reasoning,
+          legacy_direction:       _signal.dir,
+          /* direction_disagreement excludes NEUTRAL — that's "shadow suppresses", not
+             "shadow says opposite". Validation Metric 1 filters on emergent != NEUTRAL,
+             so the column should align with that. Stored as 0/1 INTEGER for DB. */
+          direction_disagreement: (_signal.dir !== _shadowResult.direction && _shadowResult.direction !== 'NEUTRAL') ? 1 : 0,
+          structural_state_snapshot: _structState
+        };
+      } else {
+        _signal.shadow = null;
+      }
+    } catch (_shadowErr) {
+      try { console.log('[Acress · L_SHADOW_ENGINE_EXECUTION_V1 ERR]', _signal && _signal.base, _mechName, _shadowErr && _shadowErr.message); } catch (_) {}
+      _signal.shadow = null;
+    }
     return _signal;
   }catch(e){
     throw e;
@@ -12423,24 +12551,8 @@ function buildCard(s, moodKey){
        early/late indicates timing; discovery/losing/etc indicates
        historical profitability. Together they tell the operator
        whether the signal is worth acting on now. Saves one row. */
-    /* L_ENGINE_A_V1 — setup pattern is the card headline; mechanism becomes
-       the diagnostic byline. UNCLEAR signals carry a small badge and dim
-       opacity so the operator can immediately tell they fired without a
-       textbook setup. */
-    +'<div class="pc-mech"' + (s.dir === 'UNCLEAR' ? ' style="opacity:0.7;"' : '') + '>'
-      +'<div class="pc-mech-name">'
-        + (function(){
-            var sd = s.setupState && s.setupState.setup_direction;
-            if (sd === 'LONG' || sd === 'SHORT') {
-              var pmap = { breakout:'Breakout', breakdown:'Breakdown', pullback_in_uptrend:'Pullback in uptrend', pullback_in_downtrend:'Pullback in downtrend', bullish_engulfing_at_support:'Bullish engulfing at support', bearish_engulfing_at_resistance:'Bearish engulfing at resistance', bullish_pin_bar_at_support:'Pin bar rejecting support', bearish_pin_bar_at_resistance:'Pin bar rejecting resistance', range_boundary:'Range boundary' };
-              var pretty = pmap[s.setupState.setup_pattern] || s.setupState.setup_pattern || '?';
-              return 'Setup: <b>' + pretty + '</b> · ' + (s.setupState.setup_quality || '?');
-            }
-            return '<span class="pc-agg-badge" style="background:#444;color:#bbb;margin-right:6px;">UNCLEAR</span>No textbook setup';
-          })()
-        + (s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')
-      +'</div>'
-      +'<div class="pc-mech-type" style="font-size:10px;opacity:0.85;">Mechanism: '+s.mechanism.name+'</div>'
+    +'<div class="pc-mech">'
+      +'<div class="pc-mech-name">'+s.mechanism.name+(s.oiAggregated?'<span class="pc-agg-badge">OI · Bybit</span>':'<span class="pc-agg-badge" style="background:var(--s3);color:var(--faint)">no OI</span>')+'</div>'
       +'<div class="pc-mech-type">'+s.mechanism.type+' · '+s.mechanism.horizon+suggestedHoldText(s)+oiStageBadge(s)+mechStatsBadge(s.mechanism.name)+'</div>'
     +'</div>'
     /* L_PROSE_LAYOUT_RESTORE_V1 — Card Restructure Pass 3 (2026-05-28).
